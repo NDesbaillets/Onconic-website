@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Contact · Onconic</title>
+  <meta name="description" content="Clinicians can request access to the Hive. Pharma, biotech and investment teams can describe their advisory need.">
+  <link rel="alternate" hreflang="fr" href="https://onconic.ch/fr/contact.html">
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/onconic.css">
+  <script src="/assets/js/site.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="/assets/js/config.js"></script>
+  <script src="/assets/js/auth.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/">Home</a>
+        <a href="/about.html">About</a>
+        <a href="/hive.html">The Hive</a>
+        <a href="/contact.html" aria-current="page">Contact</a>
+        <a class="lang" href="/fr/contact.html" hreflang="fr" lang="fr">FR</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section">
+      <div class="container">
+        <h1>Contact</h1>
+        <p class="muted">Clinicians can request access to the Hive. Pharma, biotech and investment teams can describe their advisory need.</p>
+        <form class="form" id="contact-form">
+          <label>Subject
+            <select name="kind">
+                <option value="join">Join Onconic (clinician)</option>
+                <option value="business">Advisory request (pharma, finance)</option>
+                <option value="other">Other</option>
+            </select>
+          </label>
+          <label>Full name<input name="name" autocomplete="name" required maxlength="120"></label>
+          <label>Email<input type="email" name="email" autocomplete="email" required maxlength="200"></label>
+          <label>Institution or company<input name="organisation" autocomplete="organization" maxlength="200"></label>
+          <label>Message<textarea name="message" required maxlength="4000"></textarea></label>
+          <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <p class="muted">Do not include patient data in this form.</p>
+          <button class="btn" type="submit">Send</button>
+          <p class="form-msg" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Switzerland</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <a href="mailto:contact@onconic.ch">contact@onconic.ch</a>
+    </div>
+  </footer>
+</body>
+</html>

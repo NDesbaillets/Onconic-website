@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>La Ruche · Onconic</title>
+  <meta name="description" content="Un espace collaboratif pour les équipes d'oncologie.">
+  <link rel="alternate" hreflang="en" href="https://onconic.ch/hive.html">
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/onconic.css">
+  <script src="/assets/js/site.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="/assets/js/config.js"></script>
+  <script src="/assets/js/auth.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/">Accueil</a>
+        <a href="/fr/a-propos.html">À propos</a>
+        <a href="/fr/ruche.html" aria-current="page">La Ruche</a>
+        <a href="/fr/contact.html">Contact</a>
+        <a class="lang" href="/hive.html" hreflang="en" lang="en">EN</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section">
+      <div class="container grid-2">
+        <div>
+          <span class="eyebrow">La Ruche</span>
+          <h1>Un espace collaboratif pour les équipes d'oncologie.</h1>
+          <hr class="rule">
+          <p class="muted">Comme une ruche, Onconic fonctionne parce que chaque membre y contribue. La Ruche réunit le matériel de formation, des pages par tumeur et des outils pratiques pour les médecins et les assistantes médicales. L'accès est réservé aux membres vérifiés.</p>
+          <ul>
+            <li>Formation : guidelines, présentations internes, résumés de littérature, pages par tumeur</li>
+            <li>Médecins : outils pour lettres médicales anonymisées et initiation de traitement</li>
+            <li>Assistantes et secrétaires : calcul de durée de traitement et calendrier</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Connexion</h2>
+          <form class="form" id="login-form" novalidate>
+            <label>E-mail<input type="email" name="email" autocomplete="username" required></label>
+            <label>Mot de passe<input type="password" name="password" autocomplete="current-password" required></label>
+            <div class="row">
+              <button class="btn" type="submit">Se connecter</button>
+              <a href="#" id="forgot">Mot de passe oublié ?</a>
+            </div>
+            <p class="form-msg" role="status" aria-live="polite"></p>
+            <p class="muted">Pas encore de compte ? <a href="/fr/contact.html?type=join">Demander un accès</a></p>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <a href="mailto:contact@onconic.ch">contact@onconic.ch</a>
+    </div>
+  </footer>
+</body>
+</html>

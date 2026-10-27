@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>The Hive · Onconic</title>
+  <meta name="description" content="A collaborative space for oncology teams.">
+  <link rel="alternate" hreflang="fr" href="https://onconic.ch/fr/ruche.html">
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/onconic.css">
+  <script src="/assets/js/site.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="/assets/js/config.js"></script>
+  <script src="/assets/js/auth.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/">Home</a>
+        <a href="/about.html">About</a>
+        <a href="/hive.html" aria-current="page">The Hive</a>
+        <a href="/contact.html">Contact</a>
+        <a class="lang" href="/fr/ruche.html" hreflang="fr" lang="fr">FR</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section">
+      <div class="container grid-2">
+        <div>
+          <span class="eyebrow">The Hive</span>
+          <h1>A collaborative space for oncology teams.</h1>
+          <hr class="rule">
+          <p class="muted">Like a hive, Onconic works because each member contributes. The Hive brings together training material, tumor-specific pages and practical tools for physicians and medical assistants. Access is reserved to verified members.</p>
+          <ul>
+            <li>Training: guidelines, internal presentations, literature summaries, tumor-by-tumor pages</li>
+            <li>Physicians: tools for anonymised medical letters and treatment initiation</li>
+            <li>Assistants and secretaries: treatment duration and scheduling tools</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Sign in</h2>
+          <form class="form" id="login-form" novalidate>
+            <label>Email<input type="email" name="email" autocomplete="username" required></label>
+            <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+            <div class="row">
+              <button class="btn" type="submit">Sign in</button>
+              <a href="#" id="forgot">Forgot password?</a>
+            </div>
+            <p class="form-msg" role="status" aria-live="polite"></p>
+            <p class="muted">No account yet? <a href="/contact.html?type=join">Request access</a></p>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Switzerland</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <a href="mailto:contact@onconic.ch">contact@onconic.ch</a>
+    </div>
+  </footer>
+</body>
+</html>
