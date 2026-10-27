@@ -96,7 +96,7 @@
     contact.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (contact.website.value) return; // robot
-      if (!sb) return msg(out, T.error, "error");
+      if (!sb) return msg(out, T.error + " [client]", "error");
       const { error } = await sb.from("contact_requests").insert({
         kind: contact.kind.value,
         name: contact.name.value.trim(),
@@ -105,7 +105,10 @@
         message: contact.message.value.trim(),
         lang
       });
-      if (error) return msg(out, T.error, "error");
+      if (error) {
+        console.error("contact_requests insert failed", error);
+        return msg(out, T.error + " [" + (error.code || error.status || "network") + "]", "error");
+      }
       contact.reset();
       msg(out, T.sent, "ok");
     });

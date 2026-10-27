@@ -1,5 +1,5 @@
 -- Onconic : schéma de base de données Supabase.
--- À exécuter une seule fois dans Supabase > SQL Editor > New query > Run.
+-- À exécuter dans Supabase > SQL Editor > New query > Run. Peut être relancé sans risque.
 
 -- 1. Profils et rôles ---------------------------------------------------------
 -- Rôles : member (compte créé, pas encore validé), clinician, assistant, admin.
@@ -20,10 +20,12 @@ returns text language sql stable security definer set search_path = public as $$
 $$;
 
 -- Chacun lit son propre profil ; l'admin lit tout.
+drop policy if exists "profiles: read own" on public.profiles;
 create policy "profiles: read own" on public.profiles
   for select using (id = auth.uid() or public.current_role_name() = 'admin');
 
 -- Seul l'admin modifie les rôles (un membre ne peut pas s'auto-promouvoir).
+drop policy if exists "profiles: admin update" on public.profiles;
 create policy "profiles: admin update" on public.profiles
   for update using (public.current_role_name() = 'admin');
 
@@ -57,11 +59,19 @@ create table if not exists public.contact_requests (
 
 alter table public.contact_requests enable row level security;
 
+drop policy if exists "contact: anyone can submit" on public.contact_requests;
 create policy "contact: anyone can submit" on public.contact_requests
   for insert to anon, authenticated with check (true);
 
+drop policy if exists "contact: admin reads" on public.contact_requests;
 create policy "contact: admin reads" on public.contact_requests
   for select using (public.current_role_name() = 'admin');
+
+-- Droits d'accès explicites (les règles RLS ci-dessus filtrent ensuite ligne par ligne)
+grant usage on schema public to anon, authenticated;
+grant insert on public.contact_requests to anon, authenticated;
+grant select on public.contact_requests to authenticated;
+grant select, update on public.profiles to authenticated;
 
 -- 3. Documents de formation (PDF, slides) -------------------------------------
 -- Bucket privé : les fichiers ne sont jamais publics, seulement servis aux membres validés.
@@ -69,10 +79,12 @@ insert into storage.buckets (id, name, public)
 values ('hive', 'hive', false)
 on conflict (id) do nothing;
 
+drop policy if exists "hive files: validated members read" on storage.objects;
 create policy "hive files: validated members read" on storage.objects
   for select to authenticated
   using (bucket_id = 'hive' and public.current_role_name() in ('clinician', 'assistant', 'admin'));
 
+drop policy if exists "hive files: admin writes" on storage.objects;
 create policy "hive files: admin writes" on storage.objects
   for all to authenticated
   using (bucket_id = 'hive' and public.current_role_name() = 'admin')
