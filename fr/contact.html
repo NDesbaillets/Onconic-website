@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Contact · Onconic</title>
-  <meta name="description" content="Les cliniciens peuvent demander un accès à la Ruche. Les équipes pharma, biotech et investissement peuvent décrire leur besoin de conseil.">
+  <meta name="description" content="Les cliniciens peuvent demander un accès à la Ruche. Pour toute autre question, choisissez Autre.">
   <link rel="alternate" hreflang="en" href="https://onconic.ch/contact.html">
   <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/css/onconic.css">
@@ -34,18 +34,17 @@
     <section class="section">
       <div class="container">
         <h1>Contact</h1>
-        <p class="muted">Les cliniciens peuvent demander un accès à la Ruche. Les équipes pharma, biotech et investissement peuvent décrire leur besoin de conseil.</p>
+        <p class="muted">Les cliniciens peuvent demander un accès à la Ruche. Pour toute autre question, choisissez Autre.</p>
         <form class="form" id="contact-form">
           <label>Objet
             <select name="kind">
                 <option value="join">Rejoindre Onconic (clinicien)</option>
-                <option value="business">Demande de conseil (pharma, finance)</option>
                 <option value="other">Autre</option>
             </select>
           </label>
           <label>Nom complet<input name="name" autocomplete="name" required maxlength="120"></label>
           <label>E-mail<input type="email" name="email" autocomplete="email" required maxlength="200"></label>
-          <label>Institution ou entreprise<input name="organisation" autocomplete="organization" maxlength="200"></label>
+          <label>Institution<input name="organisation" autocomplete="organization" maxlength="200"></label>
           <label>Message<textarea name="message" required maxlength="4000"></textarea></label>
           <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
           <p class="muted">N'indiquez aucune donnée patient dans ce formulaire.</p>
