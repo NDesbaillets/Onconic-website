@@ -16,3 +16,18 @@ document.addEventListener("click", (e) => {
   const target = fr ? "/fr/nouveau-mot-de-passe.html" : "/reset-password.html";
   if (location.pathname !== target) location.replace(target + h);
 })();
+
+// Apparition progressive des éléments marqués data-reveal (alvéoles de la Ruche)
+(function () {
+  const items = document.querySelectorAll("[data-reveal]");
+  if (!items.length) return;
+  if (!("IntersectionObserver" in window)) return items.forEach((el) => el.classList.add("revealed"));
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (!e.isIntersecting) return;
+      e.target.classList.add("revealed");
+      io.unobserve(e.target);
+    });
+  }, { threshold: 0.15 });
+  items.forEach((el) => io.observe(el));
+})();
