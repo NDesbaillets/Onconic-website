@@ -100,17 +100,20 @@
       e.preventDefault();
       if (contact.website.value) return; // robot
       if (!sb) return msg(out, T.error + " [client]", "error");
-      const { error } = await sb.from("contact_requests").insert({
-        kind: contact.kind.value,
-        name: contact.name.value.trim(),
-        email: contact.email.value.trim(),
-        organisation: contact.organisation.value.trim(),
-        message: contact.message.value.trim(),
-        lang
+      const { error } = await sb.functions.invoke("contact-request", {
+        body: {
+          kind: contact.kind.value,
+          name: contact.name.value.trim(),
+          email: contact.email.value.trim(),
+          organisation: contact.organisation.value.trim(),
+          message: contact.message.value.trim(),
+          website: contact.website.value,
+          lang
+        }
       });
       if (error) {
-        console.error("contact_requests insert failed", error);
-        return msg(out, T.error + " [" + (error.code || error.status || "network") + "]", "error");
+        console.error("contact-request failed", error);
+        return msg(out, T.error + " [" + ((error.context && error.context.status) || "network") + "]", "error");
       }
       contact.reset();
       msg(out, T.sent, "ok");

@@ -1,5 +1,6 @@
 User-agent: *
 Disallow: /app/
 Disallow: /fr/app/
+Disallow: /admin/
 
 Sitemap: https://onconic.ch/sitemap.xml
