@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Demande d'accès · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/onconic.css">
+  <script src="/assets/js/site.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js"></script>
+  <script src="/assets/js/review.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+    </div>
+  </header>
+
+  <main>
+    <section class="section">
+      <div class="container">
+        <span class="eyebrow">Administration</span>
+        <h1 id="review-title">Demande d'accès</h1>
+        <hr class="rule">
+        <div id="review-details" hidden>
+          <ul class="timeline">
+            <li><strong>Nom</strong><span class="muted" id="r-name"></span></li>
+            <li><strong>E-mail</strong><span class="muted" id="r-email"></span></li>
+            <li><strong>Institution</strong><span class="muted" id="r-org"></span></li>
+            <li><strong>Message</strong><span class="muted" id="r-message"></span></li>
+          </ul>
+          <button class="btn" id="review-confirm" type="button"></button>
+        </div>
+        <p class="form-msg" id="review-msg" role="status" aria-live="polite">Chargement…</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

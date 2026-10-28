@@ -40,7 +40,13 @@ CNAME                  domaine onconic.ch
 
 ## Ajouter un membre
 
-*Authentication* > *Users* > *Invite user*. Puis *Table Editor* > `profiles` : passer `role` de `member` à `clinician`, `assistant` ou `admin`. Ton propre compte doit être `admin`.
+1. Le visiteur envoie le formulaire de contact (« Join Onconic »). La fonction `contact-request` enregistre la demande dans `contact_requests` et envoie un e-mail à chaque admin.
+2. L'e-mail contient trois liens : **Inviter comme médecin**, **Inviter comme assistante**, **Refuser**. Chaque lien ouvre `/admin/review.html`, qui affiche la demande et attend un clic sur **Confirmer** (les scanners de liens des messageries ne déclenchent donc rien).
+3. À la confirmation, la fonction `review-request` envoie l'invitation Supabase, attribue le rôle et marque la demande `invited` ou `declined`. Liens signés, valables 7 jours, utilisables une fois.
+
+Secrets des fonctions (*Edge Functions* > *Secrets*) : `SMTP_PASSWORD` (mot de passe de noreply@onconic.ch) et `REVIEW_SECRET` (chaîne aléatoire d'au moins 40 caractères ; la changer invalide les liens en cours).
+
+Invitation manuelle toujours possible : *Authentication* > *Users* > *Invite user*, puis rôle dans *Table Editor* > `profiles`.
 
 ## Charte graphique
 
