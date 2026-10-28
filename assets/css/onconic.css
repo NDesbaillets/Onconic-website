@@ -331,3 +331,11 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
   .ug-time { font-size: 1.3rem; }
   .ug-dl { grid-template-columns: 1fr; }
 }
+
+/* ---------- Mon compte ---------- */
+.account-grid { margin-top: var(--space-4); align-items: start; }
+.account-col { display: grid; gap: var(--space-4); }
+.account .card { padding: var(--space-4); }
+.account .card .btn { align-self: flex-start; justify-self: start; }
+.account-ro { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--navy-100); }
+.account-note { font-size: .85rem; margin-top: var(--space-2); }

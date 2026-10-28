@@ -57,6 +57,12 @@ Page `/app/duree.html`, réservée aux membres rattachés au CHUV (adresse `@chu
 - Mise à jour : en tant qu'admin, ouvrir `/app/duree.html`, choisir le nouveau fichier Excel, puis « Remplacer les données ». Le fichier est lu dans le navigateur ; toutes les lignes sont remplacées en une seule opération.
 - Aucune IA à l'usage : la recherche se fait dans le navigateur.
 
+## Page « Mon compte »
+
+`/fr/app/compte.html` et `/app/account.html` : prénom, nom, pseudo, téléphone, changement d'adresse e-mail (confirmé par lien), changement de mot de passe (mot de passe actuel requis), déconnexion de tous les appareils. Le rôle et l'institution restent en lecture seule.
+
+Installation : exécuter une fois `supabase/user_profile.sql` dans le SQL Editor. Si l'adresse passe de `@chuv.ch` à une autre, l'accès CHUV est retiré automatiquement.
+
 ## Modèles d'e-mails (Supabase)
 
 Bilingues FR puis EN, car Supabase n'a qu'un modèle par type. À coller dans *Authentication* > *Emails* > *Templates* :

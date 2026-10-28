@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Mon compte · Onconic</title>
+  <meta name="description" content="Mon compte · Onconic">
+  <meta name="robots" content="noindex">
+  <link rel="alternate" hreflang="en" href="https://onconic.ch/app/account.html">
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/onconic.css">
+  <script src="/assets/js/site.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js"></script>
+  <script src="/assets/js/account.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/">Accueil</a>
+        <a href="/fr/a-propos.html">À propos</a>
+        <a href="/fr/ruche.html">La Ruche</a>
+        <a href="/fr/contact.html">Contact</a>
+        <a class="lang" href="/app/account.html" hreflang="en" lang="en">EN</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section" id="account" hidden>
+      <div class="container account">
+        <span class="eyebrow">Mon compte</span>
+        <h1>Profil et sécurité</h1>
+        <hr class="rule">
+        <p><a href="/fr/app/">← Retour à ma Ruche</a></p>
+
+        <div class="grid-2 account-grid">
+          <div class="card">
+            <h2>Données personnelles</h2>
+            <form class="form" id="profile-form" novalidate>
+              <label>Prénom<input name="first_name" autocomplete="given-name" maxlength="80"></label>
+              <label>Nom<input name="last_name" autocomplete="family-name" maxlength="80"></label>
+              <label>Pseudo (facultatif)<input name="username" autocomplete="nickname" maxlength="30" pattern="[a-z0-9._-]{3,30}"></label>
+              <label>Téléphone (facultatif)<input name="phone" type="tel" autocomplete="tel" maxlength="20"></label>
+              <button class="btn" type="submit">Enregistrer</button>
+              <p class="form-msg" role="status" aria-live="polite"></p>
+            </form>
+            <dl class="ug-dl account-ro">
+              <dt>Rôle</dt><dd id="acc-role"></dd>
+              <dt>Institution</dt><dd id="acc-inst"></dd>
+            </dl>
+            <p class="muted account-note">Le rôle et l'institution sont attribués par l'administration.</p>
+          </div>
+
+          <div class="account-col">
+            <div class="card">
+              <h2>Adresse e-mail</h2>
+              <p class="muted">Adresse actuelle : <strong id="acc-email"></strong></p>
+              <form class="form" id="email-form">
+                <label>Nouvelle adresse<input name="email" type="email" autocomplete="email" required maxlength="200"></label>
+                <button class="btn btn-outline" type="submit">Changer d'adresse</button>
+                <p class="form-msg" id="email-msg" role="status" aria-live="polite"></p>
+              </form>
+            </div>
+
+            <div class="card">
+              <h2>Mot de passe</h2>
+              <form class="form" id="password-form">
+                <label>Mot de passe actuel<input name="current" type="password" autocomplete="current-password" required></label>
+                <label>Nouveau mot de passe (12 caractères minimum)<input name="password" type="password" autocomplete="new-password" minlength="12" required></label>
+                <label>Confirmer<input name="confirm" type="password" autocomplete="new-password" minlength="12" required></label>
+                <button class="btn btn-outline" type="submit">Changer le mot de passe</button>
+                <p class="form-msg" role="status" aria-live="polite"></p>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2 account-grid">
+          <div class="card">
+            <h2>Sessions</h2>
+            <p class="muted">Déconnecte ce compte sur tous les appareils (ordinateur, téléphone, tablette).</p>
+            <button class="btn btn-outline" id="signout-all" type="button">Se déconnecter partout</button>
+            <p class="form-msg" id="session-msg" role="status" aria-live="polite"></p>
+          </div>
+          <div class="card">
+            <h2>Vos données</h2>
+            <p class="muted">Pour obtenir une copie de vos données ou supprimer votre compte, écrivez à <a href="mailto:contact@onconic.ch">contact@onconic.ch</a>. Voir la <a href="/fr/confidentialite.html">politique de confidentialité</a>.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>
