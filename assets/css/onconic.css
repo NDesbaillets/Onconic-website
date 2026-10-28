@@ -172,3 +172,8 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 .profile h2 { margin-top: var(--space-5); }
 #r-message { display: block; white-space: pre-wrap; }
 [hidden] { display: none !important; }
+.legal h2 { margin-top: var(--space-5); font-size: 1.5rem; }
+.legal h3 { margin-top: var(--space-4); }
+.legal ul { padding-left: 1.2em; max-width: var(--measure); }
+.legal li { margin-bottom: var(--space-2); }
+.site-footer .footer-links a { white-space: nowrap; }
