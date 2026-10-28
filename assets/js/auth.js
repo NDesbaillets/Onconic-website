@@ -14,6 +14,7 @@
       pwShort: "At least 12 characters.",
       pwMismatch: "Passwords do not match.",
       pwUpdated: "Password updated. Redirecting…",
+      linkExpired: "This link is invalid or has expired. Request a new one from the sign-in page (Forgot password?).",
       sent: "Thank you. We will get back to you shortly.",
       error: "Something went wrong. Please try again or write to contact@onconic.ch."
     },
@@ -25,6 +26,7 @@
       pwShort: "Au moins 12 caractères.",
       pwMismatch: "Les mots de passe ne correspondent pas.",
       pwUpdated: "Mot de passe modifié. Redirection…",
+      linkExpired: "Ce lien est invalide ou a expiré. Demandez-en un nouveau depuis la page de connexion (Mot de passe oublié ?).",
       sent: "Merci. Nous revenons vers vous rapidement.",
       error: "Une erreur est survenue. Réessayez ou écrivez à contact@onconic.ch."
     }
@@ -63,7 +65,7 @@
       const email = login.email.value.trim();
       if (!email) return msg(out, T.enterEmail, "error");
       await sb.auth.resetPasswordForEmail(email, {
-        redirectTo: location.origin + base + (lang === "fr" ? "/nouveau-mot-de-passe.html" : "/reset-password.html")
+        redirectTo: "https://" + location.host + base + (lang === "fr" ? "/nouveau-mot-de-passe.html" : "/reset-password.html")
       });
       msg(out, T.resetSent, "ok"); // même message que le compte existe ou non
     });
@@ -73,6 +75,7 @@
   const reset = document.getElementById("reset-form");
   if (reset) {
     const out = reset.querySelector(".form-msg");
+    if (/error_code=/.test(location.hash)) msg(out, T.linkExpired, "error");
     reset.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (!sb) return msg(out, T.notConfigured, "error");
