@@ -74,6 +74,10 @@ Bilingues FR puis EN, car Supabase n'a qu'un modèle par type. À coller dans *A
 
 Le logo de l'en-tête est `assets/img/email-header.png` (PNG, car Gmail n'affiche pas les SVG). Le nom du destinataire vient de `full_name`, renseigné lors d'une invitation depuis l'e-mail de demande.
 
+## Cache des navigateurs
+
+Les pages chargent `onconic.css` et les scripts avec un suffixe de version (`?v=20261028`). Après toute modification de ces fichiers, changer ce suffixe dans toutes les pages, sinon des visiteurs peuvent combiner une page récente avec un ancien script gardé en cache.
+
 ## Charte graphique
 
 Reprise du « Onconic Brand Design » (claude.ai) : navy #001B4D, accent ambre #F0B12B (bouton principal, filets, focus, jamais en grand aplat), Helvetica Neue, angles droits, pas d'ombre. Tous les tokens sont dans le bloc `:root` de `assets/css/onconic.css`.

@@ -22,6 +22,9 @@ document.addEventListener("click", (e) => {
   const items = document.querySelectorAll("[data-reveal]");
   if (!items.length) return;
   if (!("IntersectionObserver" in window)) return items.forEach((el) => el.classList.add("revealed"));
+  // Le masquage initial n'existe que si ce script tourne : sans lui, tout reste visible
+  document.documentElement.classList.add("reveal-on");
+  setTimeout(() => items.forEach((el) => el.classList.add("revealed")), 3000);
   const io = new IntersectionObserver((entries) => {
     entries.forEach((e) => {
       if (!e.isIntersecting) return;
