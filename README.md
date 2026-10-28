@@ -48,6 +48,15 @@ Secrets des fonctions (*Edge Functions* > *Secrets*) : `SMTP_PASSWORD` (mot de p
 
 Invitation manuelle toujours possible : *Authentication* > *Users* > *Invite user*, puis rôle dans *Table Editor* > `profiles`.
 
+## Outil « Durée de traitement » (assistantes)
+
+Page `/app/duree.html`, réservée aux membres rattachés au CHUV (adresse `@chuv.ch`, ou champ `institution` = `CHUV` dans `profiles`) et aux admins.
+
+- Données : copie fidèle du fichier Excel Ultragenda dans la table `ug_slots` (Supabase, Zurich). **Le fichier n'est jamais commité** (`*.xlsx` est ignoré par Git).
+- Installation : exécuter une fois `supabase/ug_durations.sql` dans le SQL Editor.
+- Mise à jour : en tant qu'admin, ouvrir `/app/duree.html`, choisir le nouveau fichier Excel, puis « Remplacer les données ». Le fichier est lu dans le navigateur ; toutes les lignes sont remplacées en une seule opération.
+- Aucune IA à l'usage : la recherche se fait dans le navigateur.
+
 ## Modèles d'e-mails (Supabase)
 
 Bilingues FR puis EN, car Supabase n'a qu'un modèle par type. À coller dans *Authentication* > *Emails* > *Templates* :

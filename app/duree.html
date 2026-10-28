@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Durée de traitement · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/onconic.css">
+  <script src="/assets/js/site.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js"></script>
+  <script src="/assets/js/ug-parse.js" defer></script>
+  <script src="/assets/js/duree.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">Ma Ruche</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug">
+      <div class="container">
+        <span class="eyebrow">Outil des assistantes</span>
+        <h1>Durée de traitement</h1>
+        <hr class="rule">
+        <p class="form-msg" id="ug-status" role="status">Chargement…</p>
+
+        <div id="ug-tool" hidden>
+          <label class="ug-search">
+            <span class="visually-hidden">Rechercher un traitement</span>
+            <input id="q" type="search" autocomplete="off" placeholder="Médicament, nom commercial, acronyme ou code de plan (ex. pembro, Keytruda, FOLFOX)">
+          </label>
+          <div class="ug-filters">
+            <div class="ug-chips" id="ug-clinics" role="group" aria-label="Clinique"></div>
+            <div class="ug-chips" id="ug-routes" role="group" aria-label="Voie d'administration"></div>
+          </div>
+          <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
+          <div id="ug-results"></div>
+          <p class="muted ug-source" id="ug-source"></p>
+          <p class="muted ug-source">La voie d'administration est déduite du libellé. La durée affichée est celle du fichier Ultragenda, sans modification.</p>
+        </div>
+
+        <div class="card ug-admin" id="ug-admin" hidden>
+          <span class="eyebrow">Administration</span>
+          <h2>Importer une nouvelle version du fichier</h2>
+          <p class="muted">Le fichier est lu dans votre navigateur puis remplace toutes les lignes existantes. Il n'est jamais publié.</p>
+          <label>Fichier Excel Ultragenda (.xlsx)<input type="file" id="ug-file" accept=".xlsx"></label>
+          <button class="btn" id="ug-import" type="button" disabled>Remplacer les données</button>
+          <p class="form-msg" id="ug-import-msg" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>
