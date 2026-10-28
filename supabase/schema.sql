@@ -72,6 +72,10 @@ grant usage on schema public to anon, authenticated;
 grant insert on public.contact_requests to anon, authenticated;
 grant select on public.contact_requests to authenticated;
 grant select, update on public.profiles to authenticated;
+-- Les visiteurs anonymes n'ont rien à lire ; la fonction du déclencheur n'est pas appelable via l'API
+revoke select on public.profiles from anon;
+revoke select on public.contact_requests from anon;
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
 
 -- 3. Documents de formation (PDF, slides) -------------------------------------
 -- Bucket privé : les fichiers ne sont jamais publics, seulement servis aux membres validés.
