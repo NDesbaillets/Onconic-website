@@ -265,18 +265,18 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 @media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
 
 /* Apparition au défilement (activée seulement si JS est présent) */
-.js [data-reveal] { opacity: 0; transform: translateY(18px) scale(.96); transition: opacity 500ms ease-out, transform 500ms ease-out; }
-.js [data-reveal].revealed { opacity: 1; transform: none; }
-.js .comb .hex:nth-of-type(2) { transition-delay: 80ms; }
-.js .comb .hex:nth-of-type(3) { transition-delay: 160ms; }
-.js .comb .hex:nth-of-type(4) { transition-delay: 240ms; }
-.js .comb .hex:nth-of-type(5) { transition-delay: 320ms; }
-.js .comb .hex:nth-of-type(6) { transition-delay: 400ms; }
-.js .comb .hex:nth-of-type(7) { transition-delay: 480ms; }
-.js .comb .hex.revealed:hover { transition-delay: 0ms; transform: scale(1.04); }
+.reveal-on [data-reveal] { opacity: 0; transform: translateY(18px) scale(.96); transition: opacity 500ms ease-out, transform 500ms ease-out; }
+.reveal-on [data-reveal].revealed { opacity: 1; transform: none; }
+.reveal-on .comb .hex:nth-of-type(2) { transition-delay: 80ms; }
+.reveal-on .comb .hex:nth-of-type(3) { transition-delay: 160ms; }
+.reveal-on .comb .hex:nth-of-type(4) { transition-delay: 240ms; }
+.reveal-on .comb .hex:nth-of-type(5) { transition-delay: 320ms; }
+.reveal-on .comb .hex:nth-of-type(6) { transition-delay: 400ms; }
+.reveal-on .comb .hex:nth-of-type(7) { transition-delay: 480ms; }
+.reveal-on .comb .hex.revealed:hover { transition-delay: 0ms; transform: scale(1.04); }
 @media (prefers-reduced-motion: reduce) {
   .hive-logo { animation: none; }
-  .js [data-reveal] { opacity: 1; transform: none; transition: none; }
+  .reveal-on [data-reveal] { opacity: 1; transform: none; transition: none; }
 }
 
 /* ---------- Outil : durée de traitement ---------- */
