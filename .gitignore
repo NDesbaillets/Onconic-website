@@ -1,0 +1,5 @@
+
+# Données privées : ne jamais commiter
+*.xlsx
+*.xls
+*.csv
