@@ -339,3 +339,22 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 .account .card .btn { align-self: flex-start; justify-self: start; }
 .account-ro { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--navy-100); }
 .account-note { font-size: .85rem; margin-top: var(--space-2); }
+
+/* ---------- Tableau de bord : alvéoles des espaces ---------- */
+.hex-row { --w: 210px; --g: 8px; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: var(--space-5); }
+.hex-row .hex { margin: 0; text-decoration: none; }
+.hex-tag { margin-top: 4px; font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; color: var(--amber-500); }
+.hex-link .hex-in { color: var(--white); }
+.hex-link:hover .hex-tag, .hex-link:focus-visible .hex-tag { color: var(--navy-800); }
+.hex-link:focus-visible { outline: none; transform: scale(1.04); }
+.hex-link:focus-visible .hex-in { background: var(--amber-500); color: var(--navy-800); }
+.hex-link:focus-visible .hex-in svg, .hex-link:focus-visible .hex-in p { color: var(--navy-800); }
+.hex-soon { background: var(--navy-200); }
+.hex-soon .hex-in { background: var(--navy-800); opacity: .78; }
+.hex-soon .hex-tag { color: var(--navy-200); }
+.hex-soon:hover { transform: none; }
+.hex-soon:hover .hex-in { background: var(--navy-800); color: var(--white); }
+.hex-soon:hover .hex-in svg { color: var(--amber-500); }
+.hex-soon:hover .hex-in p { color: rgba(255, 255, 255, .72); }
+@media (max-width: 900px) { .hex-row { --w: 150px; --g: 6px; } }
+@media (max-width: 560px) { .hex-row .hex-in p { display: none; } }

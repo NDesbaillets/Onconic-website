@@ -11,6 +11,7 @@
   <link rel="alternate" hreflang="fr" href="https://onconic.ch/fr/app/">
   <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/css/onconic.css">
+  <script src="/assets/js/js-flag.js"></script>
   <script src="/assets/js/site.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js"></script>
@@ -31,44 +32,35 @@
     </div>
   </header>
 
-  <main>
-    <section class="section" id="hive-app" hidden>
+  <main id="hive-app" hidden>
+    <section class="hive-hero">
       <div class="container">
-        <div class="app-bar">
+        <div>
+          <span class="eyebrow">The Hive</span>
           <h1>Welcome, <span id="user-name"></span></h1>
-          <span class="btn-row"><a class="btn btn-outline" href="/app/account.html">My account</a>
-          <button class="btn btn-outline" id="logout" type="button">Sign out</button></span>
+          <hr class="rule">
+          <p class="lead">Your cells, according to your role. Tools are added over time.</p>
+          <div class="btn-row">
+            <a class="btn" href="/app/account.html">My account</a>
+            <button class="btn btn-light" id="logout" type="button">Sign out</button>
+          </div>
         </div>
-        <div class="grid-3">
-          <article class="card cell" data-roles="clinician assistant" hidden>
-            <span class="eyebrow">Learn</span>
-            <h2>Training</h2>
-            <ul>
-              <li>Guidelines (ESMO, NCCN, ASCO) by tumor</li>
-              <li>Internal presentations</li>
-              <li>Literature summaries (PDF, slides)</li>
-              <li>Tumor-by-tumor pages</li>
-            </ul>
-            <p class="muted">Coming soon</p>
-          </article>
-          <article class="card cell" data-roles="clinician" hidden>
-            <span class="eyebrow">Tools</span>
-            <h2>Physicians</h2>
-            <ul>
-              <li>Anonymised medical letter generator</li>
-              <li>Treatment initiation: side effects, schedule, premedication, dosing</li>
-            </ul>
-            <p class="muted">Coming soon</p>
-          </article>
-          <article class="card cell" data-roles="assistant" hidden>
-            <span class="eyebrow">Tools</span>
-            <h2>Assistants &amp; secretaries</h2>
-            <ul>
-              <li>Treatment duration to book (Ultragenda, French)</li>
-              <li>Treatment calendar</li>
-            </ul>
-            <a class="btn" href="/app/duree.html">Treatment duration</a>
-          </article>
+        <img class="hive-logo" src="/assets/img/the-hive.webp" alt="The Onconic Hive" width="536" height="720">
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <span class="eyebrow">My spaces</span>
+        <h2>Your cells</h2>
+        <div class="hex-row">
+          <a class="hex hex-link" href="/app/duree.html" data-roles="assistant" hidden data-reveal><span class="hex-in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><h3>Treatment duration</h3><p>Time to book in Ultragenda (French)</p><span class="hex-tag">Open →</span></span></a>
+          <div class="hex hex-soon" data-roles="assistant" hidden data-reveal><div class="hex-in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15"/><path d="M4 9h16M8 3v4M16 3v4"/><path d="M8 13h.01M12 13h.01M16 13h.01M8 16.5h.01M12 16.5h.01M16 16.5h.01"/></svg><h3>Calendar</h3><p>Treatment cycle planning</p><span class="hex-tag">Coming soon</span></div></div>
+          <div class="hex hex-soon" data-roles="clinician assistant" hidden data-reveal><div class="hex-in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M10 11h5M10 14h5M10 17h3"/></svg><h3>Training</h3><p>Guidelines and tumour pages</p><span class="hex-tag">Coming soon</span></div></div>
+          <div class="hex hex-soon" data-roles="clinician assistant" hidden data-reveal><div class="hex-in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h6l2 2h10v11H3z"/><path d="M3 10h18"/></svg><h3>Library</h3><p>Presentations, slides and PDFs</p><span class="hex-tag">Coming soon</span></div></div>
+          <div class="hex hex-soon" data-roles="clinician" hidden data-reveal><div class="hex-in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13"/><path d="M3 7l9 6 9-6"/></svg><h3>Medical letters</h3><p>Anonymised letter generator</p><span class="hex-tag">Coming soon</span></div></div>
+          <div class="hex hex-soon" data-roles="clinician" hidden data-reveal><div class="hex-in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 3l3 3M16.5 4.5l3 3M19 6l-9.5 9.5-3-3L16 3M8 14l-4 4M3 21l1-3 2 2z"/></svg><h3>Treatment initiation</h3><p>Side effects, premedication, dosing</p><span class="hex-tag">Coming soon</span></div></div>
+          <a class="hex hex-link" href="/app/account.html" data-reveal><span class="hex-in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg><h3>My account</h3><p>Profile, email and password</p><span class="hex-tag">Open →</span></span></a>
         </div>
       </div>
     </section>
