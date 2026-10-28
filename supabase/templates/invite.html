@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Onconic</title></head>
+<body style="margin:0;padding:0;background:#F2F4F8;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F2F4F8;">
+<tr><td align="center" style="padding:32px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1A2A4A;">
+<tr><td style="background:#001B4D;padding:24px 32px;">
+<img src="https://onconic.ch/assets/img/email-header.png" width="244" height="48" alt="Onconic" style="display:block;border:0;">
+</td></tr>
+<tr><td style="padding:32px 32px 8px;">
+<p style="margin:0 0 4px;font-size:12px;letter-spacing:.2em;color:#B4820E;">INVITATION · English below</p>
+<h1 style="margin:0 0 16px;font-size:26px;font-weight:300;line-height:1.2;color:#001B4D;">Bienvenue dans la Ruche</h1>
+<div style="width:96px;height:3px;background:#F0B12B;margin:0 0 20px;"></div>
+<p style="margin:0 0 12px;font-size:16px;line-height:1.6;">Bonjour{{ if .Data.full_name }} {{ .Data.full_name }}{{ end }},</p>
+<p style="margin:0 0 12px;font-size:16px;line-height:1.6;">Votre accès à Onconic est validé. Onconic est une plateforme collaborative à but non lucratif, conçue par des oncologues pour partager guidelines, cas et outils entre confrères.</p>
+<p style="margin:0 0 12px;font-size:16px;line-height:1.6;">Pour activer votre compte, choisissez votre mot de passe :</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;"><tr><td style="background:#F0B12B;">
+<a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;font-size:16px;font-weight:500;color:#001B4D;text-decoration:none;">Activer mon compte</a>
+</td></tr></table>
+<p style="margin:0 0 24px;font-size:13px;line-height:1.5;color:#5A6478;">Ce lien est personnel et ne fonctionne qu'une fois. S'il a expiré, utilisez « Mot de passe oublié ? » sur la page de connexion de la Ruche.</p>
+</td></tr>
+<tr><td style="padding:0 32px;"><div style="border-top:1px solid #DDE2EB;"></div></td></tr>
+<tr><td style="padding:24px 32px 8px;" lang="en">
+<p style="margin:0 0 4px;font-size:12px;letter-spacing:.2em;color:#B4820E;">INVITATION</p>
+<h2 style="margin:0 0 16px;font-size:20px;font-weight:300;line-height:1.2;color:#001B4D;">Welcome to the Hive</h2>
+<p style="margin:0 0 12px;font-size:16px;line-height:1.6;">Dear{{ if .Data.full_name }} {{ .Data.full_name }}{{ else }} colleague{{ end }},</p>
+<p style="margin:0 0 12px;font-size:16px;line-height:1.6;">Your access to Onconic has been approved. Onconic is a non-profit collaborative platform built by oncologists to share guidelines, cases and tools with peers.</p>
+<p style="margin:0 0 12px;font-size:16px;line-height:1.6;">To activate your account, choose your password:</p>
+<p style="margin:16px 0 8px;font-size:15px;"><a href="{{ .ConfirmationURL }}" style="color:#001B4D;font-weight:500;">Activate my account →</a></p>
+<p style="margin:0 0 24px;font-size:13px;line-height:1.5;color:#5A6478;">This link is personal and works only once. If it has expired, use “Forgot password?” on the Hive sign-in page.</p>
+</td></tr>
+<tr><td style="background:#001B4D;padding:20px 32px;font-size:12px;line-height:1.6;color:rgba(255,255,255,.72);">
+<span style="color:#F0B12B;letter-spacing:.2em;">ONCOLOGY MADE ICONIC</span><br>
+Onconic · Lausanne · <a href="https://onconic.ch" style="color:#FFFFFF;">onconic.ch</a>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>
