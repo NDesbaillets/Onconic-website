@@ -177,3 +177,104 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 .legal ul { padding-left: 1.2em; max-width: var(--measure); }
 .legal li { margin-bottom: var(--space-2); }
 .site-footer .footer-links a { white-space: nowrap; }
+
+/* ---------- La Ruche : page publique ---------- */
+.hive-hero { position: relative; overflow: hidden; background: var(--navy-800); color: var(--white); padding: var(--space-6) 0; }
+.hive-hero::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image: url("../img/honeycomb.svg"); background-size: 96px;
+  mask-image: linear-gradient(to right, #000 0%, transparent 70%);
+  -webkit-mask-image: linear-gradient(to right, #000 0%, transparent 70%);
+}
+.hive-hero .container { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 400px); gap: var(--space-5); align-items: center; }
+.hive-hero h1 { color: var(--white); }
+.hive-hero .eyebrow { color: var(--amber-500); }
+.hive-hero .lead { font-size: 1.2rem; font-weight: 300; color: rgba(255, 255, 255, .8); max-width: 46ch; margin-bottom: var(--space-4); }
+.hive-logo { width: 100%; max-width: 400px; height: auto; justify-self: center; animation: hive-float 6s ease-in-out infinite; }
+@keyframes hive-float { 50% { transform: translateY(-10px); } }
+.btn-row { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.btn-light { background: transparent; border-color: rgba(255, 255, 255, .7); color: var(--white); }
+.btn-light:hover { background: rgba(255, 255, 255, .1); color: var(--white); }
+@media (max-width: 860px) {
+  .hive-hero .container { grid-template-columns: 1fr; }
+  .hive-logo { max-width: 260px; order: -1; }
+}
+
+/* Rayon d'alvéoles : grille en demi-colonnes, une rangée sur deux décalée d'une demi-alvéole */
+.comb {
+  --w: 210px; --g: 8px;
+  display: grid; justify-content: center;
+  grid-template-columns: repeat(8, calc(var(--w) / 2));
+  grid-auto-rows: calc(var(--w) * .866);
+  margin-top: var(--space-5); padding-bottom: calc(var(--w) * .3);
+}
+.hex {
+  position: relative; align-self: start;
+  width: calc(var(--w) - var(--g)); height: calc((var(--w) - var(--g)) * 1.1547); margin: calc(var(--g) / 2);
+  background: var(--amber-500);
+  clip-path: polygon(0% 25%, 0% 75%, 50% 100%, 100% 75%, 100% 25%, 50% 0%);
+  transition: transform var(--transition) ease-out;
+}
+.hex:nth-child(1) { grid-area: 1 / 1 / 2 / 3; }
+.hex:nth-child(2) { grid-area: 1 / 3 / 2 / 5; }
+.hex:nth-child(3) { grid-area: 1 / 5 / 2 / 7; }
+.hex:nth-child(4) { grid-area: 1 / 7 / 2 / 9; }
+.hex:nth-child(5) { grid-area: 2 / 4 / 3 / 6; }
+.hex:nth-child(6) { grid-area: 2 / 2 / 3 / 4; }
+.hex:nth-child(7) { grid-area: 2 / 6 / 3 / 8; }
+.hex-in {
+  position: absolute; inset: 3px; background: var(--navy-800); color: var(--white);
+  clip-path: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 18% 14%; gap: 6px; transition: background-color 200ms, color 200ms;
+}
+.hex-in svg { width: 40px; height: 40px; color: var(--amber-500); transition: color 200ms; }
+.hex-in h3 { margin: 0; font-size: 1.05rem; font-weight: 500; color: inherit; }
+.hex-in p { margin: 0; font-size: .82rem; line-height: 1.35; color: rgba(255, 255, 255, .72); transition: color 200ms; }
+.hex:hover { transform: scale(1.04); }
+.hex:hover .hex-in { background: var(--amber-500); color: var(--navy-800); }
+.hex:hover .hex-in svg, .hex:hover .hex-in p { color: var(--navy-800); }
+.hex-bee .hex-in { background: var(--navy-900); }
+.hex-bee .hex-in img { width: 62%; height: auto; }
+.hex-bee:hover .hex-in { background: var(--navy-900); }
+@media (max-width: 900px) {
+  /* 2 alvéoles par rangée, en zigzag */
+  .comb { --w: 140px; --g: 6px; grid-template-columns: repeat(5, calc(var(--w) / 2)); }
+  .hex:nth-child(1) { grid-area: 1 / 1 / 2 / 3; }
+  .hex:nth-child(2) { grid-area: 1 / 3 / 2 / 5; }
+  .hex:nth-child(5) { grid-area: 2 / 2 / 3 / 4; }
+  .hex:nth-child(3) { grid-area: 2 / 4 / 3 / 6; }
+  .hex:nth-child(4) { grid-area: 3 / 1 / 4 / 3; }
+  .hex:nth-child(6) { grid-area: 3 / 3 / 4 / 5; }
+  .hex:nth-child(7) { grid-area: 4 / 2 / 5 / 4; }
+  .hex-in { padding: 16% 10%; gap: 4px; }
+  .hex-in p { display: none; }
+  .hex-in svg { width: 30px; height: 30px; }
+  .hex-in h3 { font-size: .85rem; }
+}
+
+/* Étapes pour rejoindre */
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); margin-top: var(--space-5); }
+.step { display: flex; gap: var(--space-3); align-items: flex-start; }
+.step-num {
+  flex: none; width: 56px; height: 64px; display: grid; place-items: center;
+  background: var(--amber-500); color: var(--navy-800); font-size: 1.4rem; font-weight: 300;
+  clip-path: polygon(0% 25%, 0% 75%, 50% 100%, 100% 75%, 100% 25%, 50% 0%);
+}
+.step h3 { margin: 4px 0 6px; }
+.step p { color: var(--ink-600); margin: 0; }
+@media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+
+/* Apparition au défilement (activée seulement si JS est présent) */
+.js [data-reveal] { opacity: 0; transform: translateY(18px) scale(.96); transition: opacity 500ms ease-out, transform 500ms ease-out; }
+.js [data-reveal].revealed { opacity: 1; transform: none; }
+.js .comb .hex:nth-of-type(2) { transition-delay: 80ms; }
+.js .comb .hex:nth-of-type(3) { transition-delay: 160ms; }
+.js .comb .hex:nth-of-type(4) { transition-delay: 240ms; }
+.js .comb .hex:nth-of-type(5) { transition-delay: 320ms; }
+.js .comb .hex:nth-of-type(6) { transition-delay: 400ms; }
+.js .comb .hex:nth-of-type(7) { transition-delay: 480ms; }
+.js .comb .hex.revealed:hover { transition-delay: 0ms; transform: scale(1.04); }
+@media (prefers-reduced-motion: reduce) {
+  .hive-logo { animation: none; }
+  .js [data-reveal] { opacity: 1; transform: none; transition: none; }
+}
