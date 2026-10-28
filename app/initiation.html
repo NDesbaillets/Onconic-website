@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Initiation de traitement · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261028b">
+  <script src="/assets/js/site.js?v=20261028" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/sl-parse.js?v=20261028b" defer></script>
+  <script src="/assets/js/initiation-rx.js?v=20261028b" defer></script>
+  <script src="/assets/js/initiation.js?v=20261028b" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">Ma Ruche</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section it">
+      <div class="container">
+        <span class="eyebrow">Outil des médecins</span>
+        <h1>Initiation de traitement</h1>
+        <hr class="rule">
+        <p class="form-msg" id="it-status" role="status">Chargement…</p>
+
+        <div class="it-layout" id="it-tool" hidden>
+          <form class="form it-form" id="it-form" autocomplete="off">
+            <p class="muted it-anon">Saisie anonyme : aucun nom, aucune date de naissance. Rien n'est enregistré.</p>
+
+            <fieldset>
+              <legend>Traitement</legend>
+              <label>Clinique<select name="clinic" id="f-clinic"></select></label>
+              <label>Protocole<select name="protocol" id="f-protocol"></select></label>
+              <div id="f-variants"></div>
+              <div class="it-pair">
+                <label id="f-cycles-wrap" hidden>Cycles<select name="cycles" id="f-cycles"></select></label>
+                <label id="f-cyclen-wrap" hidden>Durée du cycle<select name="cyclen" id="f-cyclen"></select></label>
+                <label id="f-maint-wrap" hidden>Cycles de maintenance affichés<input name="maint" id="f-maint" type="number" min="1" max="60" inputmode="numeric"></label>
+              </div>
+              <label>Date prévue du 1er traitement<input name="start" id="f-start" type="date" required></label>
+            </fieldset>
+
+            <fieldset>
+              <legend>Situation</legend>
+              <label>Histologie<input name="histo" id="f-histo" list="histo-list" placeholder="ex. adénocarcinome, CPPC"></label>
+              <datalist id="histo-list">
+                <option value="CBNPC adénocarcinome"><option value="CBNPC épidermoïde"><option value="CBNPC autre">
+                <option value="CPPC (petites cellules)"><option value="Mésothéliome pleural"><option value="Thymome / carcinome thymique">
+              </datalist>
+              <div class="it-tnm">
+                <label>T<input name="t" placeholder="cT2a"></label>
+                <label>N<input name="n" placeholder="cN2"></label>
+                <label>M<input name="m" placeholder="cM1c"></label>
+                <label>Stade<input name="stage" list="stage-list" placeholder="IVB"></label>
+              </div>
+              <datalist id="stage-list">
+                <option value="IA1"><option value="IA2"><option value="IA3"><option value="IB"><option value="IIA"><option value="IIB">
+                <option value="IIIA"><option value="IIIB"><option value="IIIC"><option value="IVA"><option value="IVB">
+              </datalist>
+              <div class="it-radios" role="radiogroup" aria-label="Contexte">
+                <label><input type="radio" name="setting" value="néoadjuvant"> Néoadjuvant</label>
+                <label><input type="radio" name="setting" value="adjuvant"> Adjuvant</label>
+                <label><input type="radio" name="setting" value="métastatique" checked> Métastatique / avancé</label>
+              </div>
+              <label>Étude de référence (optionnel)<input name="trial" id="f-trial" placeholder="ex. CheckMate 9LA"></label>
+            </fieldset>
+
+            <fieldset>
+              <legend>Neutropénie fébrile</legend>
+              <label>Risque de NF du schéma
+                <select name="fn" id="f-fn">
+                  <option value="low">&lt; 10 %</option>
+                  <option value="mid">10 à 20 %</option>
+                  <option value="high">≥ 20 %</option>
+                </select>
+              </label>
+              <label class="it-check"><input type="checkbox" name="fnrisk"> Facteurs de risque du patient (âge ≥ 65 ans, ECOG, comorbidités, NF antérieure…)</label>
+              <label>G-CSF
+                <select name="gcsf" id="f-gcsf">
+                  <option value="pegfilgrastim">Pegfilgrastim (Fulphila), dose unique</option>
+                  <option value="filgrastim">Filgrastim, J5 à J9</option>
+                </select>
+              </label>
+            </fieldset>
+
+            <fieldset>
+              <legend>Ordonnance de support</legend>
+              <div id="f-rx"></div>
+              <label id="f-emeto-wrap" hidden>Antiémèse absente du protocole, niveau émétogène (MASCC/ESMO)
+                <select name="emeto" id="f-emeto">
+                  <option value="high">Hautement émétisant</option>
+                  <option value="carbo">Carboplatine AUC ≥ 4</option>
+                  <option value="moderate">Modérément émétisant</option>
+                  <option value="low">Faiblement émétisant</option>
+                  <option value="minimal">Minimalement émétisant</option>
+                </select>
+              </label>
+            </fieldset>
+          </form>
+
+          <div class="it-out" id="it-out" aria-live="polite">
+            <div class="btn-row it-actions">
+              <button class="btn btn-navy" id="it-print" type="button">Imprimer</button>
+            </div>
+            <section class="it-card" id="o-summary"></section>
+            <section class="it-card" id="o-cycles"></section>
+            <section class="it-card" id="o-agenda"></section>
+            <section class="it-card" id="o-sl"></section>
+            <section class="it-card" id="o-rx-onco"></section>
+            <section class="it-card" id="o-rx-support"></section>
+            <section class="it-card" id="o-hospital"></section>
+          </div>
+        </div>
+
+        <div class="card ug-admin" id="it-admin" hidden>
+          <span class="eyebrow">Administration</span>
+          <h2>Mettre à jour les données</h2>
+          <p class="muted">Les fichiers sont lus dans votre navigateur. Les protocoles restent visibles uniquement par les médecins du CHUV.</p>
+          <label>Protocoles transcrits (.json) : ajout ou remplacement par code<input type="file" id="it-proto-file" accept=".json,application/json"></label>
+          <label>Liste des spécialités OFSP (.xlsx) : remplace la version précédente<input type="file" id="it-sl-file" accept=".xlsx"></label>
+          <button class="btn" id="it-import" type="button" disabled>Importer</button>
+          <p class="form-msg" id="it-import-msg" role="status" aria-live="polite"></p>
+          <p class="muted ug-source" id="it-source"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>
