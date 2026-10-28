@@ -45,7 +45,8 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- 2. Formulaire de contact ----------------------------------------------------
--- Les visiteurs anonymes peuvent écrire, jamais lire.
+-- Les demandes arrivent uniquement par l'Edge Function contact-request (clé service_role),
+-- qui notifie les admins. Aucune écriture directe depuis le site.
 create table if not exists public.contact_requests (
   id bigint generated always as identity primary key,
   kind text not null check (kind in ('join', 'business', 'other')),
@@ -54,14 +55,18 @@ create table if not exists public.contact_requests (
   organisation text check (char_length(organisation) <= 200),
   message text not null check (char_length(message) between 1 and 4000),
   lang text check (lang in ('en', 'fr')),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  status text not null default 'pending'
+    check (status in ('pending', 'processing', 'invited', 'declined')),
+  handled_role text check (handled_role in ('clinician', 'assistant')),
+  handled_at timestamptz
 );
+
+create index if not exists contact_requests_email_created_idx on public.contact_requests (email, created_at);
 
 alter table public.contact_requests enable row level security;
 
 drop policy if exists "contact: anyone can submit" on public.contact_requests;
-create policy "contact: anyone can submit" on public.contact_requests
-  for insert to anon, authenticated with check (true);
 
 drop policy if exists "contact: admin reads" on public.contact_requests;
 create policy "contact: admin reads" on public.contact_requests
@@ -69,12 +74,12 @@ create policy "contact: admin reads" on public.contact_requests
 
 -- Droits d'accès explicites (les règles RLS ci-dessus filtrent ensuite ligne par ligne)
 grant usage on schema public to anon, authenticated;
-grant insert on public.contact_requests to anon, authenticated;
 grant select on public.contact_requests to authenticated;
 grant select, update on public.profiles to authenticated;
 -- Les visiteurs anonymes n'ont rien à lire ; la fonction du déclencheur n'est pas appelable via l'API
 revoke select on public.profiles from anon;
 revoke select on public.contact_requests from anon;
+revoke insert, update, delete on public.contact_requests from anon, authenticated;
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 
 -- 3. Documents de formation (PDF, slides) -------------------------------------
