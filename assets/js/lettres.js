@@ -8,6 +8,13 @@
   const LINES = window.LetterParse.LINES;
   const LINE_LABEL = Object.fromEntries(LINES);
 
+  // Cliniques du CHUV, par bloc ; une clinique présente en base mais absente d'ici apparaît sous « Autres »
+  const BLOCS = [
+    ["Bloc 1", ["Sénologie", "Gynécologie", "Urologie"]],
+    ["Bloc 2", ["Thoracique", "Neuro-oncologie", "Mélanome"]],
+    ["Bloc 3", ["Lower GI", "Upper GI", "ORL", "Sarcomes", "Radiologie interventionnelle"]]
+  ];
+
   const $ = (id) => document.getElementById(id);
   const state = { rows: [], clinic: "", route: "", line: "" };
 
@@ -55,7 +62,7 @@
     const mk = norm($("f-mk").value).split(" ").filter(Boolean);
     const hits = [];
     for (const r of state.rows) {
-      if (state.clinic && r.clinic !== state.clinic) continue;
+      if (state.clinic && norm(r.clinic) !== state.clinic) continue;
       if (state.route && !r._routes.includes(state.route)) continue;
       if (state.line && !r.lines.includes(state.line)) continue;
       if (!tokens.every((t) => r._hay.includes(t))) continue;
@@ -176,15 +183,36 @@
     box.replaceChildren(make("", all), ...values.map(([v, l]) => make(v, l)));
   }
 
+  // Sélecteur de clinique : filtre (avec « Toutes » et le nombre de lettres) ou champ du formulaire admin
+  function fillClinics(sel, filter, current) {
+    const count = (c) => state.rows.filter((r) => norm(r.clinic) === norm(c)).length;
+    const known = new Set(BLOCS.flatMap(([, l]) => l).map(norm));
+    const others = [...new Set(state.rows.map((r) => r.clinic).filter((c) => c && !known.has(norm(c))))].sort();
+    const opt = (c) => {
+      const o = el("option", null, filter ? `${c} (${count(c)})` : c);
+      o.value = filter ? norm(c) : c;
+      if (filter && !count(c)) o.disabled = true;
+      return o;
+    };
+    const groups = BLOCS.concat(others.length ? [["Autres", others]] : []).map(([bloc, list]) => {
+      const g = el("optgroup");
+      g.label = bloc;
+      g.append(...list.map(opt));
+      return g;
+    });
+    const first = el("option", null, filter ? `Toutes les cliniques (${state.rows.length})` : "Choisir…");
+    first.value = "";
+    sel.replaceChildren(first, ...groups);
+    sel.value = filter ? state.clinic : ([...sel.options].find((o) => norm(o.value) === norm(current)) || first).value;
+  }
+
   function setupFilters() {
     chips("ug-lines", LINES, "line", "Toutes lignes");
     const clinics = [...new Set(state.rows.map((r) => r.clinic).filter(Boolean))].sort();
-    if (clinics.length > 1) chips("ug-clinics", clinics.map((c) => [c, c]), "clinic", "Toutes cliniques");
-    else $("ug-clinics").hidden = true;
+    fillClinics($("f-clinic"), true);
     chips("ug-routes", [["IV", "IV"], ["SC", "SC"], ["PO", "Oral"]], "route", "Toutes voies");
     const fill = (id, values) => $(id).replaceChildren(...[...new Set(values)].sort().map((v) => { const o = el("option"); o.value = v; return o; }));
     fill("dx-list", state.rows.map((r) => r.diagnosis).filter(Boolean));
-    fill("clinic-list", state.rows.map((r) => r.clinic).filter(Boolean));
     if (!state.lastClinic && clinics.length) {
       const count = (c) => state.rows.filter((r) => r.clinic === c).length;
       state.lastClinic = clinics.reduce((a, b) => (count(b) > count(a) ? b : a));
@@ -256,7 +284,14 @@
     const grid = el("div", "lt-editor-grid");
     grid.append(
       field("title", "Titre", src.title),
-      field("clinic", "Clinique", src.clinic || state.lastClinic || "", "clinic-list"),
+      (() => {
+        const l = el("label", null, "Clinique");
+        const sel = el("select");
+        sel.name = "clinic";
+        fillClinics(sel, false, src.clinic || state.lastClinic || "");
+        l.append(sel);
+        return l;
+      })(),
       field("diagnosis", "Diagnostic", src.diagnosis, "dx-list"),
       field("markers", "Drivers / marqueurs (séparés par « ; »)", src.markers, "mk-list"),
       field("trial", "Étude(s) de référence", src.trial),
@@ -294,6 +329,7 @@
         note: (fd.get("note") || "").trim() || null, lines: fd.getAll("lines")
       };
       if (!payload.title) { msg.className = "form-msg error"; msg.textContent = "Le titre est obligatoire."; return; }
+      if (!payload.clinic) { msg.className = "form-msg error"; msg.textContent = "Choisissez une clinique."; return; }
       if (!payload.lines.length) { msg.className = "form-msg error"; msg.textContent = "Cochez au moins une ligne thérapeutique."; return; }
       if (ex) payload.id = ex.id;
       if (opts.fromDrop) Object.assign(payload, { file: row.file, html: row.html, drugs: row.drugs, docx: row.docx });
@@ -431,6 +467,7 @@
     const { data: profile } = await sb.from("profiles").select("role").eq("id", data.session.user.id).single();
     const role = profile ? profile.role : "member";
     for (const id of ["q", "f-dx", "f-mk"]) $(id).addEventListener("input", search);
+    $("f-clinic").addEventListener("change", (e) => { state.clinic = e.target.value; search(); });
     if (role === "admin") setupAdmin();
 
     const rows = await loadRows();
