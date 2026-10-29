@@ -8,12 +8,12 @@
   <meta name="robots" content="noindex">
   <title>Lettres d'assurance · Onconic</title>
   <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261029b">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261030">
   <script src="/assets/js/site.js?v=20261028" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
   <script src="/assets/js/letter-parse.js?v=20261029b" defer></script>
-  <script src="/assets/js/lettres.js?v=20261029b" defer></script>
+  <script src="/assets/js/lettres.js?v=20261030" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -42,15 +42,14 @@
             <input id="q" type="search" autocomplete="off" placeholder="Médicament, nom commercial, étude ou code d'indication (ex. osimertinib, Keytruda, KEYNOTE-189)">
           </label>
           <div class="lt-fields">
+            <label>Clinique<select id="f-clinic"></select></label>
             <label>Diagnostic<input id="f-dx" type="search" autocomplete="off" list="dx-list" placeholder="ex. CBNPC non épidermoïde"></label>
             <label>Drivers / marqueurs<input id="f-mk" type="search" autocomplete="off" list="mk-list" placeholder="ex. EGFR, ALK, PD-L1 ≥ 50 %"></label>
             <datalist id="dx-list"></datalist>
             <datalist id="mk-list"></datalist>
-            <datalist id="clinic-list"></datalist>
           </div>
           <div class="ug-filters">
             <div class="ug-chips" id="ug-lines" role="group" aria-label="Ligne thérapeutique"></div>
-            <div class="ug-chips" id="ug-clinics" role="group" aria-label="Clinique"></div>
             <div class="ug-chips" id="ug-routes" role="group" aria-label="Voie d'administration"></div>
           </div>
           <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
