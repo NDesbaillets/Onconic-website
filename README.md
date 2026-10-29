@@ -61,8 +61,9 @@ Page `/app/duree.html`, réservée aux membres rattachés au CHUV (adresse `@chu
 
 - Page `/app/lettres.html` (français), réservée aux médecins du CHUV et aux admins.
 - Installation : exécuter une fois `supabase/lettres.sql` dans le SQL Editor.
-- Données : les lettres Word restent la source du texte ; un tableur d'index (une ligne par lettre : fichier, titre, clinique, diagnostic, drivers, lignes, étude, mots-clés, remarque) sert à la recherche. L'admin importe les deux depuis la page ; substances, noms commerciaux, codes LS et voie sont lus dans le tableau de chaque lettre.
-- Lignes autorisées dans l'index, séparées par « ; » : Néoadjuvant, Adjuvant, 1re ligne, 2e ligne, 3e ligne et plus.
+- Ajout courant (admin) : glisser une ou plusieurs lettres Word sur la page. Titre, médicaments, codes LS, voie, diagnostic, drivers, lignes et études sont détectés dans la lettre et proposés dans un formulaire à vérifier avant d'enregistrer. Un fichier de même nom remplace la lettre existante en gardant ses champs. Chaque lettre peut être modifiée ou supprimée depuis sa fiche.
+- La base fait office d'index ; « Exporter l'index (.xlsx) » en donne une copie. L'import complet (toutes les lettres, avec ou sans tableur) reste disponible pour une reprise globale.
+- Lignes : Néoadjuvant, Adjuvant, 1re ligne, 2e ligne, 3e ligne et plus.
 - Ni les lettres ni l'index ne sont versionnés ici.
 
 ## Page « Mon compte »

@@ -105,6 +105,15 @@
     dl.type = "button";
     dl.addEventListener("click", () => download(r, dl));
     actions.append(copyBtn, dl);
+    if (state.admin) {
+      const edit = el("button", "btn btn-outline ug-copy", "Modifier");
+      edit.type = "button";
+      edit.addEventListener("click", () => { if (!b.querySelector(".lt-editor")) b.insertBefore(editor(r, { existing: r }), actions.nextSibling); });
+      const del = el("button", "btn btn-outline ug-copy lt-danger", "Supprimer");
+      del.type = "button";
+      del.addEventListener("click", () => remove(r));
+      actions.append(edit, del);
+    }
     const letter = el("article", "lt-letter");
     // HTML déjà nettoyé à l'import ; nettoyé encore ici par sécurité
     letter.innerHTML = window.LetterParse.sanitize(r.html);
@@ -175,12 +184,16 @@
     chips("ug-routes", [["IV", "IV"], ["SC", "SC"], ["PO", "Oral"]], "route", "Toutes voies");
     const fill = (id, values) => $(id).replaceChildren(...[...new Set(values)].sort().map((v) => { const o = el("option"); o.value = v; return o; }));
     fill("dx-list", state.rows.map((r) => r.diagnosis).filter(Boolean));
+    fill("clinic-list", state.rows.map((r) => r.clinic).filter(Boolean));
+    if (!state.lastClinic && clinics.length) {
+      const count = (c) => state.rows.filter((r) => r.clinic === c).length;
+      state.lastClinic = clinics.reduce((a, b) => (count(b) > count(a) ? b : a));
+    }
     fill("mk-list", state.rows.flatMap((r) => (r.markers || "").split(";").map((m) => m.trim())).filter(Boolean));
-    for (const id of ["q", "f-dx", "f-mk"]) $(id).addEventListener("input", search);
     search();
   }
 
-  // ----- Import (admin) -----
+  // ----- Administration -----
   function loadScript(src, global) {
     return new Promise((ok, ko) => {
       if (window[global]) return ok();
@@ -190,8 +203,166 @@
     });
   }
 
-  function setupImport() {
+  async function loadRows() {
+    const [{ data: rows, error }, { data: meta }] = await Promise.all([
+      sb.from("letters").select("id, position, file, title, clinic, diagnosis, markers, lines, trial, keywords, note, drugs, html").order("position").range(0, 999),
+      sb.from("letters_meta").select("source_file, imported_at, row_count").maybeSingle()
+    ]);
+    if (meta) {
+      const d = new Date(meta.imported_at);
+      $("ug-source").textContent = `Source : ${meta.source_file}, mis à jour le ${d.toLocaleDateString("fr-CH")} (${meta.row_count} lettres).`;
+    }
+    return error ? null : rows || [];
+  }
+
+  async function refresh() {
+    const rows = await loadRows();
+    if (!rows) return;
+    prepare(rows);
+    $("ug-status").hidden = rows.length > 0;
+    $("ug-tool").hidden = rows.length === 0;
+    setupFilters();
+  }
+
+  const splitList = (v) => String(v || "").split(";").map((x) => x.trim()).filter(Boolean);
+
+  // Formulaire d'une lettre : nouvelle (row issu du Word) ou existante (opts.existing)
+  function editor(row, opts = {}) {
+    const ex = opts.existing;
+    const f = el("form", "lt-editor");
+    f.noValidate = true;
+    const field = (name, label, value, list) => {
+      const l = el("label", null, label);
+      const i = el("input");
+      i.name = name; i.value = value || ""; i.autocomplete = "off";
+      if (list) i.setAttribute("list", list);
+      l.append(i);
+      return l;
+    };
+    const head = el("div", "lt-editor-head");
+    head.append(el("strong", null, row.file));
+    head.append(el("span", "ug-badge " + (ex && !opts.fromDrop ? "" : ex ? "ug-warn" : "lt-new"),
+      ex && !opts.fromDrop ? "Modification" : ex ? "Remplace la lettre existante" : "Nouvelle lettre"));
+    f.append(head);
+    if (row.drugs && opts.fromDrop) {
+      const d = el("p", "lt-drugs");
+      d.append(el("span", "muted", "Lu dans la lettre : "));
+      row.drugs.forEach((x, i) => { if (i) d.append(" · "); d.append(el("strong", null, x.substance), ` ${x.brand}${x.code ? " — " + x.code : ""}`); });
+      if (!row.drugs.length) d.append("aucun médicament reconnu");
+      f.append(d);
+    }
+    (row.warnings || []).forEach((w) => f.append(el("p", "ug-note ug-attn", "Attention : " + w)));
+    const src = ex || row;
+    const grid = el("div", "lt-editor-grid");
+    grid.append(
+      field("title", "Titre", src.title),
+      field("clinic", "Clinique", src.clinic || state.lastClinic || "", "clinic-list"),
+      field("diagnosis", "Diagnostic", src.diagnosis, "dx-list"),
+      field("markers", "Drivers / marqueurs (séparés par « ; »)", src.markers, "mk-list"),
+      field("trial", "Étude(s) de référence", src.trial),
+      field("keywords", "Mots-clés (séparés par « ; »)", src.keywords),
+      field("note", "Remarque interne", src.note)
+    );
+    f.append(grid);
+    const lines = el("fieldset", "lt-editor-lines");
+    lines.append(el("legend", null, "Lignes thérapeutiques"));
+    for (const [id, label] of LINES) {
+      const l = el("label", "lt-check");
+      const c = el("input");
+      c.type = "checkbox"; c.name = "lines"; c.value = id; c.checked = (src.lines || []).includes(id);
+      l.append(c, " " + label);
+      lines.append(l);
+    }
+    f.append(lines);
+    const msg = el("p", "form-msg");
+    msg.setAttribute("role", "status");
+    const bar = el("div", "btn-row");
+    const save = el("button", "btn", "Enregistrer");
+    save.type = "submit";
+    const cancel = el("button", "btn btn-outline", "Annuler");
+    cancel.type = "button";
+    cancel.addEventListener("click", () => f.remove());
+    bar.append(save, cancel);
+    f.append(bar, msg);
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(f);
+      const payload = {
+        title: (fd.get("title") || "").trim(), clinic: (fd.get("clinic") || "").trim() || null,
+        diagnosis: (fd.get("diagnosis") || "").trim() || null, markers: splitList(fd.get("markers")).join(" ; ") || null,
+        trial: splitList(fd.get("trial")).join(" ; ") || null, keywords: splitList(fd.get("keywords")).join(" ; ") || null,
+        note: (fd.get("note") || "").trim() || null, lines: fd.getAll("lines")
+      };
+      if (!payload.title) { msg.className = "form-msg error"; msg.textContent = "Le titre est obligatoire."; return; }
+      if (!payload.lines.length) { msg.className = "form-msg error"; msg.textContent = "Cochez au moins une ligne thérapeutique."; return; }
+      if (ex) payload.id = ex.id;
+      if (opts.fromDrop) Object.assign(payload, { file: row.file, html: row.html, drugs: row.drugs, docx: row.docx });
+      save.disabled = true;
+      msg.className = "form-msg"; msg.textContent = "Enregistrement…";
+      const { error } = await sb.rpc("letters_upsert", { p_row: payload });
+      save.disabled = false;
+      if (error) { msg.className = "form-msg error"; msg.textContent = "Refusé : " + error.message; return; }
+      state.lastClinic = payload.clinic;
+      f.remove();
+      $("lt-drop-msg").className = "form-msg ok";
+      $("lt-drop-msg").textContent = `« ${payload.title} » enregistrée.`;
+      await refresh();
+    });
+    return f;
+  }
+
+  async function remove(r) {
+    if (!confirm(`Supprimer définitivement la lettre « ${r.title} » ?`)) return;
+    const { error } = await sb.rpc("letters_delete", { p_id: r.id });
+    if (error) return alert("Suppression refusée : " + error.message);
+    await refresh();
+  }
+
+  async function dropped(files) {
+    const docs = [...files].filter((f) => /\.docx$/i.test(f.name));
+    const msg = $("lt-drop-msg");
+    if (!docs.length) { msg.className = "form-msg error"; msg.textContent = "Déposez des fichiers Word (.docx)."; return; }
+    msg.className = "form-msg"; msg.textContent = "Lecture…";
+    try {
+      await loadScript(MAMMOTH, "mammoth");
+      for (const file of docs) {
+        const row = await window.LetterParse.fromDocx(file, window.mammoth);
+        const existing = state.rows.find((r) => r.file === row.file);
+        $("lt-editors").prepend(editor(row, { existing, fromDrop: true }));
+      }
+      msg.textContent = `${docs.length} lettre${docs.length > 1 ? "s" : ""} à vérifier puis enregistrer.`;
+    } catch (err) { msg.className = "form-msg error"; msg.textContent = "Lecture impossible : " + err.message; }
+  }
+
+  async function exportIndex() {
+    await loadScript(EXCELJS, "ExcelJS");
+    const wb = new window.ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Lettres");
+    ws.columns = [["Fichier", 52], ["Titre", 44], ["Clinique", 14], ["Diagnostic", 28], ["Drivers / marqueurs", 32],
+      ["Lignes", 36], ["Étude de référence", 24], ["Mots-clés", 36], ["Remarque", 50]].map(([header, width]) => ({ header, width }));
+    ws.getRow(1).font = { bold: true };
+    for (const r of state.rows) ws.addRow([r.file, r.title, r.clinic, r.diagnosis, r.markers,
+      r.lines.map((l) => LINE_LABEL[l]).join(" ; "), r.trial, r.keywords, r.note]);
+    const url = URL.createObjectURL(new Blob([await wb.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    const a = el("a");
+    a.href = url; a.download = `index-lettres-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  function setupAdmin() {
+    state.admin = true;
     $("ug-admin").hidden = false;
+    const zone = $("lt-drop"), input = $("lt-drop-input");
+    zone.addEventListener("click", () => input.click());
+    zone.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } });
+    input.addEventListener("change", () => { dropped(input.files); input.value = ""; });
+    zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("over"); });
+    zone.addEventListener("dragleave", () => zone.classList.remove("over"));
+    zone.addEventListener("drop", (e) => { e.preventDefault(); zone.classList.remove("over"); dropped(e.dataTransfer.files); });
+    $("lt-export").addEventListener("click", exportIndex);
+
+    // Import complet
     const out = $("ug-import-msg");
     const issues = $("lt-issues");
     let parsed = null;
@@ -200,18 +371,29 @@
       $("ug-import").disabled = true;
       issues.replaceChildren();
       const index = $("lt-index").files[0], docs = $("lt-docx").files;
-      if (!index || !docs.length) return;
+      if (!docs.length) return;
       out.className = "form-msg";
       out.textContent = "Lecture des fichiers…";
       try {
         await Promise.all([loadScript(EXCELJS, "ExcelJS"), loadScript(MAMMOTH, "mammoth")]);
-        const wb = new window.ExcelJS.Workbook();
-        await wb.xlsx.load(await index.arrayBuffer());
-        const res = await window.LetterParse.build(wb, docs, window.mammoth);
+        let res;
+        if (index) {
+          const wb = new window.ExcelJS.Workbook();
+          await wb.xlsx.load(await index.arrayBuffer());
+          res = await window.LetterParse.build(wb, docs, window.mammoth);
+        } else {
+          res = { rows: [], errors: [], warnings: [] };
+          for (const f of [...docs].filter((x) => /\.docx$/i.test(x.name))) {
+            const r = await window.LetterParse.fromDocx(f, window.mammoth);
+            r.warnings.forEach((w) => res.warnings.push(`${r.file} : ${w}`));
+            delete r.warnings;
+            res.rows.push(Object.assign(r, { position: res.rows.length + 1, clinic: state.lastClinic || null, keywords: null, note: null }));
+          }
+        }
         issues.replaceChildren(...res.errors.map((e) => el("li", "error", e)), ...res.warnings.map((w) => el("li", null, w)));
         if (res.errors.length) throw new Error(`${res.errors.length} erreur(s) à corriger dans le tableur`);
         if (!res.rows.length) throw new Error("aucune lettre");
-        parsed = { rows: res.rows, name: index.name };
+        parsed = { rows: res.rows, name: index ? index.name : "détection automatique" };
         out.textContent = `${res.rows.length} lettres prêtes à importer.` + (res.warnings.length ? ` ${res.warnings.length} remarque(s) ci-dessous.` : "");
         $("ug-import").disabled = false;
       } catch (err) {
@@ -222,7 +404,7 @@
     $("lt-index").addEventListener("change", read);
     $("lt-docx").addEventListener("change", read);
     $("ug-import").addEventListener("click", async () => {
-      if (!parsed) return;
+      if (!parsed || !confirm(`Remplacer toutes les lettres par ces ${parsed.rows.length} lettres ?`)) return;
       $("ug-import").disabled = true;
       out.className = "form-msg";
       out.textContent = "Import en cours…";
@@ -234,8 +416,8 @@
         return;
       }
       out.className = "form-msg ok";
-      out.textContent = `${data} lettres importées. Rechargement…`;
-      setTimeout(() => location.reload(), 1200);
+      out.textContent = `${data} lettres importées.`;
+      await refresh();
     });
   }
 
@@ -248,21 +430,15 @@
 
     const { data: profile } = await sb.from("profiles").select("role").eq("id", data.session.user.id).single();
     const role = profile ? profile.role : "member";
-    if (role === "admin") setupImport();
+    for (const id of ["q", "f-dx", "f-mk"]) $(id).addEventListener("input", search);
+    if (role === "admin") setupAdmin();
 
-    const [{ data: rows, error }, { data: meta }] = await Promise.all([
-      sb.from("letters").select("id, position, file, title, clinic, diagnosis, markers, lines, trial, keywords, note, drugs, html").order("position").range(0, 999),
-      sb.from("letters_meta").select("source_file, imported_at, row_count").maybeSingle()
-    ]);
-    if (error || !rows || !rows.length) {
+    const rows = await loadRows();
+    if (!rows || !rows.length) {
       $("ug-status").textContent = role === "admin"
-        ? "Aucune lettre. Importez le tableur d'index et les lettres Word ci-dessous."
+        ? "Aucune lettre. Déposez vos lettres Word ci-dessous."
         : "Cet outil est réservé aux médecins du CHUV. Contactez l'administrateur si vous pensez y avoir droit.";
       return;
-    }
-    if (meta) {
-      const d = new Date(meta.imported_at);
-      $("ug-source").textContent = `Source : ${meta.source_file}, importé le ${d.toLocaleDateString("fr-CH")} (${meta.row_count} lettres).`;
     }
     $("ug-status").hidden = true;
     $("ug-tool").hidden = false;

@@ -8,12 +8,12 @@
   <meta name="robots" content="noindex">
   <title>Lettres d'assurance · Onconic</title>
   <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261029">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261029b">
   <script src="/assets/js/site.js?v=20261028" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/letter-parse.js?v=20261029" defer></script>
-  <script src="/assets/js/lettres.js?v=20261029" defer></script>
+  <script src="/assets/js/letter-parse.js?v=20261029b" defer></script>
+  <script src="/assets/js/lettres.js?v=20261029b" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -46,6 +46,7 @@
             <label>Drivers / marqueurs<input id="f-mk" type="search" autocomplete="off" list="mk-list" placeholder="ex. EGFR, ALK, PD-L1 ≥ 50 %"></label>
             <datalist id="dx-list"></datalist>
             <datalist id="mk-list"></datalist>
+            <datalist id="clinic-list"></datalist>
           </div>
           <div class="ug-filters">
             <div class="ug-chips" id="ug-lines" role="group" aria-label="Ligne thérapeutique"></div>
@@ -59,13 +60,27 @@
 
         <div class="card ug-admin" id="ug-admin" hidden>
           <span class="eyebrow">Administration</span>
-          <h2>Importer les lettres</h2>
-          <p class="muted">Sélectionnez le tableur d'index et toutes les lettres Word. Tout est lu dans votre navigateur puis remplace les lettres existantes. Rien n'est publié.</p>
-          <label>Tableur d'index (.xlsx)<input type="file" id="lt-index" accept=".xlsx"></label>
-          <label>Lettres Word (.docx, sélection multiple)<input type="file" id="lt-docx" accept=".docx" multiple></label>
-          <button class="btn" id="ug-import" type="button" disabled>Remplacer les lettres</button>
-          <p class="form-msg" id="ug-import-msg" role="status" aria-live="polite"></p>
-          <ul class="lt-issues" id="lt-issues"></ul>
+          <h2>Ajouter ou mettre à jour des lettres</h2>
+          <div class="lt-drop" id="lt-drop" role="button" tabindex="0">
+            <strong>Glissez ici une ou plusieurs lettres Word</strong>
+            <span>ou cliquez pour les choisir (.docx)</span>
+          </div>
+          <input type="file" id="lt-drop-input" accept=".docx" multiple hidden>
+          <p class="muted lt-help">Les champs sont préremplis à partir de chaque lettre : vérifiez-les puis enregistrez. Une lettre portant le même nom de fichier remplace l'existante et garde ses champs. Pour corriger une lettre déjà en ligne, ouvrez-la et cliquez sur « Modifier ».</p>
+          <div id="lt-editors"></div>
+          <p class="form-msg" id="lt-drop-msg" role="status" aria-live="polite"></p>
+          <div class="btn-row">
+            <button class="btn btn-outline" id="lt-export" type="button">Exporter l'index (.xlsx)</button>
+          </div>
+          <details class="lt-bulk">
+            <summary>Import complet (remplace toutes les lettres)</summary>
+            <p class="muted">Sélectionnez toutes les lettres Word, avec ou sans tableur d'index. Sans index, les champs sont détectés automatiquement.</p>
+            <label>Tableur d'index (.xlsx, optionnel)<input type="file" id="lt-index" accept=".xlsx"></label>
+            <label>Lettres Word (.docx, sélection multiple)<input type="file" id="lt-docx" accept=".docx" multiple></label>
+            <button class="btn" id="ug-import" type="button" disabled>Remplacer toutes les lettres</button>
+            <p class="form-msg" id="ug-import-msg" role="status" aria-live="polite"></p>
+            <ul class="lt-issues" id="lt-issues"></ul>
+          </details>
         </div>
       </div>
     </section>

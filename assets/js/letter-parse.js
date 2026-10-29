@@ -83,6 +83,91 @@
     return p ? p.textContent.trim() : "";
   }
 
+  // ----- Détection automatique des métadonnées (proposition, toujours relue par l'admin) -----
+  function sections(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const ps = [...doc.body.children].map((n) => n.textContent.trim());
+    const at = (re) => ps.findIndex((t) => re.test(norm(t)));
+    const i = at(/^diagnostic/), j = at(/^justification/);
+    return {
+      dx: i >= 0 ? ps.slice(i + 1, j > i ? j : undefined).join("\n") : "",
+      just: j >= 0 ? ps.slice(j + 1).join("\n") : ""
+    };
+  }
+
+  const MARKERS = [
+    ["EGFR T790M", /t790m/], ["EGFR ex19del", /exon 19|ex19/], ["EGFR L858R", /l858r/],
+    ["EGFR exon 20", /egfr[^.]*exon 20|exon 20[^.]*egfr/], ["EGFR", /\begfr\b/],
+    ["ALK", /\balk\b/], ["ROS1", /\bros1\b/], ["MET exon 14", /exon 14[^.]*met|met[^.]*exon 14/],
+    ["MET amplification", /amplification[^.]*\bmet\b|\bmet\b[^.]*amplific/], ["RET", /\bret\b/],
+    ["BRAF V600E", /v600e/], ["HER2 (ERBB2) muté", /her2|erbb2/], ["KRAS G12C", /g12c/], ["NTRK", /\bntrk/],
+    ["PD-L1 ≥ 50 %", /pd-l1[^.]*(≥|>=|superieur[^.]*) ?50/], ["PD-L1 < 50 %", /pd-l1[^.]*< ?50/],
+    ["PD-L1 ≥ 1 %", /pd-l1[^.]*(≥|>=) ?1 ?%/]
+  ];
+  const NEG = /\b(sans|ne presente pas|n.a pas|aucune?|absence|exclu)/;
+
+  function guess(html, title) {
+    const { dx, just } = sections(html);
+    const t = norm(title), d = norm(dx), all = t + "\n" + d;
+    // Diagnostic
+    let diagnosis = "";
+    if (/non a petites cellules|cbnpc|cpnpc|nsclc/.test(all)) diagnosis = "CBNPC";
+    else if (/petites cellules|cppc|sclc/.test(all)) diagnosis = "CPPC";
+    if (diagnosis === "CBNPC") {
+      if (/non[ -]?epiderm|pas a predominance epiderm/.test(all)) diagnosis += " non épidermoïde";
+      else if (/epiderm/.test(all)) diagnosis += " épidermoïde";
+    }
+    // Marqueurs : phrase par phrase, en écartant les mentions négatives
+    const markers = [];
+    let negEgfrAlk = false;
+    // Découpage en propositions : une négation ne s'étend pas à la proposition suivante
+    for (const sentence of all.split(/[.\n;]|, (?=sans|aucun)| et (?=presente|exprime|dont)/)) {
+      const neg = NEG.test(sentence);
+      if (neg && /egfr/.test(sentence) && /\balk\b/.test(sentence)) negEgfrAlk = true;
+      if (neg) continue;
+      for (const [label, re] of MARKERS) if (re.test(sentence) && !markers.includes(label)) markers.push(label);
+    }
+    // Un marqueur détaillé remplace le générique (EGFR ex19del plutôt qu'EGFR)
+    const detailed = markers.filter((m) => !(m === "EGFR" && markers.some((x) => x.startsWith("EGFR ") && x !== "EGFR")));
+    if (negEgfrAlk) detailed.push("EGFR/ALK négatif");
+    // Lignes : le titre prime, puis le texte du diagnostic
+    const lines = [];
+    const later = /ayant progresse|en progression|progression est survenue|apres echec|ligne ulterieure|\b2l\b|traitement (systemique )?anterieur|post[- ]/;
+    if (/neo ?adjuvant/.test(all)) lines.push("neoadj");
+    if (/(^|[^o])adjuvant/.test(all.replace(/neo ?adjuvant/g, ""))) lines.push("adj");
+    if (!lines.length) {
+      if (/\b1l\b|premiere ligne/.test(t) && !/a partir de la premiere ligne/.test(d)) lines.push("1L");
+      else if (later.test(t)) lines.push("2L", "3L");
+      else if (/a partir de la premiere ligne/.test(d)) lines.push("1L", "2L", "3L");
+      else {
+        if (/premiere ligne|non precedemment traite|n.a pas ete traite/.test(d)) lines.push("1L");
+        if (later.test(d)) lines.push("2L", "3L");
+        if (!lines.length) lines.push("1L", "2L", "3L");
+      }
+    }
+    // Études : acronymes connus, puis tout acronyme cité après « étude » (hors chiffres romains)
+    const trials = [];
+    const add = (x) => { x = x.trim(); if (x && !/^[IVX]+$/.test(x) && !trials.includes(x)) trials.push(x); };
+    const KNOWN = /\b(KEYNOTE-\d+|CheckMate[- ]\w+|IMpower\d+|DESTINY-Lung\d+|LIBRETTO-\d+|STARTRK-\d+|GEOMETRY mono-1|INSIGHT 2|ALTA-1L|ALTA|CASPIAN|PACIFIC|ADAURA|FLAURA2?|AURA3?|MARIPOSA|PAPILLON|CROWN|VISION|PHAROS|REVEL|EURTAC|OPTIMAL|IPSOS|ALKA)\b/g;
+    for (const m of just.matchAll(KNOWN)) add(m[1]);
+    for (const m of just.matchAll(/\b([A-Z]{2}\d{4,})\b/g)) add(m[1]);
+    for (const m of just.matchAll(/(?:étude|essai)(?: [a-zé]+){0,4} ([A-Z][A-Z0-9]{2,}(?:-[A-Za-z0-9]+)?)\b/g)) add(m[1]);
+    return { diagnosis, markers: detailed.join(" ; "), lines: [...new Set(lines)], trial: trials.join(" ; ") };
+  }
+
+  // Une lettre Word → ligne prête pour la base (métadonnées devinées, à relire)
+  async function fromDocx(file, mammoth) {
+    const buf = await file.arrayBuffer();
+    const { value } = await mammoth.convertToHtml({ arrayBuffer: buf });
+    const html = sanitize(value);
+    const title = firstLine(html) || file.name.replace(/\.docx$/i, "");
+    const warnings = [];
+    const d = drugs(html);
+    if (!d.length) warnings.push("tableau des médicaments non reconnu");
+    if (/\[[^\]]{3,}\]/.test(html)) warnings.push("contient une zone entre crochets");
+    return Object.assign({ file: nfc(file.name), title, html, drugs: d, docx: base64(buf), warnings }, guess(html, title));
+  }
+
   // Colonnes repérées par leur en-tête
   const COLUMNS = { file: "fichier", title: "titre", clinic: "clinique", diagnosis: "diagnostic",
     markers: "drivers / marqueurs", lines: "lignes", trial: "etude de reference", keywords: "mots-cles", note: "remarque" };
@@ -141,5 +226,5 @@
     return { rows, errors, warnings };
   }
 
-  root.LetterParse = { build, sanitize, LINES: LINES.map(([id, label]) => [id, label]) };
+  root.LetterParse = { build, sanitize, guess, fromDocx, nfc, LINES: LINES.map(([id, label]) => [id, label]) };
 })(this);

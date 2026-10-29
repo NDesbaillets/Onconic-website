@@ -376,3 +376,23 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 .lt-issues { margin: var(--space-2) 0 0; padding-left: 1.2em; font-size: .9rem; color: var(--ink-600); }
 .lt-issues .error { color: var(--danger); }
 @media (max-width: 640px) { .lt-fields { grid-template-columns: 1fr; } .lt-letter { padding: var(--space-3); } }
+.lt-drop { display: grid; gap: 4px; place-items: center; text-align: center; padding: var(--space-5) var(--space-3); margin: var(--space-3) 0; border: 2px dashed var(--navy-200); background: var(--white); color: var(--ink-600); cursor: pointer; transition: border-color var(--transition), background var(--transition); }
+.lt-drop strong { color: var(--navy-800); font-weight: 500; }
+.lt-drop:hover, .lt-drop:focus-visible, .lt-drop.over { border-color: var(--amber-500); background: var(--amber-50); outline: none; }
+.lt-help { font-size: .9rem; }
+.lt-editor { background: var(--white); border: 1px solid var(--navy-100); border-top: 3px solid var(--amber-500); padding: var(--space-3); margin: 0 0 var(--space-3); display: grid; gap: var(--space-2); }
+.lt-editor-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.lt-editor-head strong { color: var(--navy-800); overflow-wrap: anywhere; }
+.ug-badge.lt-new { background: var(--success); color: var(--white); }
+.lt-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-3); }
+.ug-admin .lt-editor label, .lt-editor label { display: grid; gap: 4px; margin: 0; font-weight: 500; font-size: .88rem; color: var(--navy-800); }
+.lt-editor input:not([type="checkbox"]) { font: inherit; font-weight: 400; min-height: 40px; padding: 6px 10px; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); min-width: 0; }
+.lt-editor-lines { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.lt-editor-lines legend { font-weight: 500; font-size: .88rem; color: var(--navy-800); padding: 0 0 4px; }
+.ug-admin .lt-editor label.lt-check { display: flex; align-items: center; gap: 6px; font-weight: 400; color: var(--ink-900); }
+.lt-editor .lt-check input { width: 18px; height: 18px; accent-color: var(--navy-800); }
+.lt-editor .btn { min-height: 40px; padding: 0 20px; font-size: .92rem; }
+.btn.lt-danger { border-color: var(--danger); color: var(--danger); }
+.lt-bulk { margin-top: var(--space-4); border-top: 1px solid var(--navy-100); padding-top: var(--space-3); }
+.lt-bulk > summary { cursor: pointer; color: var(--navy-700); font-weight: 500; }
+@media (max-width: 640px) { .lt-editor-grid { grid-template-columns: 1fr; } }
