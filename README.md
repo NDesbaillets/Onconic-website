@@ -57,6 +57,15 @@ Page `/app/duree.html`, réservée aux membres rattachés au CHUV (adresse `@chu
 - Mise à jour : en tant qu'admin, ouvrir `/app/duree.html`, choisir le nouveau fichier Excel, puis « Remplacer les données ». Le fichier est lu dans le navigateur ; toutes les lignes sont remplacées en une seule opération.
 - Aucune IA à l'usage : la recherche se fait dans le navigateur.
 
+## Outil « Lettres d'assurance » (médecins)
+
+- Page `/app/lettres.html` (français), réservée aux médecins du CHUV et aux admins.
+- Installation : exécuter une fois `supabase/lettres.sql` dans le SQL Editor.
+- Ajout courant (admin) : glisser une ou plusieurs lettres Word sur la page. Titre, médicaments, codes LS, voie, diagnostic, drivers, lignes et études sont détectés dans la lettre et proposés dans un formulaire à vérifier avant d'enregistrer. Un fichier de même nom remplace la lettre existante en gardant ses champs. Chaque lettre peut être modifiée ou supprimée depuis sa fiche.
+- La base fait office d'index ; « Exporter l'index (.xlsx) » en donne une copie. L'import complet (toutes les lettres, avec ou sans tableur) reste disponible pour une reprise globale.
+- Lignes : Néoadjuvant, Adjuvant, 1re ligne, 2e ligne, 3e ligne et plus.
+- Ni les lettres ni l'index ne sont versionnés ici.
+
 ## Page « Mon compte »
 
 `/fr/app/compte.html` et `/app/account.html` : prénom, nom, pseudo, téléphone, changement d'adresse e-mail (confirmé par lien), changement de mot de passe (mot de passe actuel requis), déconnexion de tous les appareils. Le rôle et l'institution restent en lecture seule.

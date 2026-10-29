@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Lettres d'assurance · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261029b">
+  <script src="/assets/js/site.js?v=20261028" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/letter-parse.js?v=20261029b" defer></script>
+  <script src="/assets/js/lettres.js?v=20261029b" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">Ma Ruche</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug">
+      <div class="container">
+        <span class="eyebrow">Outil des médecins</span>
+        <h1>Lettres d'assurance</h1>
+        <hr class="rule">
+        <p class="form-msg" id="ug-status" role="status">Chargement…</p>
+
+        <div id="ug-tool" hidden>
+          <label class="ug-search">
+            <span class="visually-hidden">Rechercher une lettre</span>
+            <input id="q" type="search" autocomplete="off" placeholder="Médicament, nom commercial, étude ou code d'indication (ex. osimertinib, Keytruda, KEYNOTE-189)">
+          </label>
+          <div class="lt-fields">
+            <label>Diagnostic<input id="f-dx" type="search" autocomplete="off" list="dx-list" placeholder="ex. CBNPC non épidermoïde"></label>
+            <label>Drivers / marqueurs<input id="f-mk" type="search" autocomplete="off" list="mk-list" placeholder="ex. EGFR, ALK, PD-L1 ≥ 50 %"></label>
+            <datalist id="dx-list"></datalist>
+            <datalist id="mk-list"></datalist>
+            <datalist id="clinic-list"></datalist>
+          </div>
+          <div class="ug-filters">
+            <div class="ug-chips" id="ug-lines" role="group" aria-label="Ligne thérapeutique"></div>
+            <div class="ug-chips" id="ug-clinics" role="group" aria-label="Clinique"></div>
+            <div class="ug-chips" id="ug-routes" role="group" aria-label="Voie d'administration"></div>
+          </div>
+          <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
+          <div id="ug-results"></div>
+          <p class="muted ug-source" id="ug-source"></p>
+        </div>
+
+        <div class="card ug-admin" id="ug-admin" hidden>
+          <span class="eyebrow">Administration</span>
+          <h2>Ajouter ou mettre à jour des lettres</h2>
+          <div class="lt-drop" id="lt-drop" role="button" tabindex="0">
+            <strong>Glissez ici une ou plusieurs lettres Word</strong>
+            <span>ou cliquez pour les choisir (.docx)</span>
+          </div>
+          <input type="file" id="lt-drop-input" accept=".docx" multiple hidden>
+          <p class="muted lt-help">Les champs sont préremplis à partir de chaque lettre : vérifiez-les puis enregistrez. Une lettre portant le même nom de fichier remplace l'existante et garde ses champs. Pour corriger une lettre déjà en ligne, ouvrez-la et cliquez sur « Modifier ».</p>
+          <div id="lt-editors"></div>
+          <p class="form-msg" id="lt-drop-msg" role="status" aria-live="polite"></p>
+          <div class="btn-row">
+            <button class="btn btn-outline" id="lt-export" type="button">Exporter l'index (.xlsx)</button>
+          </div>
+          <details class="lt-bulk">
+            <summary>Import complet (remplace toutes les lettres)</summary>
+            <p class="muted">Sélectionnez toutes les lettres Word, avec ou sans tableur d'index. Sans index, les champs sont détectés automatiquement.</p>
+            <label>Tableur d'index (.xlsx, optionnel)<input type="file" id="lt-index" accept=".xlsx"></label>
+            <label>Lettres Word (.docx, sélection multiple)<input type="file" id="lt-docx" accept=".docx" multiple></label>
+            <button class="btn" id="ug-import" type="button" disabled>Remplacer toutes les lettres</button>
+            <p class="form-msg" id="ug-import-msg" role="status" aria-live="polite"></p>
+            <ul class="lt-issues" id="lt-issues"></ul>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>
