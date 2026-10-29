@@ -358,3 +358,21 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 .hex-soon:hover .hex-in p { color: rgba(255, 255, 255, .72); }
 @media (max-width: 900px) { .hex-row { --w: 150px; --g: 6px; } }
 @media (max-width: 560px) { .hex-row .hex-in p { display: none; } }
+
+/* ---------- Lettres d'assurance ---------- */
+.lt-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-3); }
+.lt-fields label { display: grid; gap: 4px; font-weight: 500; font-size: .9rem; color: var(--navy-800); }
+.lt-fields input { font: inherit; font-weight: 400; min-height: 44px; padding: 8px 12px; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); min-width: 0; }
+.ug-badge.lt-marker { background: var(--navy-800); color: var(--white); }
+.lt-drugs { margin: 0; font-size: .92rem; color: var(--ink-900); max-width: none; }
+.lt-trial { margin: 0; font-size: .85rem; color: var(--ink-600); }
+.lt-actions { margin: var(--space-3) 0; }
+.lt-letter { background: var(--white); border: 1px solid var(--navy-100); padding: var(--space-4); font-size: .95rem; overflow-x: auto; }
+.lt-letter p { max-width: none; margin: 0 0 var(--space-2); }
+.lt-letter h1, .lt-letter h2 { font-size: 1.05rem; font-weight: 500; margin: var(--space-3) 0 var(--space-2); letter-spacing: 0; }
+.lt-letter table { border-collapse: collapse; width: 100%; margin: 0 0 var(--space-3); }
+.lt-letter td, .lt-letter th { border: 1px solid var(--navy-200); padding: 6px 8px; vertical-align: top; }
+.lt-letter td p { margin: 0 0 4px; }
+.lt-issues { margin: var(--space-2) 0 0; padding-left: 1.2em; font-size: .9rem; color: var(--ink-600); }
+.lt-issues .error { color: var(--danger); }
+@media (max-width: 640px) { .lt-fields { grid-template-columns: 1fr; } .lt-letter { padding: var(--space-3); } }
