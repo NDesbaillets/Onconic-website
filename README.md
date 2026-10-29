@@ -57,15 +57,6 @@ Page `/app/duree.html`, réservée aux membres rattachés au CHUV (adresse `@chu
 - Mise à jour : en tant qu'admin, ouvrir `/app/duree.html`, choisir le nouveau fichier Excel, puis « Remplacer les données ». Le fichier est lu dans le navigateur ; toutes les lignes sont remplacées en une seule opération.
 - Aucune IA à l'usage : la recherche se fait dans le navigateur.
 
-## Outil « Initiation de traitement » (médecins)
-
-- Page `/app/initiation.html` (français), réservée aux rôles `clinician` et `admin`.
-- Installation : exécuter une fois `supabase/initiation.sql` dans le SQL Editor.
-- Protocoles : transcription fidèle des PDF CHUV au format JSON, importée par l'admin depuis la page. Table `protocols` lisible uniquement par les médecins du CHUV. Les PDF et le JSON ne sont jamais versionnés ici.
-- Liste des spécialités (OFSP) : fichier Excel importé par l'admin depuis la même page (ATC L01, L02, L03AA).
-- Calcul déterministe dans le navigateur (calendrier, agenda, limitations, Rp.) : aucune IA, aucune donnée patient enregistrée.
-- Modèles d'ordonnance de support : `assets/js/initiation-rx.js`.
-
 ## Page « Mon compte »
 
 `/fr/app/compte.html` et `/app/account.html` : prénom, nom, pseudo, téléphone, changement d'adresse e-mail (confirmé par lien), changement de mot de passe (mot de passe actuel requis), déconnexion de tous les appareils. Le rôle et l'institution restent en lecture seule.
