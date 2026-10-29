@@ -1,0 +1,15 @@
+{
+  "name": "Onconic",
+  "short_name": "Onconic",
+  "description": "Oncology made iconic",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#001B4D",
+  "theme_color": "#001B4D",
+  "icons": [
+    { "src": "/assets/img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
