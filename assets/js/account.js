@@ -55,7 +55,7 @@
     if (location.hash) history.replaceState(null, "", location.pathname);
 
     const { data: p } = await sb.from("profiles")
-      .select("first_name, last_name, username, phone, full_name, role, institution").eq("id", user.id).single();
+      .select("first_name, last_name, username, phone, full_name, role, institution, show_in_events, contactable").eq("id", user.id).single();
     const prof = p || {};
     let first = prof.first_name, last = prof.last_name;
     if (!first && !last && prof.full_name) {
@@ -72,6 +72,24 @@
     $("acc-inst").textContent = prof.institution || T.none;
     $("acc-email").textContent = user.email;
     $("account").hidden = false;
+
+    // Consentements « La Ruche au congrès » : enregistrés à chaque clic ; le contact suppose l'affichage du nom
+    const cf = $("consent-form");
+    if (cf) {
+      const sync = () => { cf.contactable.disabled = !cf.show_in_events.checked; if (!cf.show_in_events.checked) cf.contactable.checked = false; };
+      cf.show_in_events.checked = !!prof.show_in_events;
+      cf.contactable.checked = !!prof.contactable;
+      sync();
+      cf.addEventListener("change", async () => {
+        sync();
+        const out = $("consent-msg");
+        const { error } = await sb.from("profiles").update({
+          show_in_events: cf.show_in_events.checked, contactable: cf.contactable.checked
+        }).eq("id", user.id);
+        msg(out, error ? T.error : out.dataset.saved, error ? "error" : "ok");
+      });
+      if (h.has("ruche")) $("ruche").scrollIntoView();
+    }
 
     f.addEventListener("submit", async (e) => {
       e.preventDefault();
