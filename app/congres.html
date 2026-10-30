@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Congrès &amp; formations · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <meta name="apple-mobile-web-app-title" content="Onconic">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261031">
+  <script src="/assets/js/site.js?v=20261031" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261031"></script>
+  <script src="/assets/js/congres.js?v=20261031" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">Ma Ruche</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug cg">
+      <div class="container">
+        <span class="eyebrow">Pour toute la Ruche</span>
+        <h1>Congrès &amp; formations</h1>
+        <p class="cg-sub">Qui d'autre butine au congrès ?</p>
+        <hr class="rule">
+        <p class="form-msg" id="ug-status" role="status">Chargement…</p>
+
+        <div id="cg-tool" hidden>
+          <div class="cg-bar">
+            <label class="ug-search cg-search">
+              <span class="visually-hidden">Rechercher un événement</span>
+              <input id="q" type="search" autocomplete="off" placeholder="Nom, ville ou mot-clé (ex. ESMO, Lausanne, poumon)">
+            </label>
+            <label class="cg-clinic">Clinique<select id="f-clinic"></select></label>
+          </div>
+          <div class="ug-filters">
+            <div class="ug-chips" id="cg-kinds" role="group" aria-label="Type d'événement"></div>
+            <div class="cg-toggles">
+              <label class="cg-check"><input type="checkbox" id="f-mine"> Mes événements</label>
+              <label class="cg-check"><input type="checkbox" id="f-past"> Afficher les événements passés</label>
+            </div>
+          </div>
+          <div class="cg-actions">
+            <div class="cg-views" role="tablist" aria-label="Affichage">
+              <button class="ug-chip" type="button" role="tab" id="v-list" aria-pressed="true">Liste</button>
+              <button class="ug-chip" type="button" role="tab" id="v-cal" aria-pressed="false">Calendrier</button>
+            </div>
+            <button class="btn" id="cg-new" type="button">Ajouter un événement</button>
+          </div>
+          <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
+          <p class="ug-note ug-attn" id="cg-privacy" hidden></p>
+          <div id="cg-list"></div>
+          <div id="cg-cal" hidden></div>
+          <p class="muted ug-source">Les événements sont proposés et mis à jour par les membres. Dates « à confirmer » : vérifiez sur le site officiel avant de réserver.</p>
+        </div>
+
+        <dialog class="cg-dialog" id="cg-dialog" aria-labelledby="cg-form-title">
+          <form class="cg-form" id="cg-form" method="dialog" novalidate>
+            <h2 id="cg-form-title">Nouvel événement</h2>
+            <div class="cg-similar" id="cg-similar" hidden></div>
+            <div class="cg-grid">
+              <label class="cg-wide">Titre *<input name="title" required maxlength="200" autocomplete="off"></label>
+              <label>Type<select name="kind">
+                <option value="congrès">Congrès</option><option value="formation">Formation</option>
+                <option value="symposium">Symposium</option><option value="webinaire">Webinaire</option>
+              </select></label>
+              <label>Format<select name="format">
+                <option value="présentiel">Présentiel</option><option value="hybride">Hybride</option><option value="en ligne">En ligne</option>
+              </select></label>
+              <label>Début *<input name="start_date" type="date" required></label>
+              <label>Fin<input name="end_date" type="date"></label>
+              <label>Ville<input name="city" maxlength="100"></label>
+              <label>Pays<input name="country" maxlength="100"></label>
+              <label class="cg-wide">Lieu<input name="venue" maxlength="200" placeholder="ex. Congress Center Basel"></label>
+              <label class="cg-wide">Site officiel<input name="url" type="url" maxlength="500" placeholder="https://"></label>
+              <label class="cg-wide">Description<textarea name="description" maxlength="2000" rows="3"></textarea></label>
+              <label>Délai de soumission des abstracts<input name="abstract_deadline" type="date"></label>
+              <label>Fin du tarif réduit<input name="early_deadline" type="date"></label>
+              <label class="cg-wide">Lien du groupe WhatsApp (optionnel)<input name="whatsapp_url" type="url" maxlength="200" placeholder="https://chat.whatsapp.com/…"></label>
+            </div>
+            <fieldset class="cg-clinics" id="cg-clinics"><legend>Cliniques concernées *</legend></fieldset>
+            <label class="cg-check"><input type="checkbox" name="to_confirm"> Dates à confirmer</label>
+            <p class="form-msg" id="cg-form-msg" role="status" aria-live="polite"></p>
+            <div class="btn-row">
+              <button class="btn" type="submit" value="save">Enregistrer</button>
+              <button class="btn btn-outline" type="button" id="cg-cancel">Annuler</button>
+            </div>
+          </form>
+        </dialog>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>

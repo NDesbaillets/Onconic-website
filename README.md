@@ -65,6 +65,23 @@ Pages `/app/fiches.html` (liste et recherche) et `/app/fiche.html?p=<page>` (lec
 - Installation : exécuter une fois `supabase/hive_pages.sql` dans le SQL Editor (table, règles RLS, recherche plein texte `hive_search`).
 - Figures : bucket privé `hive`, dossier `fiches/<page>/`, affichées par URL signée.
 
+## Outil « Lettres d'assurance » (médecins)
+
+- Page `/app/lettres.html` (français), réservée aux médecins du CHUV et aux admins.
+- Installation : exécuter une fois `supabase/lettres.sql` dans le SQL Editor.
+- Ajout courant (admin) : glisser une ou plusieurs lettres Word sur la page. Titre, médicaments, codes LS, voie, diagnostic, drivers, lignes et études sont détectés dans la lettre et proposés dans un formulaire à vérifier avant d'enregistrer. Un fichier de même nom remplace la lettre existante en gardant ses champs. Chaque lettre peut être modifiée ou supprimée depuis sa fiche.
+- La base fait office d'index ; « Exporter l'index (.xlsx) » en donne une copie. L'import complet (toutes les lettres, avec ou sans tableur) reste disponible pour une reprise globale.
+- Lignes : Néoadjuvant, Adjuvant, 1re ligne, 2e ligne, 3e ligne et plus.
+- Ni les lettres ni l'index ne sont versionnés ici.
+
+## Outil « Congrès & formations » (tous les membres)
+
+- Page `/app/congres.html` (français) : liste par mois, calendrier mensuel, recherche, filtre par clinique (« Transversal » = toutes) et par type, « Mes événements », événements passés.
+- Installation : exécuter une fois `supabase/congres.sql` dans le SQL Editor. Le script crée les tables, les droits, l'historique et une trentaine d'événements de départ (sources publiques, octobre 2026).
+- Tout membre validé crée, modifie ou duplique un événement (nouvelle édition) ; la suppression est réservée au créateur et à l'admin. Chaque version précédente est gardée dans `event_history` (lecture admin).
+- Participation : « J'y vais », « Peut-être », « Je présente ». Les noms ne s'affichent qu'avec le consentement « Afficher mon nom » (Mon compte), les coordonnées (e-mail, WhatsApp) qu'avec le consentement « Être contacté » ; la règle est appliquée côté base par `event_attendees()`.
+- Export agenda (.ics) par événement.
+
 ## Page « Mon compte »
 
 `/fr/app/compte.html` et `/app/account.html` : prénom, nom, pseudo, téléphone, changement d'adresse e-mail (confirmé par lien), changement de mot de passe (mot de passe actuel requis), déconnexion de tous les appareils. Le rôle et l'institution restent en lecture seule.
@@ -84,7 +101,7 @@ Le logo de l'en-tête est `assets/img/email-header.png` (PNG, car Gmail n'affich
 
 ## Cache des navigateurs
 
-Les pages chargent `onconic.css` et les scripts avec un suffixe de version (`?v=20261030`). Après toute modification de ces fichiers, changer ce suffixe dans toutes les pages, sinon des visiteurs peuvent combiner une page récente avec un ancien script gardé en cache.
+Les pages chargent `onconic.css` et les scripts avec un suffixe de version (`?v=20261031`). Après toute modification de ces fichiers, changer ce suffixe dans toutes les pages, sinon des visiteurs peuvent combiner une page récente avec un ancien script gardé en cache.
 
 ## Charte graphique
 
