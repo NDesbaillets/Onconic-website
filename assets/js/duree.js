@@ -296,7 +296,7 @@
   (async () => {
     if (!sb) return ($("ug-status").textContent = "Service indisponible.");
     const { data } = await sb.auth.getSession();
-    if (!data.session) return (location.href = "/fr/ruche.html");
+    if (!data.session) return (location.href = "/fr/the-hive.html");
     $("logout").addEventListener("click", async () => { await sb.auth.signOut(); location.href = "/fr/"; });
 
     const { data: profile } = await sb.from("profiles").select("role").eq("id", data.session.user.id).single();

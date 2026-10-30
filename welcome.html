@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Welcome · Onconic</title>
+  <meta name="description" content="Welcome to The Hive">
+  <meta name="robots" content="noindex">
+  <link rel="alternate" hreflang="fr" href="https://onconic.ch/fr/bienvenue.html">
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <meta name="apple-mobile-web-app-title" content="Onconic">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261031">
+  <script src="/assets/js/site.js?v=20261031" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/welcome.js?v=20261031" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/">Home</a>
+        <a href="/about.html">About</a>
+        <a href="/hive.html">The Hive</a>
+        <a href="/contact.html">Contact</a>
+        <a class="lang" href="/fr/bienvenue.html" hreflang="fr" lang="fr">FR</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section welcome">
+      <div class="container">
+        <span class="eyebrow">Account activation</span>
+        <h1>Welcome to The Hive</h1>
+        <hr class="rule">
+        <p class="lead welcome-lead">Your access is approved. Choose your password and introduce yourself in a few seconds: this is how the colony recognises each other.</p>
+        <p class="form-msg" id="welcome-status" role="status">Checking the link…</p>
+        <form class="form welcome-form" id="welcome-form" hidden novalidate>
+          <fieldset>
+            <legend>1. Your password</legend>
+            <label>Password (12 characters minimum)<input type="password" name="password" autocomplete="new-password" minlength="12" required></label>
+            <label>Confirm password<input type="password" name="confirm" autocomplete="new-password" minlength="12" required></label>
+          </fieldset>
+          <fieldset>
+            <legend>2. Your details</legend>
+            <div class="welcome-pair">
+              <label>First name<input name="first_name" autocomplete="given-name" maxlength="80" required></label>
+              <label>Last name<input name="last_name" autocomplete="family-name" maxlength="80" required></label>
+            </div>
+            <label>Mobile phone (optional, for WhatsApp)<input name="phone" type="tel" autocomplete="tel" maxlength="20" placeholder="+41 79 123 45 67"></label>
+          </fieldset>
+          <fieldset>
+            <legend>3. Collaborate and network</legend>
+            <p class="muted welcome-why">In The Hive, members meet up at conferences and help each other. If you agree, your name is shown to other members on the events you attend, and they can reach you by email or WhatsApp. Without these options you remain “a discreet member”: you see the others, but they can neither recognise nor contact you, which makes collaboration much less fluid. You can change your mind at any time in My account.</p>
+            <label class="cg-check"><input type="checkbox" name="show_in_events"> Show my name to members on the Conferences page</label>
+            <label class="cg-check"><input type="checkbox" name="contactable"> Members may contact me by email or WhatsApp</label>
+          </fieldset>
+          <button class="btn" type="submit">Activate my account</button>
+          <p class="form-msg" id="welcome-msg" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Switzerland</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/legal.html">Legal notice</a> · <a href="/privacy.html">Privacy</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>

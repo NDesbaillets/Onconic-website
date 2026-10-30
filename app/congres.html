@@ -12,11 +12,11 @@
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#001B4D">
   <meta name="apple-mobile-web-app-title" content="Onconic">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261030">
-  <script src="/assets/js/site.js?v=20261028" defer></script>
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261031">
+  <script src="/assets/js/site.js?v=20261031" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/congres.js?v=20261030" defer></script>
+  <script src="/assets/js/congres.js?v=20261031" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -24,7 +24,7 @@
       <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
       <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
       <nav class="nav" id="nav">
-        <a href="/fr/app/">Ma Ruche</a>
+        <a href="/fr/app/">The Hive</a>
         <a href="/fr/app/compte.html">Mon compte</a>
         <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
       </nav>
@@ -34,7 +34,8 @@
   <main>
     <section class="section ug cg">
       <div class="container">
-        <span class="eyebrow">Pour toute la Ruche</span>
+        <a class="btn btn-outline hive-back" href="/fr/app/">← The Hive</a>
+        <span class="eyebrow">Pour toute la communauté The Hive</span>
         <h1>Congrès &amp; formations</h1>
         <p class="cg-sub">Qui d'autre butine au congrès ?</p>
         <hr class="rule">
@@ -57,15 +58,16 @@
           </div>
           <div class="cg-actions">
             <div class="cg-views" role="tablist" aria-label="Affichage">
-              <button class="ug-chip" type="button" role="tab" id="v-list" aria-pressed="true">Liste</button>
-              <button class="ug-chip" type="button" role="tab" id="v-cal" aria-pressed="false">Calendrier</button>
+              <button class="ug-chip" type="button" role="tab" id="v-cal" aria-pressed="true">Calendrier</button>
+              <button class="ug-chip" type="button" role="tab" id="v-list" aria-pressed="false">Liste</button>
             </div>
             <button class="btn" id="cg-new" type="button">Ajouter un événement</button>
           </div>
           <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
           <p class="ug-note ug-attn" id="cg-privacy" hidden></p>
-          <div id="cg-list"></div>
-          <div id="cg-cal" hidden></div>
+          <div id="cg-cal"></div>
+          <div id="cg-detail" class="cg-detail"></div>
+          <div id="cg-list" hidden></div>
           <p class="muted ug-source">Les événements sont proposés et mis à jour par les membres. Dates « à confirmer » : vérifiez sur le site officiel avant de réserver.</p>
         </div>
 

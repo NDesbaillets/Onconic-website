@@ -47,7 +47,7 @@
     // Retour depuis le lien de confirmation d'un changement d'adresse
     const h = new URLSearchParams(location.hash.slice(1));
     const { data } = await sb.auth.getSession();
-    if (!data.session) return (location.href = base + (fr ? "/ruche.html" : "/hive.html"));
+    if (!data.session) return (location.href = base + (fr ? "/the-hive.html" : "/hive.html"));
     const user = data.session.user;
 
     if (h.get("type") === "email_change") msg($("email-msg"), T.emailDone, "ok");
@@ -73,7 +73,7 @@
     $("acc-email").textContent = user.email;
     $("account").hidden = false;
 
-    // Consentements « La Ruche au congrès » : enregistrés à chaque clic ; le contact suppose l'affichage du nom
+    // Consentements « The Hive au congrès » : enregistrés à chaque clic ; le contact suppose l'affichage du nom
     const cf = $("consent-form");
     if (cf) {
       const sync = () => { cf.contactable.disabled = !cf.show_in_events.checked; if (!cf.show_in_events.checked) cf.contactable.checked = false; };

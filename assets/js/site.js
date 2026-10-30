@@ -7,17 +7,18 @@ document.addEventListener("click", (e) => {
   btn.setAttribute("aria-expanded", String(open));
 });
 
-// Liens reçus par e-mail (invitation, mot de passe oublié) : Supabase peut renvoyer vers
-// n'importe quelle page autorisée. On transmet le jeton à la page « nouveau mot de passe ».
+// Liens reçus par e-mail : Supabase peut renvoyer vers n'importe quelle page autorisée.
+// Invitation → page de bienvenue (mot de passe + profil) ; mot de passe oublié → « nouveau mot de passe ».
 (function () {
   const h = location.hash;
   if (!/type=(invite|recovery)|error_code=/.test(h)) return;
   const fr = location.pathname.startsWith("/fr/") || document.documentElement.lang === "fr";
-  const target = fr ? "/fr/nouveau-mot-de-passe.html" : "/reset-password.html";
+  const invite = /type=invite/.test(h) || (/error_code=/.test(h) && /bienvenue|welcome/.test(location.pathname));
+  const target = invite ? (fr ? "/fr/bienvenue.html" : "/welcome.html") : (fr ? "/fr/nouveau-mot-de-passe.html" : "/reset-password.html");
   if (location.pathname !== target) location.replace(target + h);
 })();
 
-// Apparition progressive des éléments marqués data-reveal (alvéoles de la Ruche)
+// Apparition progressive des éléments marqués data-reveal (alvéoles de The Hive)
 (function () {
   const items = document.querySelectorAll("[data-reveal]");
   if (!items.length) return;

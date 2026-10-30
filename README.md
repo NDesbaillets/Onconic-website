@@ -1,6 +1,6 @@
 # onconic.ch
 
-Site vitrine bilingue (EN/FR) d'Onconic + espace membres « La Ruche ».
+Site vitrine bilingue (EN/FR) d'Onconic + espace membres « The Hive ».
 
 ## Architecture
 
@@ -16,7 +16,7 @@ Règle d'or : **le dépôt GitHub est public**. Rien de confidentiel n'y va (doc
 
 ```
 index.html, about.html, hive.html, contact.html, reset-password.html   pages EN
-fr/  index.html, a-propos.html, ruche.html, contact.html, nouveau-mot-de-passe.html
+fr/  index.html, a-propos.html, the-hive.html (ruche.html redirige), contact.html, nouveau-mot-de-passe.html
 app/, fr/app/          espace connecté (formation, médecins, assistantes)
 assets/css/onconic.css styles + tokens du design system (en tête de fichier)
 assets/js/config.js    URL et clé publique Supabase
@@ -37,6 +37,11 @@ CNAME                  domaine onconic.ch
    - 4 enregistrements `A` sur `@` : `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
    - 1 `CNAME` `www` → `ndesbaillets.github.io`
 7. **GitHub** : fusionner la branche dans `main`, puis *Settings* > *Pages* : source `main`, domaine `onconic.ch`, cocher *Enforce HTTPS* (certificat émis en quelques minutes à 24 h).
+
+## Première connexion (invitation)
+
+- Le lien d'invitation ouvre `/fr/bienvenue.html` ou `/welcome.html` (redirection automatique dans `site.js`, quelle que soit la page d'arrivée). Le membre y choisit son mot de passe, renseigne nom, prénom et téléphone, et donne ou non ses consentements « The Hive au congrès ».
+- Le lien « mot de passe oublié » continue d'ouvrir la page « nouveau mot de passe ».
 
 ## Ajouter un membre
 
