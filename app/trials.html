@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Key trials · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <meta name="apple-mobile-web-app-title" content="Onconic">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261031c">
+  <script src="/assets/js/site.js?v=20261031" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/trials.js?v=20261031" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug kt">
+      <div class="container">
+        <a class="btn btn-outline hive-back" href="/fr/app/">← The Hive</a>
+        <span class="eyebrow">Outil des médecins</span>
+        <h1>Key trials</h1>
+        <p class="cg-sub">Les études qui ont changé la pratique, en une page.</p>
+        <hr class="rule">
+        <p class="form-msg" id="ug-status" role="status">Chargement…</p>
+
+        <div id="ug-tool" hidden>
+          <label class="ug-search">
+            <span class="visually-hidden">Rechercher une étude</span>
+            <input id="q" type="search" autocomplete="off" placeholder="Acronyme, médicament ou mot-clé (ex. KEYNOTE-189, osimertinib, adjuvant)">
+          </label>
+          <div class="lt-fields">
+            <label>Clinique<select id="f-clinic"></select></label>
+            <label>Diagnostic<input id="f-dx" type="search" autocomplete="off" list="dx-list" placeholder="ex. CBNPC non épidermoïde"></label>
+            <label>Drivers / marqueurs<input id="f-mk" type="search" autocomplete="off" list="mk-list" placeholder="ex. EGFR, ALK, PD-L1 ≥ 50 %"></label>
+            <datalist id="dx-list"></datalist>
+            <datalist id="mk-list"></datalist>
+          </div>
+          <div class="ug-filters">
+            <div class="ug-chips" id="ug-lines" role="group" aria-label="Ligne thérapeutique"></div>
+          </div>
+          <div class="cg-actions">
+            <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
+            <button class="btn" id="kt-new" type="button" hidden>Nouvelle fiche</button>
+          </div>
+          <div id="ug-results"></div>
+          <p class="muted ug-source">Synthèses destinées à la formation. Les chiffres proviennent des publications citées ; vérifiez toujours la source originale avant une décision clinique.</p>
+        </div>
+
+        <dialog class="cg-dialog kt-dialog" id="kt-dialog" aria-labelledby="kt-form-title">
+          <form class="cg-form" id="kt-form" method="dialog" novalidate>
+            <h2 id="kt-form-title">Modifier la fiche</h2>
+            <p class="muted">Fiche complète au format JSON. Les champs : slug, acronym, title, clinic, diagnosis, markers (séparés par « ; »), lines (neoadj, adj, 1L, 2L, 3L), drugs, phase, design, outcomes, safety, summary, strengths, limitations, practice (oui, partiel ou non), practice_text, refs.</p>
+            <textarea id="kt-json" rows="22" spellcheck="false"></textarea>
+            <p class="form-msg" id="kt-form-msg" role="status" aria-live="polite"></p>
+            <div class="btn-row">
+              <button class="btn" type="submit">Enregistrer</button>
+              <button class="btn btn-outline" type="button" id="kt-cancel">Annuler</button>
+            </div>
+          </form>
+        </dialog>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>

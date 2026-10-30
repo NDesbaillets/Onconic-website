@@ -79,6 +79,13 @@ Page `/app/duree.html`, réservée aux membres rattachés au CHUV (adresse `@chu
 - Participation : « J'y vais », « Peut-être », « Je présente ». Les noms ne s'affichent qu'avec le consentement « Afficher mon nom » (Mon compte), les coordonnées (e-mail, WhatsApp) qu'avec le consentement « Être contacté » ; la règle est appliquée côté base par `event_attendees()`.
 - Export agenda (.ics) par événement.
 
+## Outil « Key trials » (membres validés)
+
+- Page `/app/trials.html` : une fiche par étude clé (design, résultats OS/PFS/DFS/ORR/DoR, tolérance, forces, limites, « practice changing ? », références PubMed/DOI). Recherche par mot-clé, clinique, diagnostic, drivers et ligne ; lien direct `?t=slug`.
+- Graphiques générés à partir des chiffres de la fiche (forest plot des HR, médianes, taux) : aucune figure d'article n'est reproduite.
+- Installation : exécuter une fois `supabase/trials.sql` (table `key_trials` + 14 fiches thoraciques en brouillon, chiffres tirés des résumés PubMed cités).
+- Les membres ne voient que les fiches publiées. L'admin voit les brouillons et peut modifier (JSON), publier, marquer comme relu, dupliquer, supprimer ou créer une fiche.
+
 ## Page « Mon compte »
 
 `/fr/app/compte.html` et `/app/account.html` : prénom, nom, pseudo, téléphone, changement d'adresse e-mail (confirmé par lien), changement de mot de passe (mot de passe actuel requis), déconnexion de tous les appareils. Le rôle et l'institution restent en lecture seule.
