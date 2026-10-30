@@ -57,6 +57,14 @@ Page `/app/duree.html`, réservée aux membres rattachés au CHUV (adresse `@chu
 - Mise à jour : en tant qu'admin, ouvrir `/app/duree.html`, choisir le nouveau fichier Excel, puis « Remplacer les données ». Le fichier est lu dans le navigateur ; toutes les lignes sont remplacées en une seule opération.
 - Aucune IA à l'usage : la recherche se fait dans le navigateur.
 
+## Fiches tumeurs (formation)
+
+Pages `/app/fiches.html` (liste et recherche) et `/app/fiche.html?p=<page>` (lecture), en français, pour les rôles `clinician`, `assistant` et `admin`. Les brouillons ne sont visibles que des admins.
+
+- **Le contenu n'est pas ici.** Il vit dans le dépôt privé `onconic-content` (Markdown, fiches d'essais, références), qui le compile et l'envoie dans la table `hive_pages` à chaque fusion sur `main`. Ce dépôt public ne contient que la visionneuse (`assets/js/fiches.js`).
+- Installation : exécuter une fois `supabase/hive_pages.sql` dans le SQL Editor (table, règles RLS, recherche plein texte `hive_search`).
+- Figures : bucket privé `hive`, dossier `fiches/<page>/`, affichées par URL signée.
+
 ## Outil « Lettres d'assurance » (médecins)
 
 - Page `/app/lettres.html` (français), réservée aux médecins du CHUV et aux admins.
@@ -93,7 +101,7 @@ Le logo de l'en-tête est `assets/img/email-header.png` (PNG, car Gmail n'affich
 
 ## Cache des navigateurs
 
-Les pages chargent `onconic.css` et les scripts avec un suffixe de version (`?v=20261028`). Après toute modification de ces fichiers, changer ce suffixe dans toutes les pages, sinon des visiteurs peuvent combiner une page récente avec un ancien script gardé en cache.
+Les pages chargent `onconic.css` et les scripts avec un suffixe de version (`?v=20261031`). Après toute modification de ces fichiers, changer ce suffixe dans toutes les pages, sinon des visiteurs peuvent combiner une page récente avec un ancien script gardé en cache.
 
 ## Charte graphique
 
