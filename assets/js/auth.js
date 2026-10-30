@@ -124,18 +124,42 @@
   const app = document.getElementById("hive-app");
   if (app) {
     (async () => {
-      if (!sb) return (location.href = base + (lang === "fr" ? "/ruche.html" : "/hive.html"));
+      if (!sb) return (location.href = base + (lang === "fr" ? "/the-hive.html" : "/hive.html"));
       const { data } = await sb.auth.getSession();
-      if (!data.session) return (location.href = base + (lang === "fr" ? "/ruche.html" : "/hive.html"));
+      if (!data.session) return (location.href = base + (lang === "fr" ? "/the-hive.html" : "/hive.html"));
 
       const { data: profile } = await sb.from("profiles")
         .select("full_name, role").eq("id", data.session.user.id).single();
       const role = profile ? profile.role : "member";
       document.getElementById("user-name").textContent = (profile && profile.full_name) || data.session.user.email;
 
-      app.querySelectorAll("[data-roles]").forEach((el) => {
-        el.hidden = !el.dataset.roles.split(" ").includes(role) && role !== "admin";
+      // Alvéoles groupées par public : son propre espace d'abord ; l'espace de l'autre métier reste visible,
+      // grisé, pour que chacun sache ce qui existe (accès réservé par la base de données de toute façon).
+      const LOCKED = lang === "fr"
+        ? { clinician: "Réservé aux médecins", assistant: "Réservé au secrétariat" }
+        : { clinician: "Physicians only", assistant: "Secretariat only" };
+      const active = (role === "clinician" || role === "assistant") ? role : null;
+      app.querySelectorAll(".hive-group").forEach((group) => {
+        const gid = group.dataset.group;
+        const other = active && gid !== "common" && gid !== active;
+        group.querySelectorAll("[data-roles]").forEach((el) => {
+          const allowed = role === "admin" || el.dataset.roles.split(" ").includes(role);
+          el.hidden = !allowed && !other;
+          if (!allowed && other) {
+            el.classList.add("hex-locked");
+            el.setAttribute("aria-disabled", "true");
+            el.removeAttribute("href");
+            const tag = el.querySelector(".hex-tag");
+            if (tag) tag.textContent = LOCKED[gid];
+          }
+        });
+        group.classList.toggle("hive-group-other", !!other);
+        group.hidden = ![...group.querySelectorAll(".hex")].some((el) => !el.hidden);
       });
+      if (active) {
+        const own = app.querySelector(`.hive-group[data-group="${active}"]`);
+        if (own) own.parentNode.insertBefore(own, app.querySelector('.hive-group[data-group="common"]'));
+      }
       app.hidden = false;
 
       document.getElementById("logout").addEventListener("click", async () => {

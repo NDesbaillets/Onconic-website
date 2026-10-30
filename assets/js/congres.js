@@ -19,7 +19,7 @@
   const $ = (id) => document.getElementById(id);
   const state = {
     events: [], att: new Map(), me: null, role: "", q: "", clinic: "", kind: "", mine: false, past: false,
-    view: "list", month: null, day: null, editing: null
+    view: "calendar", month: null, day: null, detail: null, editing: null
   };
 
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -102,12 +102,20 @@
     box.replaceChildren(make("", "Tous"), ...KINDS.map(([v, l]) => make(v, l)));
   }
 
-  // ----- Liste -----
+  // ----- Affichage : calendrier par défaut ; liste seulement sur recherche ou si demandée -----
+  const listMode = () => state.view === "list" || state.q.trim() !== "";
+
   function render() {
     const list = state.events.filter((e) => matches(e));
     $("ug-count").textContent = `${list.length} événement${list.length > 1 ? "s" : ""}` + (state.past ? "" : " à venir");
     renderPrivacyHint();
-    if (state.view === "calendar") return renderCalendar();
+    const lm = listMode();
+    $("v-list").setAttribute("aria-pressed", String(lm));
+    $("v-cal").setAttribute("aria-pressed", String(!lm));
+    $("cg-list").hidden = !lm;
+    $("cg-cal").hidden = lm;
+    $("cg-detail").hidden = lm;
+    if (!lm) { renderCalendar(); renderDetail(); return; }
     const out = $("cg-list");
     out.replaceChildren();
     if (!list.length) {
@@ -127,6 +135,15 @@
       }
       out.append(card(e));
     }
+  }
+
+  function renderDetail() {
+    const box = $("cg-detail");
+    const e = state.detail && state.events.find((x) => x.id === state.detail);
+    if (!e) { box.replaceChildren(); return; }
+    const d = card(e);
+    box.replaceChildren(d, button("Fermer la fiche", "btn btn-outline ug-copy cg-close", () => { state.detail = null; renderDetail(); }));
+    d.open = true;
   }
 
   function renderPrivacyHint() {
@@ -162,7 +179,7 @@
     const line = el("p", "cg-who");
     if (me) line.append(badge("Vous : " + STATUS[STATUS.findIndex(([k]) => k === me.status)][1], "cg-me"), " ");
     const others = att.filter((a) => !a.is_me);
-    if (others.length) line.append(`${others.length} autre${others.length > 1 ? "s" : ""} membre${others.length > 1 ? "s" : ""} de la Ruche`);
+    if (others.length) line.append(`${others.length} autre${others.length > 1 ? "s" : ""} membre${others.length > 1 ? "s" : ""} de The Hive`);
     if (me || others.length) head.append(line);
     s.append(date, head);
     d.append(s);
@@ -183,7 +200,6 @@
     b.append(facts);
     const links = el("div", "btn-row cg-links");
     if (e.url) { const a = el("a", "btn btn-outline ug-copy", "Site officiel"); a.href = e.url; a.target = "_blank"; a.rel = "noopener noreferrer"; links.append(a); }
-    if (e.whatsapp_url) { const a = el("a", "btn btn-outline ug-copy", "Groupe WhatsApp"); a.href = e.whatsapp_url; a.target = "_blank"; a.rel = "noopener noreferrer"; links.append(a); }
     links.append(button("Ajouter à mon agenda", "btn btn-outline ug-copy", () => ics(e)));
     b.append(links);
 
@@ -216,6 +232,7 @@
     }
     if (named.length) part.append(ul);
     if (anon) part.append(el("p", "muted", `${named.length ? "Et " : ""}${anon} membre${anon > 1 ? "s" : ""} qui préfère${anon > 1 ? "nt" : ""} rester discret${anon > 1 ? "s" : ""}.`));
+    part.append(whatsapp(e, !!me));
     b.append(part);
 
     // Gestion
@@ -226,6 +243,45 @@
     b.append(tools);
     b.append(el("p", "muted cg-stamp", `Dernière modification le ${new Date(e.updated_at).toLocaleDateString("fr-CH")}${e.source ? " · source : " + e.source : ""}`));
     d.append(b);
+  }
+
+  // WhatsApp ne permet pas de créer un groupe depuis un site : un participant le crée dans l'app,
+  // colle ici le lien d'invitation, et chaque participant le rejoint en un clic.
+  function whatsapp(e, going) {
+    const box = el("div", "cg-wa");
+    const share = el("a", "btn btn-outline ug-copy", "Partager sur WhatsApp");
+    share.href = `https://wa.me/?text=${encodeURIComponent(`${e.title} (${range(e)}) : qui y va ? https://onconic.ch/app/congres.html?e=${e.id}`)}`;
+    share.target = "_blank"; share.rel = "noopener noreferrer";
+    if (e.whatsapp_url) {
+      const join = el("a", "btn ug-copy", "Rejoindre le groupe WhatsApp");
+      join.href = e.whatsapp_url; join.target = "_blank"; join.rel = "noopener noreferrer";
+      box.append(el("div", "btn-row", null));
+      box.lastChild.append(join, share);
+      return box;
+    }
+    box.append(share);
+    if (!going) return box;
+    const help = el("details", "cg-wa-help");
+    help.append(el("summary", null, "Créer le groupe WhatsApp des participants"));
+    const ol = el("ol");
+    ["Dans WhatsApp, créez un groupe (« Nouveau groupe ») avec un premier participant.",
+      "Ouvrez les infos du groupe › « Inviter via un lien » › « Copier le lien ».",
+      "Collez le lien ci-dessous : tous les membres inscrits pourront rejoindre le groupe en un clic."].forEach((t) => ol.append(el("li", null, t)));
+    const row = el("div", "cg-wa-row");
+    const input = el("input");
+    input.type = "url"; input.placeholder = "https://chat.whatsapp.com/…"; input.setAttribute("aria-label", "Lien d'invitation du groupe");
+    const save = button("Enregistrer le lien", "btn ug-copy", async () => {
+      const v = input.value.trim();
+      if (!/^https:\/\/chat\.whatsapp\.com\/\S+$/.test(v)) { input.setCustomValidity("Lien attendu : https://chat.whatsapp.com/…"); input.reportValidity(); return; }
+      const { error } = await sb.from("events").update({ whatsapp_url: v }).eq("id", e.id);
+      if (error) return alert("Enregistrement impossible : " + error.message);
+      await refresh(e.id);
+    });
+    input.addEventListener("input", () => input.setCustomValidity(""));
+    row.append(input, save);
+    help.append(ol, row);
+    box.append(help);
+    return box;
   }
 
   // Numéro suisse ou international → lien wa.me (chiffres seulement, indicatif sans « + »)
@@ -265,11 +321,21 @@
   function reveal(id) {
     const e = state.events.find((x) => x.id === id);
     if (!e) return;
-    if (!matches(e)) { state.q = ""; $("q").value = ""; state.clinic = ""; $("f-clinic").value = ""; state.kind = ""; state.mine = false; $("f-mine").checked = false; kindChips(); }
     if (e.end_date < todayIso() && !state.past) { state.past = true; $("f-past").checked = true; }
-    setView("list");
-    const d = document.getElementById("ev-" + id);
-    if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    if (listMode()) {
+      if (!matches(e)) { state.q = ""; $("q").value = ""; state.clinic = ""; $("f-clinic").value = ""; state.kind = ""; state.mine = false; $("f-mine").checked = false; kindChips(); }
+      render();
+      if (listMode()) {
+        const d = document.getElementById("ev-" + id);
+        if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+        return;
+      }
+    }
+    // Calendrier : on se place sur le mois de l'événement et sa fiche s'ouvre sous la grille
+    state.month = e.start_date.slice(0, 7) + "-01";
+    state.detail = id;
+    render();
+    $("cg-detail").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   // ----- Export agenda (.ics, journées entières) -----
@@ -293,10 +359,7 @@
   // ----- Calendrier -----
   function setView(v) {
     state.view = v;
-    $("v-list").setAttribute("aria-pressed", String(v === "list"));
-    $("v-cal").setAttribute("aria-pressed", String(v === "calendar"));
-    $("cg-list").hidden = v !== "list";
-    $("cg-cal").hidden = v !== "calendar";
+    if (v === "calendar" && state.q) { state.q = ""; $("q").value = ""; }
     render();
   }
 
@@ -445,13 +508,13 @@
   (async () => {
     if (!sb) return ($("ug-status").textContent = "Service indisponible.");
     const { data } = await sb.auth.getSession();
-    if (!data.session) return (location.href = "/fr/ruche.html");
+    if (!data.session) return (location.href = "/fr/the-hive.html");
     $("logout").addEventListener("click", async () => { await sb.auth.signOut(); location.href = "/fr/"; });
     const { data: profile } = await sb.from("profiles").select("role, show_in_events, contactable").eq("id", data.session.user.id).single();
     state.role = profile ? profile.role : "member";
     state.me = Object.assign({ id: data.session.user.id }, profile || {});
     if (!["admin", "clinician", "assistant"].includes(state.role)) {
-      $("ug-status").textContent = "Cet espace est réservé aux membres validés de la Ruche.";
+      $("ug-status").textContent = "Cet espace est réservé aux membres validés de The Hive.";
       return;
     }
     try { await load(); } catch (e) { $("ug-status").textContent = "Chargement impossible : " + e.message; return; }

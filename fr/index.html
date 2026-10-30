@@ -6,15 +6,15 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Onconic · L'oncologie iconique</title>
-  <meta name="description" content="Une plateforme conçue par des oncologues pour partager les connaissances et rendre la prise en charge des patients plus efficiente.">
+  <meta name="description" content="Onconic réunit les équipes d'oncologie pour partager le savoir et mettre la collaboration interprofessionnelle au service des patients.">
   <link rel="alternate" hreflang="en" href="https://onconic.ch/">
   <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#001B4D">
   <meta name="apple-mobile-web-app-title" content="Onconic">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261030">
-  <script src="/assets/js/site.js?v=20261028" defer></script>
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261031">
+  <script src="/assets/js/site.js?v=20261031" defer></script>
   
 </head>
 <body>
@@ -25,7 +25,7 @@
       <nav class="nav" id="nav">
         <a href="/fr/" aria-current="page">Accueil</a>
         <a href="/fr/a-propos.html">À propos</a>
-        <a href="/fr/ruche.html">La Ruche</a>
+        <a href="/fr/the-hive.html">The Hive</a>
         <a href="/fr/contact.html">Contact</a>
         <a class="lang" href="/" hreflang="en" lang="en">EN</a>
       </nav>
@@ -33,35 +33,98 @@
   </header>
 
   <main>
-    <section class="hero">
+    <section class="hero home-hero">
+      <div class="home-dance" aria-hidden="true">
+        <svg viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice">
+          <path id="waggle" class="home-trail" d="M300 200 C 380 110, 520 120, 520 200 C 520 280, 380 290, 300 200 C 220 110, 80 120, 80 200 C 80 280, 220 290, 300 200 Z"/>
+          <g class="home-bee"><image href="/assets/img/mark-on-dark.svg" x="-16" y="-14" width="32" height="28" transform="rotate(90)"/>
+            <animateMotion dur="14s" repeatCount="indefinite" rotate="auto"><mpath href="#waggle"/></animateMotion></g>
+        </svg>
+      </div>
       <div class="container">
         <img class="hero-logo" src="/assets/img/logo-full-dark.svg" alt="Onconic, Oncology made iconic" width="420" height="420">
         <div>
-          <h1>Onconic.</h1>
-          <hr class="rule">
           <p class="eyebrow">L'oncologie iconique</p>
-          <p class="lead">Une plateforme conçue par des oncologues pour partager les connaissances et rendre la prise en charge des patients plus efficiente.</p>
-          <a class="btn" href="/fr/contact.html?type=join">Rejoindre Onconic</a>
+          <h1>Ensemble, plus forts face au cancer.</h1>
+          <hr class="rule">
+          <p class="lead">Onconic réunit médecins, soignants et équipes d'oncologie pour partager le savoir, simplifier le quotidien et mettre la collaboration au service des patients.</p>
+          <div class="btn-row">
+            <a class="btn" href="/fr/the-hive.html">Entrer dans The Hive</a>
+            <a class="btn btn-light" href="/fr/contact.html?type=join">Rejoindre la colonie</a>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="section">
-      <div class="container grid-2">
-        <article class="card">
-          <div class="num">01</div>
-          <span class="eyebrow">Pour les cliniciens</span>
-          <h2>Partagez votre savoir. Trouvez ce qui vous manque.</h2>
-          <p class="muted">Échangez cas, pratiques et expertise entre confrères, pour que chaque patient bénéficie de l’expérience collective.</p>
-          <a class="btn btn-navy" href="/fr/ruche.html">Entrer dans la Ruche</a>
-        </article>
-        <article class="card highlight">
-          <div class="num">02</div>
-          <span class="eyebrow">Non lucratif</span>
-          <h2>Par des cliniciens, pour des cliniciens.</h2>
-          <p class="muted">Onconic est une initiative à but non lucratif. Comme une ruche, elle fonctionne parce que chaque membre y contribue, et ce qui s'y partage sert les patients.</p>
-          <a class="btn btn-outline" href="/fr/a-propos.html">Qui sommes-nous</a>
-        </article>
+    <section class="section home-bees">
+      <div class="container">
+        <span class="eyebrow">Comme une ruche</span>
+        <h2 class="home-title">Des ouvrières qui collaborent, et qui dansent.</h2>
+        <p class="home-intro">Une colonie d'abeilles accomplit ensemble ce qu'aucune ne réussirait seule. Chacune a son rôle, toutes poursuivent le même but, et l'information circule par la danse : en quelques mouvements, une butineuse indique aux autres où trouver les fleurs. La prise en charge du cancer fonctionne de la même manière.</p>
+        <div class="home-cells">
+          <article class="home-cell" data-reveal>
+            <span class="home-cell-num">01</span>
+            <h3>Les ouvrières</h3>
+            <p>Oncologues, infirmières, pharmaciens, assistantes, radio-oncologues, chirurgiens, psycho-oncologues : chaque métier apporte une compétence que les autres n'ont pas.</p>
+          </article>
+          <article class="home-cell" data-reveal>
+            <span class="home-cell-num">02</span>
+            <h3>La collaboration</h3>
+            <p>Un traitement oncologique est une œuvre collective, du colloque multidisciplinaire au suivi à domicile. Aucune décision importante ne se prend seul.</p>
+          </article>
+          <article class="home-cell" data-reveal>
+            <span class="home-cell-num">03</span>
+            <h3>La danse</h3>
+            <p>Partager une bonne pratique, un outil, une étude marquante ou une lettre bien faite : c'est notre façon de montrer aux autres où se trouvent les fleurs.</p>
+          </article>
+          <article class="home-cell" data-reveal>
+            <span class="home-cell-num">04</span>
+            <h3>Le miel</h3>
+            <p>Le but de tout ce travail : des patients mieux soignés, mieux informés et mieux accompagnés, dans leur traitement comme dans leur qualité de vie.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section home-journey">
+      <div class="container">
+        <span class="eyebrow">Interprofessionnel par nature</span>
+        <h2 class="home-title">Le patient au centre, l'équipe autour.</h2>
+        <p class="home-intro">La lutte contre le cancer et l'engagement pour le bien-être des patients sont, par définition, interprofessionnels. Ils reposent sur une communication claire et une collaboration de chaque instant, à toutes les étapes du parcours.</p>
+        <ol class="home-steps">
+          <li data-reveal><strong>Diagnostic</strong><span>Pathologistes, radiologues et cliniciens assemblent les pièces du puzzle.</span></li>
+          <li data-reveal><strong>Décision</strong><span>Le tumor board croise les expertises pour proposer le meilleur traitement.</span></li>
+          <li data-reveal><strong>Traitement</strong><span>Médecins, soignants, pharmacie et secrétariats orchestrent chaque cycle.</span></li>
+          <li data-reveal><strong>Accompagnement</strong><span>Soins de support, réadaptation et écoute préservent la qualité de vie.</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section home-hive">
+      <div class="container home-hive-grid">
+        <div>
+          <span class="eyebrow">The Hive</span>
+          <h2 class="home-title">Des outils construits par l'équipe, pour l'équipe.</h2>
+          <p>The Hive est l'espace réservé aux membres. Chaque alvéole répond à un besoin concret du terrain, et la ruche s'agrandit au fil des contributions.</p>
+          <a class="btn btn-navy" href="/fr/the-hive.html">Découvrir The Hive</a>
+        </div>
+        <ul class="home-tools">
+          <li data-reveal><strong>Durée de traitement</strong><span>Le temps à réserver pour chaque protocole, en un instant.</span></li>
+          <li data-reveal><strong>Lettres d'assurance</strong><span>Les demandes de garantie standardisées, prêtes à l'emploi.</span></li>
+          <li data-reveal><strong>Congrès &amp; formations</strong><span>Qui d'autre butine au congrès ? Retrouvez-vous sur place.</span></li>
+          <li data-reveal><strong>Et bientôt</strong><span>Études clés, formation, bibliothèque partagée.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="home-cta">
+      <div class="container">
+        <h2>Rejoignez la colonie.</h2>
+        <p>Vous travaillez en oncologie et souhaitez partager, apprendre et collaborer ?</p>
+        <div class="btn-row">
+          <a class="btn" href="/fr/contact.html?type=join">Demander un accès</a>
+          <a class="btn btn-light" href="/fr/a-propos.html">Qui sommes-nous</a>
+        </div>
       </div>
     </section>
   </main>

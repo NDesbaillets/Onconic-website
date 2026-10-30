@@ -29,6 +29,9 @@
     minutes: "temps en minutes"
   };
 
+  // Noms de clinique harmonisés avec le reste du site (le fichier Ultragenda dit « Neurologie »)
+  const RENAME = { neurologie: "Neuro-oncologie" };
+
   function clinicNames(wb) {
     const map = {};
     wb.eachSheet((ws) => {
@@ -36,7 +39,7 @@
       ws.eachRow((row) => {
         const letter = text(row.getCell(1).value);
         const name = text(row.getCell(2).value);
-        if (letter && name && /^[A-Z]$/.test(letter)) map[letter] = name;
+        if (letter && name && /^[A-Z]$/.test(letter)) map[letter] = RENAME[norm(name)] || name;
       });
     });
     return map;

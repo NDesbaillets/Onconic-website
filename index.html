@@ -6,15 +6,15 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Onconic · Oncology made iconic</title>
-  <meta name="description" content="A platform built by oncologists to share knowledge and make patient care more efficient.">
+  <meta name="description" content="Onconic brings oncology teams together to share knowledge and put interprofessional collaboration at the service of patients.">
   <link rel="alternate" hreflang="fr" href="https://onconic.ch/fr/">
   <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#001B4D">
   <meta name="apple-mobile-web-app-title" content="Onconic">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261030">
-  <script src="/assets/js/site.js?v=20261028" defer></script>
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261031">
+  <script src="/assets/js/site.js?v=20261031" defer></script>
   
 </head>
 <body>
@@ -33,35 +33,98 @@
   </header>
 
   <main>
-    <section class="hero">
+    <section class="hero home-hero">
+      <div class="home-dance" aria-hidden="true">
+        <svg viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice">
+          <path id="waggle" class="home-trail" d="M300 200 C 380 110, 520 120, 520 200 C 520 280, 380 290, 300 200 C 220 110, 80 120, 80 200 C 80 280, 220 290, 300 200 Z"/>
+          <g class="home-bee"><image href="/assets/img/mark-on-dark.svg" x="-16" y="-14" width="32" height="28" transform="rotate(90)"/>
+            <animateMotion dur="14s" repeatCount="indefinite" rotate="auto"><mpath href="#waggle"/></animateMotion></g>
+        </svg>
+      </div>
       <div class="container">
         <img class="hero-logo" src="/assets/img/logo-full-dark.svg" alt="Onconic, Oncology made iconic" width="420" height="420">
         <div>
-          <h1>Onconic.</h1>
-          <hr class="rule">
           <p class="eyebrow">Oncology made iconic</p>
-          <p class="lead">A platform built by oncologists to share knowledge and make patient care more efficient.</p>
-          <a class="btn" href="/contact.html?type=join">Join Onconic</a>
+          <h1>Together, stronger against cancer.</h1>
+          <hr class="rule">
+          <p class="lead">Onconic brings physicians, nurses and oncology teams together to share knowledge, simplify daily work and put collaboration at the service of patients.</p>
+          <div class="btn-row">
+            <a class="btn" href="/hive.html">Enter The Hive</a>
+            <a class="btn btn-light" href="/contact.html?type=join">Join the colony</a>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="section">
-      <div class="container grid-2">
-        <article class="card">
-          <div class="num">01</div>
-          <span class="eyebrow">For clinicians</span>
-          <h2>Share what you know. Learn what you need.</h2>
-          <p class="muted">Exchange cases, practices and expertise with peers, so every patient benefits from collective experience.</p>
-          <a class="btn btn-navy" href="/hive.html">Enter the Hive</a>
-        </article>
-        <article class="card highlight">
-          <div class="num">02</div>
-          <span class="eyebrow">Non-profit</span>
-          <h2>Built by clinicians, for clinicians.</h2>
-          <p class="muted">Onconic is a non-profit initiative. Like a hive, it works because each member contributes, and what is shared here serves patients.</p>
-          <a class="btn btn-outline" href="/about.html">Who we are</a>
-        </article>
+    <section class="section home-bees">
+      <div class="container">
+        <span class="eyebrow">Like a hive</span>
+        <h2 class="home-title">Workers who collaborate, and dance.</h2>
+        <p class="home-intro">A bee colony achieves together what no single bee could. Each has its role, all pursue the same goal, and information travels through dance: in a few moves, a forager shows the others where the flowers are. Cancer care works the same way.</p>
+        <div class="home-cells">
+          <article class="home-cell" data-reveal>
+            <span class="home-cell-num">01</span>
+            <h3>The workers</h3>
+            <p>Oncologists, nurses, pharmacists, medical assistants, radiation oncologists, surgeons, psycho-oncologists: each profession brings a skill the others lack.</p>
+          </article>
+          <article class="home-cell" data-reveal>
+            <span class="home-cell-num">02</span>
+            <h3>Collaboration</h3>
+            <p>Cancer treatment is a collective work, from the multidisciplinary board to follow-up at home. No important decision is made alone.</p>
+          </article>
+          <article class="home-cell" data-reveal>
+            <span class="home-cell-num">03</span>
+            <h3>The dance</h3>
+            <p>Sharing a good practice, a tool, a landmark trial or a well-written letter: that is how we show each other where the flowers are.</p>
+          </article>
+          <article class="home-cell" data-reveal>
+            <span class="home-cell-num">04</span>
+            <h3>The honey</h3>
+            <p>The purpose of all this work: patients who are better treated, better informed and better supported, in their treatment as in their quality of life.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section home-journey">
+      <div class="container">
+        <span class="eyebrow">Interprofessional by nature</span>
+        <h2 class="home-title">The patient at the centre, the team around.</h2>
+        <p class="home-intro">Fighting cancer and caring for patients' well-being are interprofessional by definition. They rely on clear communication and constant collaboration at every step of the journey.</p>
+        <ol class="home-steps">
+          <li data-reveal><strong>Diagnosis</strong><span>Pathologists, radiologists and clinicians put the pieces together.</span></li>
+          <li data-reveal><strong>Decision</strong><span>The tumour board combines expertise to propose the best treatment.</span></li>
+          <li data-reveal><strong>Treatment</strong><span>Physicians, nurses, pharmacy and secretariats orchestrate every cycle.</span></li>
+          <li data-reveal><strong>Support</strong><span>Supportive care, rehabilitation and listening preserve quality of life.</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section home-hive">
+      <div class="container home-hive-grid">
+        <div>
+          <span class="eyebrow">The Hive</span>
+          <h2 class="home-title">Tools built by the team, for the team.</h2>
+          <p>The Hive is the members' space. Each cell answers a concrete need from the ward, and the hive grows with every contribution.</p>
+          <a class="btn btn-navy" href="/hive.html">Discover The Hive</a>
+        </div>
+        <ul class="home-tools">
+          <li data-reveal><strong>Treatment duration</strong><span>The time to book for each protocol, instantly.</span></li>
+          <li data-reveal><strong>Insurance letters</strong><span>Standardised coverage requests, ready to use.</span></li>
+          <li data-reveal><strong>Conferences &amp; courses</strong><span>Who else is buzzing at the congress? Meet up on site.</span></li>
+          <li data-reveal><strong>Coming soon</strong><span>Key trials, training, shared library.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="home-cta">
+      <div class="container">
+        <h2>Join the colony.</h2>
+        <p>You work in oncology and want to share, learn and collaborate?</p>
+        <div class="btn-row">
+          <a class="btn" href="/contact.html?type=join">Request access</a>
+          <a class="btn btn-light" href="/about.html">About us</a>
+        </div>
       </div>
     </section>
   </main>
