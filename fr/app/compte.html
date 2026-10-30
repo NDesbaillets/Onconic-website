@@ -14,11 +14,11 @@
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#001B4D">
   <meta name="apple-mobile-web-app-title" content="Onconic">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261028">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261030">
   <script src="/assets/js/site.js?v=20261028" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/account.js?v=20261028" defer></script>
+  <script src="/assets/js/account.js?v=20261030" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -83,6 +83,16 @@
               </form>
             </div>
           </div>
+        </div>
+
+        <div class="card account-consent" id="ruche">
+          <h2>La Ruche au congrès</h2>
+          <form class="form" id="consent-form">
+            <label class="cg-check"><input type="checkbox" name="show_in_events"> Afficher mon nom aux membres sur la page Congrès</label>
+            <label class="cg-check"><input type="checkbox" name="contactable"> Les membres peuvent me contacter par e-mail ou WhatsApp (téléphone ci-dessus)</label>
+            <p class="muted account-note">Désactivé par défaut. Sans la première option, les autres voient seulement « un autre membre ». Vos coordonnées ne sont montrées qu'aux membres connectés de la Ruche, jamais publiquement.</p>
+            <p class="form-msg" id="consent-msg" role="status" aria-live="polite" data-saved="Enregistré."></p>
+          </form>
         </div>
 
         <div class="grid-2 account-grid">

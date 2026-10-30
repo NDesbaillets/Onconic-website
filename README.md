@@ -66,6 +66,14 @@ Page `/app/duree.html`, réservée aux membres rattachés au CHUV (adresse `@chu
 - Lignes : Néoadjuvant, Adjuvant, 1re ligne, 2e ligne, 3e ligne et plus.
 - Ni les lettres ni l'index ne sont versionnés ici.
 
+## Outil « Congrès & formations » (tous les membres)
+
+- Page `/app/congres.html` (français) : liste par mois, calendrier mensuel, recherche, filtre par clinique (« Transversal » = toutes) et par type, « Mes événements », événements passés.
+- Installation : exécuter une fois `supabase/congres.sql` dans le SQL Editor. Le script crée les tables, les droits, l'historique et une trentaine d'événements de départ (sources publiques, octobre 2026).
+- Tout membre validé crée, modifie ou duplique un événement (nouvelle édition) ; la suppression est réservée au créateur et à l'admin. Chaque version précédente est gardée dans `event_history` (lecture admin).
+- Participation : « J'y vais », « Peut-être », « Je présente ». Les noms ne s'affichent qu'avec le consentement « Afficher mon nom » (Mon compte), les coordonnées (e-mail, WhatsApp) qu'avec le consentement « Être contacté » ; la règle est appliquée côté base par `event_attendees()`.
+- Export agenda (.ics) par événement.
+
 ## Page « Mon compte »
 
 `/fr/app/compte.html` et `/app/account.html` : prénom, nom, pseudo, téléphone, changement d'adresse e-mail (confirmé par lien), changement de mot de passe (mot de passe actuel requis), déconnexion de tous les appareils. Le rôle et l'institution restent en lecture seule.
