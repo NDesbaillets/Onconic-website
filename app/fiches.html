@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data: https://*.supabase.co; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Fiches tumeurs · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261030">
+  <script src="/assets/js/site.js?v=20261030" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261030"></script>
+  <script src="/assets/js/fiches.js?v=20261030" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">Ma Ruche</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section">
+      <div class="container">
+        <span class="eyebrow">Formation</span>
+        <h1>Fiches tumeurs</h1>
+        <hr class="rule">
+        <p class="form-msg" id="fiches-status" role="status">Chargement…</p>
+
+        <div id="fiches-outil" hidden>
+          <label class="ug-search">
+            <span class="visually-hidden">Rechercher dans les fiches</span>
+            <input id="q" type="search" autocomplete="off" placeholder="Tumeur, molécule, biomarqueur ou essai (ex. MGMT, osimertinib, KEYNOTE-189)">
+          </label>
+          <p class="muted" id="fiches-compte" role="status" aria-live="polite"></p>
+          <div id="fiches-liste"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>

@@ -358,3 +358,65 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 .hex-soon:hover .hex-in p { color: rgba(255, 255, 255, .72); }
 @media (max-width: 900px) { .hex-row { --w: 150px; --g: 6px; } }
 @media (max-width: 560px) { .hex-row .hex-in p { display: none; } }
+
+/* ---------- Fiches tumeurs (contenu du dépôt onconic-content) ---------- */
+#fiches-compte { margin-top: var(--space-2); }
+.fiches-domaine { font-size: 1.5rem; margin: var(--space-5) 0 var(--space-3); }
+.fiches-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-2); margin-top: var(--space-3); }
+.fiche-carte {
+  display: grid; gap: 6px; align-content: start; padding: 16px; text-decoration: none;
+  background: var(--white); border: 1px solid var(--navy-100); border-top: 3px solid var(--navy-800);
+  transition: border-color var(--transition);
+}
+.fiche-carte:hover, .fiche-carte:focus-visible { border-top-color: var(--amber-500); }
+.fiche-carte-titre { font-weight: 500; color: var(--navy-800); }
+.fiche-carte-resume { font-size: .92rem; color: var(--ink-600); }
+
+.fiche-page { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+.fiche-toc { position: sticky; top: 96px; font-size: .9rem; }
+.fiche-toc ol { list-style: none; padding: 0; margin: var(--space-3) 0 0; border-left: 1px solid var(--navy-100); }
+.fiche-toc li a { display: block; padding: 4px 0 4px 12px; text-decoration: none; color: var(--ink-600); }
+.fiche-toc li a:hover { color: var(--navy-800); }
+.fiche-retour { text-decoration: none; }
+.fiche h1 { font-size: clamp(2rem, 4.5vw, 3rem); }
+.fiche h2 { font-size: 1.6rem; margin-top: var(--space-5); scroll-margin-top: 96px; }
+.fiche h3 { margin-top: var(--space-4); scroll-margin-top: 96px; }
+.fiche ul, .fiche ol { max-width: var(--measure); padding-left: 1.2em; margin: 0 0 var(--space-3); }
+.fiche li { margin-bottom: 4px; }
+.fiche-meta { font-size: .9rem; color: var(--ink-600); }
+.fiche-alerte { background: var(--amber-50); padding: 10px 14px; border-left: 3px solid var(--amber-500); }
+.fiche .cite { font-size: .72em; line-height: 0; }
+.fiche .cite a { text-decoration: none; color: var(--amber-700); }
+.fiche .fig { margin: var(--space-3) 0; max-width: 100%; border: 1px solid var(--navy-100); background: var(--white); }
+
+.table-wrap { overflow-x: auto; margin: 0 0 var(--space-3); }
+.fiche table { border-collapse: collapse; width: 100%; font-size: .9rem; background: var(--white); }
+.fiche th, .fiche td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--navy-100); }
+.fiche thead th { color: var(--navy-800); font-weight: 500; border-bottom: 2px solid var(--navy-800); }
+.fiche tbody th { font-weight: 500; color: var(--navy-800); }
+
+.note { margin: var(--space-4) 0; padding: 16px 20px; background: var(--mist); border-left: 3px solid var(--navy-800); max-width: calc(var(--measure) + 40px); }
+.note > :last-child { margin-bottom: 0; }
+.note-titre { font-size: .8rem; text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--navy-800); margin-bottom: var(--space-2); }
+.note-cle { border-left-color: var(--amber-500); }
+.note-attention { background: var(--amber-50); border-left-color: var(--amber-700); }
+.note-attention .note-titre { color: var(--amber-700); }
+.note-incertitude { background: var(--white); border: 1px dashed var(--navy-200); border-left: 3px solid var(--navy-200); }
+
+.essai { margin: var(--space-4) 0; padding: 16px 20px; background: var(--white); border: 1px solid var(--navy-100); border-top: 3px solid var(--navy-800); }
+.essai p { margin-bottom: var(--space-2); }
+.essai-nom { font-weight: 500; color: var(--navy-800); }
+.essai-phase { font-size: .75rem; font-weight: 400; letter-spacing: .04em; padding: 2px 8px; margin-left: 6px; background: var(--mist); }
+.essai-pop, .essai-critere, .essai-comm { font-size: .92rem; color: var(--ink-600); }
+.essai-bras { font-size: .95rem; }
+.essai .table-wrap { margin: var(--space-3) 0 var(--space-2); }
+
+.refs ol { font-size: .85rem; color: var(--ink-600); padding-left: 1.6em; }
+.refs li { margin-bottom: 6px; scroll-margin-top: 96px; }
+.refs li:target { background: var(--amber-50); }
+
+@media (max-width: 900px) {
+  .fiche-page { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+  .fiche-toc { position: static; }
+  .fiche-toc ol { display: none; }
+}
