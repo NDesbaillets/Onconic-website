@@ -600,3 +600,47 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 .kt-card { max-width: 100%; overflow: hidden; }
 .kt-card summary .ug-head { min-width: 0; flex: 1; }
 .kt-card .ug-name, .kt-card .lt-drugs { overflow-wrap: anywhere; }
+/* Key trials : schéma de l'étude, traitements, courbes de survie reconstruites */
+.kt-k0 { --arm: var(--navy-800); }
+.kt-k1 { --arm: var(--amber-500); }
+.kt-k2 { --arm: var(--ink-400); }
+.kt-scheme-fig { margin-bottom: var(--space-3); }
+.kt-scheme-fig .kt-svg { max-width: 980px; }
+.kt-box { fill: var(--white); stroke: var(--navy-200); stroke-width: 1; }
+.kt-box.pop { fill: var(--mist); }
+.kt-box.ep { fill: var(--amber-50); stroke: var(--amber-500); }
+.kt-box.arm { stroke: var(--arm); stroke-width: 2; }
+.kt-box-title { font-size: 13px; font-weight: 600; fill: var(--navy-800); }
+.kt-box-text { font-size: 12px; fill: var(--ink-900); }
+.kt-arrow { stroke: var(--navy-800); stroke-width: 1.5; fill: none; }
+.kt-arrow-head { fill: var(--navy-800); }
+.kt-rand { fill: var(--navy-800); }
+.kt-rand-txt { font-size: 14px; font-weight: 600; fill: var(--white); }
+.kt-rand-sub { font-size: 10px; fill: var(--amber-500); }
+.kt-rx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr)); gap: var(--space-3); }
+.kt-rx { min-width: 0; background: var(--white); border: 1px solid var(--navy-100); border-left: 4px solid var(--arm); padding: var(--space-3); }
+.kt-rx h4 { margin: 0 0 8px; font-weight: 500; color: var(--navy-800); }
+.kt-rx-table th[scope], .kt-rx-table tbody th { text-align: left; font-weight: 500; white-space: normal; }
+.kt-rx-table td { white-space: normal; }
+.kt-rx-note { margin: var(--space-2) 0 0; font-size: .95rem; }
+.kt-rx-section .ug-copy { margin-top: var(--space-2); }
+.kt-km-fig .kt-svg { max-width: 640px; }
+.kt-km-title { margin: 0 0 6px; font-weight: 500; color: var(--navy-800); }
+.kt-grid { stroke: var(--navy-100); stroke-width: 1; }
+.kt-grid.mid { stroke: var(--ink-400); stroke-dasharray: 3 3; }
+.kt-axis-line { stroke: var(--ink-600); stroke-width: 1; }
+.kt-curve { fill: none; stroke: var(--arm); stroke-width: 2.25; }
+.kt-curve.extra { stroke-dasharray: 5 4; opacity: .6; }
+.kt-median { stroke: var(--arm); stroke-dasharray: 2 3; stroke-width: 1; }
+.kt-dot { fill: var(--white); stroke: var(--arm); stroke-width: 2; }
+.kt-legend { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: .9rem; }
+.kt-legend li { display: flex; align-items: center; gap: 8px; }
+.kt-swatch { width: 18px; height: 3px; background: var(--arm); flex: none; }
+@media (max-width: 600px) {
+  .kt-rx-table thead { display: none; }
+  .kt-rx-table tr { display: block; padding: 8px 0; border-bottom: 1px solid var(--navy-100); }
+  .kt-rx-table tbody th, .kt-rx-table td { display: flex; gap: 8px; padding: 2px 0; border: 0; }
+  .kt-rx-table td::before { content: attr(data-label); flex: 0 0 80px; color: var(--ink-600); font-size: .85rem; }
+  .kt-rx-table td:empty { display: none; }
+}
+.kt-body > * { min-width: 0; }
