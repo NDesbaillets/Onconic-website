@@ -644,3 +644,5 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
   .kt-rx-table td:empty { display: none; }
 }
 .kt-body > * { min-width: 0; }
+.kt-risk-swatch { fill: var(--arm); }
+.kt-risk { font-size: 10px; }

@@ -82,8 +82,9 @@ Page `/app/duree.html`, réservée aux membres rattachés au CHUV (adresse `@chu
 ## Outil « Key trials » (membres validés)
 
 - Page `/app/trials.html` : une fiche par étude clé (design, résultats OS/PFS/DFS/ORR/DoR, tolérance, forces, limites, « practice changing ? », références PubMed/DOI). Recherche par mot-clé, clinique, diagnostic, drivers et ligne ; lien direct `?t=slug`.
-- Graphiques générés à partir des chiffres de la fiche (forest plot des HR, médianes, taux) : aucune figure d'article n'est reproduite.
-- Installation : exécuter une fois `supabase/trials.sql` (table `key_trials` + 14 fiches thoraciques en brouillon, chiffres tirés des résumés PubMed cités).
+- Graphiques générés à partir des chiffres de la fiche (schéma de l'étude, forest plot des HR, médianes, taux) : aucune image d'article n'est reproduite.
+- Courbes de survie (champ `km`) : soit digitalisées à partir de la figure publiée la plus récente en libre accès (points tous les 0,5 mois, effectifs à risque, `digitized: true`), soit reconstruites à partir des médianes et taux publiés quand la figure n'est pas accessible. La source est citée sous chaque courbe.
+- Installation et mises à jour : exécuter `supabase/trials.sql` (table `key_trials` + 14 fiches thoraciques en brouillon). Le script met à jour une fiche seulement si personne ne l'a modifiée depuis son dernier passage ni marquée comme relue.
 - Les membres ne voient que les fiches publiées. L'admin voit les brouillons et peut modifier (JSON), publier, marquer comme relu, dupliquer, supprimer ou créer une fiche.
 
 ## Page « Mon compte »
