@@ -1,0 +1,4 @@
+# GitHub Pages : notes de travail exclues du site publié
+exclude:
+  - CLAUDE.md
+  - memory/
