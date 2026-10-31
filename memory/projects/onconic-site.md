@@ -8,7 +8,6 @@
 - #25 page d'accueil plus médicale, cercles bleu marine pour les étapes 1-4.
 
 ## En attente
-- PR #26 : retour léger des références aux abeilles sur la page d'accueil.
 - Relire et publier les 14 fiches Key trials.
 - Recoller `supabase/templates/invite.html` dans Supabase.
 - Noms et rôles des contributeurs pour la section équipe de la page À propos (`#team`).

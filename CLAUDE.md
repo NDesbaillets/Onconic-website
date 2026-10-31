@@ -6,8 +6,9 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 ## Préférences de travail
 - Réponses en **français**, directes, recommandation d'abord, sans flatterie ni tirets cadratins.
 - Ton médical sobre ; la métaphore des abeilles reste présente mais discrète (décision du 31.10.2026).
-- Chaque changement : branche `claude/quirky-tesla-kpblcm` repartie de `origin/main`, PR, puis il merge lui-même.
-- Le SQL Supabase : il le colle dans le SQL Editor (fichiers longs) ; Claude peut lire la base via MCP `execute_sql` (autorisé).
+- Chaque changement : branche `claude/quirky-tesla-kpblcm` repartie de `origin/main`, PR, tests, puis **Claude merge lui-même la PR** (autorisation permanente donnée le 31.10.2026 ; Nicolas ne merge plus). Merger seulement une PR testée, mergeable et sans commentaire en suspens.
+- **SQL Supabase : Claude l'exécute d'emblée** via le MCP Supabase (`execute_sql`, projet `icqrobnqvidusajburcu`), sans demander à Nicolas de le coller (autorisation permanente du 31.10.2026). Tester d'abord en PGlite ; pour un long fichier, l'envoyer par morceaux cohérents (schéma, puis données) ; vérifier ensuite par une requête de contrôle. Ne pas lancer de requête destructive (drop, delete massif) sans accord explicite.
+- Ordre habituel : merger la PR, exécuter le SQL associé, vérifier la base, puis faire un compte rendu court.
 - Dates européennes (JJ.MM.AAAA), unités métriques, CHF.
 
 ## Termes
@@ -29,7 +30,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Key trials** | 14 fiches thoraciques en brouillon, courbes digitalisées ; à relire/publier |
 | **Lettres d'assurance** | 31 lettres importées (thoracique) ; 2 Word à corriger |
 | **Congrès** | En ligne ; veille trimestrielle programmée (connecteur Supabase à attacher) |
-| **Page d'accueil** | PR #26 (retour léger des abeilles) en attente de merge |
+| **Page d'accueil** | Ton médical, abeilles discrètes (PR #25-26) |
 → Détails : memory/projects/
 
 ## Règles de sécurité (ne jamais enfreindre)
