@@ -147,7 +147,8 @@
       if (rates.length) charts.append(figure(`${o.label}${o.note ? " · " + o.note.toLowerCase() : o.timepoint ? " · " + o.timepoint : ""}`, bars(rates.map((a) => ({ label: a.arm, value: a.rate })), "%", 100)));
     }
     b.append(section("Résultats", charts, table(outs)));
-    if (r.safety) b.append(section("Tolérance", el("p", null, r.safety)));
+    const tol = safety(r);
+    if (tol) b.append(tol);
 
     // Discussion
     const disc = el("div", "kt-disc");
@@ -202,6 +203,49 @@
     const wrap = el("div", "it-table-wrap");
     wrap.append(t);
     return wrap;
+  }
+
+  // Tolérance : synthèse, puis tableau des effets indésirables principaux (fréquence par grade et par bras)
+  function safety(r) {
+    const ae = r.ae || {};
+    const arms = ae.arms || [];
+    const rows = (ae.rows || []).filter((x) => Array.isArray(x) && x.length);
+    if (!r.safety && !rows.length) return null;
+    const nodes = [];
+    if (r.safety) nodes.push(el("p", null, r.safety));
+    if (rows.length && arms.length) {
+      const pct = (v) => (v == null || v === "" ? "—" : typeof v === "number" ? num(v) + " %" : String(v));
+      const t = el("table", "it-table kt-ae");
+      t.append(el("thead"), el("tbody"));
+      const h1 = el("tr"), h2 = el("tr");
+      const first = el("th", null, "Effet indésirable");
+      first.rowSpan = 2;
+      h1.append(first);
+      arms.forEach((a, i) => {
+        const th = el("th", "kt-ae-arm " + ARM[i % 3], a);
+        th.colSpan = 2;
+        h1.append(th);
+        h2.append(el("th", null, "Tous grades"), el("th", null, ae.grade || "Grade ≥ 3"));
+      });
+      t.tHead.append(h1, h2);
+      for (const x of rows) {
+        const tr = el("tr");
+        tr.append(el("th", null, x[0]));
+        arms.forEach((a, i) => {
+          [x[1 + 2 * i], x[2 + 2 * i]].forEach((v, j) => {
+            const c = el("td", j ? "kt-ae-g3" : null, pct(v));
+            c.dataset.label = `${a} · ${j ? ae.grade || "Grade ≥ 3" : "tous grades"}`;
+            tr.append(c);
+          });
+        });
+        t.tBodies[0].append(tr);
+      }
+      const tw = el("div", "it-table-wrap kt-ae-wrap");
+      tw.append(t);
+      nodes.push(tw);
+    }
+    if (ae.source) nodes.push(el("p", "muted kt-stamp", ae.source));
+    return section("Tolérance", ...nodes);
   }
 
   // Retour à la ligne approximatif pour le texte SVG (≈ 6,4 px par caractère à 12 px)
@@ -332,12 +376,18 @@
       wrapEl.append(box);
     });
     const de = r.design || {};
-    const text = () => [r.acronym + " : schémas thérapeutiques"].concat(arms.map((a) =>
-      [a.name + (a.n ? ` (n = ${a.n})` : "")].concat(a.regimen.map((x) => "- " + [x.drug, x.dose, x.route, x.schedule, x.duration].filter((v) => v && v !== "—").join(", "))).join("\n")),
-      de.treatment_notes ? [de.treatment_notes] : []).join("\n\n");
-    const copy = button("Copier les schémas", "btn btn-outline ug-copy", async (e) => {
+    // Seul le traitement expérimental est copié : bras marqués control: true exclus ; à défaut de marquage,
+    // le premier bras d'une étude randomisée est considéré comme expérimental.
+    const flagged = arms.some((a) => "control" in a);
+    const randomized = arms.length > 1 && de.randomization && !/aucun/i.test(de.randomization);
+    const exp = flagged ? arms.filter((a) => !a.control) : randomized ? arms.slice(0, 1) : arms;
+    const partial = exp.length < arms.length;
+    const label = partial ? "Copier le traitement expérimental" : exp.length > 1 ? "Copier les schémas" : "Copier le schéma";
+    const text = () => [r.acronym + (partial ? " : traitement expérimental" : exp.length > 1 ? " : schémas thérapeutiques" : " : schéma thérapeutique")].concat(exp.map((a) =>
+      [a.name + (a.n ? ` (n = ${a.n})` : "")].concat(a.regimen.map((x) => "- " + [x.drug, x.dose, x.route, x.schedule, x.duration].filter((v) => v && v !== "—").join(", "))).join("\n"))).join("\n\n");
+    const copy = button(label, "btn btn-outline ug-copy", async (e) => {
       try { await navigator.clipboard.writeText(text()); e.target.textContent = "Copié"; } catch (x) { e.target.textContent = "Copie impossible"; }
-      setTimeout(() => (e.target.textContent = "Copier les schémas"), 1500);
+      setTimeout(() => (e.target.textContent = label), 1500);
     });
     const nodes = [wrapEl];
     if (de.treatment_notes) nodes.push(el("p", "kt-rx-note", de.treatment_notes));
@@ -495,7 +545,7 @@
   }
 
   // ----- Administration -----
-  const EDITABLE = ["slug", "acronym", "title", "clinic", "diagnosis", "markers", "lines", "drugs", "phase", "design", "outcomes", "km", "safety", "summary", "strengths", "limitations", "practice", "practice_text", "refs"];
+  const EDITABLE = ["slug", "acronym", "title", "clinic", "diagnosis", "markers", "lines", "drugs", "phase", "design", "outcomes", "km", "safety", "ae", "summary", "strengths", "limitations", "practice", "practice_text", "refs"];
   const TEMPLATE = {
     slug: "nom-de-l-etude", acronym: "NOM", title: "Traitement A vs traitement B, population", clinic: "Thoracique", diagnosis: "", markers: "", lines: ["1L"], drugs: "",
     phase: "Phase III",
@@ -508,7 +558,8 @@
     outcomes: [{ ep: "OS", label: "Survie globale", hr: null, lo: null, hi: null, p: null, arms: [{ arm: "Bras A", median: null, rate: null }, { arm: "Bras B", median: null, rate: null }] }],
     km: [{ ep: "OS", label: "Survie globale", source: "Médianes et taux publiés : auteur année", hr: "HR 0,00 (0,00–0,00)", xmax: 36,
            arms: [{ arm: "Bras A", points: [[10.5, 50], [24, 22]] }, { arm: "Bras B", points: [[7.0, 50], [24, 12]] }] }],
-    safety: "", summary: "", strengths: "", limitations: "", practice: "oui", practice_text: "", refs: [{ label: "", pmid: "", doi: "", journal: "", year: null }]
+    safety: "", ae: { arms: ["Bras A", "Bras B"], grade: "Grade ≥ 3", rows: [["Nausées", 30, 1.5, 25, 1.0]], source: "Source : publication, tableau X" },
+    summary: "", strengths: "", limitations: "", practice: "oui", practice_text: "", refs: [{ label: "", pmid: "", doi: "", journal: "", year: null }]
   };
 
   function adminBar(r) {
@@ -556,6 +607,9 @@
     if (rec.km != null && !(Array.isArray(rec.km) && rec.km.every((k) => Array.isArray(k.arms) && k.arms.every((a) => Array.isArray(a.points) && a.points.every((p) => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite) && p[1] >= 0 && p[1] <= 100)))))
       return err("km : liste de courbes { ep, label, source, arms: [{ arm, points: [[mois, %], …] }] }, % entre 0 et 100.");
     if (rec.km == null) rec.km = [];
+    if (rec.ae != null && !(typeof rec.ae === "object" && !Array.isArray(rec.ae) && Array.isArray(rec.ae.arms || []) && (rec.ae.rows || []).every((x) => Array.isArray(x) && typeof x[0] === "string" && x.length === 1 + 2 * (rec.ae.arms || []).length)))
+      return err("ae : { arms: [noms des bras], rows: [[effet, tous grades bras 1, grade ≥ 3 bras 1, …]] } ; deux valeurs par bras.");
+    if (rec.ae == null) rec.ae = {};
     out.className = "form-msg"; out.textContent = "Enregistrement…";
     const q = state.editing ? sb.from("key_trials").update(rec).eq("id", state.editing.id) : sb.from("key_trials").insert(Object.assign(rec, { status: "draft" }));
     const { error } = await q;

@@ -624,6 +624,13 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 .kt-rx-table td { white-space: normal; }
 .kt-rx-note { margin: var(--space-2) 0 0; font-size: .95rem; }
 .kt-rx-section .ug-copy { margin-top: var(--space-2); }
+.kt-ae-wrap { overflow-x: auto; }
+.kt-ae { border-collapse: collapse; width: 100%; font-size: .92rem; }
+.kt-ae th, .kt-ae td { text-align: right; white-space: nowrap; padding: 6px 10px; border-bottom: 1px solid var(--navy-100); }
+.kt-ae thead th { font-weight: 500; color: var(--ink-600); vertical-align: bottom; }
+.kt-ae thead tr:first-child th:first-child, .kt-ae tbody th { text-align: left; font-weight: 500; white-space: normal; min-width: 11em; }
+.kt-ae thead .kt-ae-arm { text-align: center; white-space: normal; border-bottom: 3px solid var(--arm); }
+.kt-ae td.kt-ae-g3 { font-weight: 500; color: var(--navy-800); }
 .kt-km-fig .kt-svg { max-width: 640px; }
 .kt-km-title { margin: 0 0 6px; font-weight: 500; color: var(--navy-800); }
 .kt-grid { stroke: var(--navy-100); stroke-width: 1; }
@@ -642,6 +649,9 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
   .kt-rx-table tbody th, .kt-rx-table td { display: flex; gap: 8px; padding: 2px 0; border: 0; }
   .kt-rx-table td::before { content: attr(data-label); flex: 0 0 80px; color: var(--ink-600); font-size: .85rem; }
   .kt-rx-table td:empty { display: none; }
+  .kt-ae { font-size: .8rem; }
+  .kt-ae th, .kt-ae td { padding: 5px 4px; }
+  .kt-ae thead tr:first-child th:first-child, .kt-ae tbody th { min-width: 0; }
 }
 .kt-body > * { min-width: 0; }
 .kt-risk-swatch { fill: var(--arm); }
