@@ -1,5 +1,6 @@
 // Key trials : une fiche par étude clé, recherchable par clinique, diagnostic, drivers et ligne.
-// Les graphiques (forest plot des HR, médianes, taux) sont générés à partir des chiffres de la fiche.
+// Les graphiques (schéma de l'étude, courbes de survie, forest plot des HR, médianes, taux) sont générés
+// à partir des chiffres de la fiche ; aucune figure des articles n'est reproduite.
 (function () {
   const cfg = window.ONCONIC_CONFIG || {};
   const sb = window.supabase && cfg.supabaseUrl ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
@@ -111,8 +112,10 @@
     if (r.status === "draft") b.append(el("p", "ug-note ug-attn", "Brouillon généré à partir des résumés publiés : à relire avant publication."));
     if (r.summary) b.append(el("p", "kt-summary", r.summary));
 
-    // Design
+    // Design : schéma de l'étude en tête, puis les faits clés
     const de = r.design || {};
+    const width = Math.max(300, d.clientWidth - 40);
+    const scheme = studyScheme(r, width);
     const dl = el("dl", "ug-dl kt-design");
     const fact = (k, v) => { if (v) dl.append(el("dt", null, k), el("dd", null, v)); };
     fact("Type", r.phase);
@@ -121,13 +124,20 @@
     const n = (de.arms || []).reduce((s, a) => s + (a.n || 0), 0) || de.total;
     fact("Bras", (de.arms || []).map((a) => a.name + (a.n ? ` (n = ${a.n})` : "")).join(" vs ") + (n ? ` · total ${n}` : ""));
     fact("Critère principal", de.primary);
+    fact("Stratification", de.stratification);
     fact("Remarques", de.notes);
-    fact("Traitements", r.drugs && r.drugs.split(";").map((x) => x.trim()).join(", "));
-    b.append(section("Design", dl));
+    b.append(section("Design de l'étude", ...(scheme ? [scheme] : []), dl));
+    const rx = regimens(r);
+    if (rx) b.append(rx);
 
     // Résultats : graphiques + tableau
     const outs = r.outcomes || [];
     const charts = el("div", "kt-charts");
+    const kmW = Math.min(640, Math.max(300, width >= 900 ? width / 2 - 40 : width - 30));
+    for (const k of r.km || []) {
+      const fig = kmFigure(k, kmW);
+      if (fig) charts.append(fig);
+    }
     const forest = forestPlot(outs);
     if (forest) { const f = figure("Hazard ratios (IC)", forest); f.classList.add("wide"); charts.append(f); }
     for (const o of outs) {
@@ -194,6 +204,215 @@
     return wrap;
   }
 
+  // Retour à la ligne approximatif pour le texte SVG (≈ 6,4 px par caractère à 12 px)
+  function wrap(text, px, size) {
+    const max = Math.max(8, Math.floor(px / ((size || 12) * 0.53)));
+    const out = [];
+    let line = "";
+    for (const w of String(text || "").split(/\s+/).filter(Boolean)) {
+      if (line && (line + " " + w).length > max) { out.push(line); line = w; } else line = line ? line + " " + w : w;
+    }
+    if (line) out.push(line);
+    return out;
+  }
+  const ARM = ["kt-k0", "kt-k1", "kt-k2"];
+
+  // Boîte de texte : titre en gras puis lignes, hauteur calculée
+  function textBox(g, x, y, w, title, lines, cls) {
+    const lh = 16, pad = 10;
+    const titleLines = wrap(title, w - 2 * pad, 13);
+    const h = pad * 2 + titleLines.length * lh + lines.length * lh + (lines.length ? 4 : 0);
+    g.append(svg("rect", { x, y, width: w, height: h, class: "kt-box " + (cls || "") }));
+    let cy = y + pad + 12;
+    for (const t of titleLines) { g.append(svg("text", { x: x + pad, y: cy, class: "kt-box-title" }, t)); cy += lh; }
+    cy += 4;
+    for (const t of lines) { g.append(svg("text", { x: x + pad, y: cy, class: "kt-box-text" }, t)); cy += lh; }
+    return h;
+  }
+  const measure = (w, title, lines) => 20 + wrap(title, w - 20, 13).length * 16 + lines.length * 16 + (lines.length ? 4 : 0);
+  const arrow = (g, x1, y1, x2, y2) => g.append(svg("line", { x1, y1, x2, y2, class: "kt-arrow", "marker-end": "url(#kt-head)" }));
+
+  // Schéma de l'étude : population → randomisation → bras → critères
+  function studyScheme(r, width) {
+    const de = r.design || {};
+    const arms = de.arms || [];
+    if (!arms.length) return null;
+    const horizontal = width >= 680;
+    const W = horizontal ? Math.min(width, 980) : Math.min(width, 520);
+    const randomized = de.randomization && !/^aucune/i.test(de.randomization);
+    const ratio = randomized ? de.randomization.split(" ")[0] : "";
+    const popW = horizontal ? W * 0.29 : W;
+    const armW = horizontal ? W * 0.36 : W;
+    const epW = horizontal ? W - popW - armW - 130 : W;
+    const bullets = (w) => (de.inclusion && de.inclusion.length ? de.inclusion : [de.population]).flatMap((t) => wrap(t, w - 32).map((l, i) => (i ? "   " : "• ") + l));
+    const armLines = (a, w) => {
+      const lines = [];
+      if (a.n) lines.push(`n = ${a.n}`);
+      for (const x of a.regimen || []) lines.push(...wrap(x.dose && x.dose.length <= 24 && x.dose !== "—" ? `${x.drug} ${x.dose}` : x.drug, w - 20));
+      return lines;
+    };
+    const epLines = (w) => [...wrap(de.primary, w - 20)].concat(de.secondary ? ["", ...wrap("Secondaires : " + de.secondary, w - 20)] : []);
+    const popLines = bullets(popW), epL = epLines(epW);
+    const popH = measure(popW, "Population", popLines), epH = measure(epW, "Critère principal", epL);
+    const armHs = arms.map((a) => measure(armW, a.name, armLines(a, armW)));
+    const armsH = armHs.reduce((s, h) => s + h, 0) + (arms.length - 1) * 12;
+    const H = horizontal ? Math.max(popH, armsH, epH) + 8 : popH + 70 + armsH + 40 + epH + 8;
+    const g = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "kt-svg kt-scheme", role: "img", "aria-label": `Schéma de l'étude ${r.acronym}` });
+    const defs = svg("defs");
+    const m = svg("marker", { id: "kt-head", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" });
+    m.append(svg("path", { d: "M0,0 L10,5 L0,10 z", class: "kt-arrow-head" }));
+    defs.append(m);
+    g.append(defs);
+    const circle = (cx, cy) => {
+      if (!randomized) return g.append(svg("text", { x: cx, y: cy + 4, class: "kt-box-text", "text-anchor": "middle" }, arms.length > 1 ? "cohortes" : ""));
+      g.append(svg("circle", { cx, cy, r: 22, class: "kt-rand" }));
+      g.append(svg("text", { x: cx, y: cy - 2, class: "kt-rand-txt", "text-anchor": "middle" }, "R"));
+      g.append(svg("text", { x: cx, y: cy + 12, class: "kt-rand-sub", "text-anchor": "middle" }, ratio));
+    };
+    if (horizontal) {
+      const mid = H / 2;
+      textBox(g, 0, mid - popH / 2, popW, "Population", popLines, "pop");
+      const rx = popW + 45;
+      arrow(g, popW, mid, rx - (randomized ? 24 : 30), mid);
+      circle(rx, mid);
+      const ax = popW + 90;
+      let y = mid - armsH / 2;
+      arms.forEach((a, i) => {
+        const h = armHs[i], cy = y + h / 2;
+        g.append(svg("path", { d: `M${rx + (randomized ? 22 : 28)},${mid} C${rx + 40},${mid} ${ax - 30},${cy} ${ax - 2},${cy}`, class: "kt-arrow", "marker-end": "url(#kt-head)" }));
+        textBox(g, ax, y, armW, a.name, armLines(a, armW), "arm " + ARM[i % 3]);
+        arrow(g, ax + armW, cy, W - epW - 2, cy);
+        y += h + 12;
+      });
+      textBox(g, W - epW, mid - epH / 2, epW, "Critère principal", epL, "ep");
+    } else {
+      textBox(g, 0, 0, W, "Population", popLines, "pop");
+      const cx = W / 2;
+      arrow(g, cx, popH, cx, popH + 22);
+      circle(cx, popH + 46);
+      let y = popH + 70;
+      arms.forEach((a, i) => {
+        textBox(g, 0, y, W, a.name, armLines(a, W), "arm " + ARM[i % 3]);
+        y += armHs[i] + 12;
+      });
+      arrow(g, cx, y - 12, cx, y + 26);
+      textBox(g, 0, y + 28, W, "Critère principal", epL, "ep");
+    }
+    const f = figure([r.phase, de.randomization && randomized ? "randomisation " + de.randomization : "", de.stratification && randomized ? "stratification : " + de.stratification : ""].filter(Boolean).join(" · "), g);
+    f.classList.add("kt-scheme-fig");
+    return f;
+  }
+
+  // Schémas thérapeutiques par bras, avec copie en texte
+  function regimens(r) {
+    const arms = ((r.design || {}).arms || []).filter((a) => (a.regimen || []).length);
+    if (!arms.length) return null;
+    const wrapEl = el("div", "kt-rx-grid");
+    arms.forEach((a, i) => {
+      const box = el("div", "kt-rx " + ARM[i % 3]);
+      const h = el("h4", null, a.name);
+      if (a.n) h.append(el("span", "muted", ` · n = ${a.n}`));
+      const t = el("table", "it-table kt-rx-table");
+      t.append(el("thead"), el("tbody"));
+      const tr = el("tr");
+      ["Médicament", "Dose", "Voie", "Schéma", "Durée"].forEach((x) => tr.append(el("th", null, x)));
+      t.tHead.append(tr);
+      for (const x of a.regimen) {
+        const row = el("tr");
+        [x.drug, x.dose, x.route, x.schedule, x.duration].forEach((v, j) => {
+          const c = el(j ? "td" : "th", null, v || "");
+          c.dataset.label = ["Médicament", "Dose", "Voie", "Schéma", "Durée"][j];
+          row.append(c);
+        });
+        t.tBodies[0].append(row);
+      }
+      const tw = el("div", "it-table-wrap");
+      tw.append(t);
+      box.append(h, tw);
+      wrapEl.append(box);
+    });
+    const de = r.design || {};
+    const text = () => [r.acronym + " : schémas thérapeutiques"].concat(arms.map((a) =>
+      [a.name + (a.n ? ` (n = ${a.n})` : "")].concat(a.regimen.map((x) => "- " + [x.drug, x.dose, x.route, x.schedule, x.duration].filter((v) => v && v !== "—").join(", "))).join("\n")),
+      de.treatment_notes ? [de.treatment_notes] : []).join("\n\n");
+    const copy = button("Copier les schémas", "btn btn-outline ug-copy", async (e) => {
+      try { await navigator.clipboard.writeText(text()); e.target.textContent = "Copié"; } catch (x) { e.target.textContent = "Copie impossible"; }
+      setTimeout(() => (e.target.textContent = "Copier les schémas"), 1500);
+    });
+    const nodes = [wrapEl];
+    if (de.treatment_notes) nodes.push(el("p", "kt-rx-note", de.treatment_notes));
+    if (de.sources_note) nodes.push(el("p", "muted kt-stamp", de.sources_note));
+    nodes.push(copy);
+    const s = section("Traitements de l'étude", ...nodes);
+    s.classList.add("kt-rx-section");
+    return s;
+  }
+
+  // Courbe de survie reconstruite : interpolation exponentielle entre les points publiés (médianes, taux à date fixe)
+  function survival(points) {
+    const pts = [[0, 100]].concat([...points].sort((a, b) => a[0] - b[0])).filter((p, i, a) => !i || p[0] > a[i - 1][0]);
+    const last = pts[pts.length - 1], prev = pts[pts.length - 2];
+    const tailRate = Math.log(prev[1] / Math.max(last[1], 0.01)) / (last[0] - prev[0]);
+    const at = (t) => {
+      for (let i = 1; i < pts.length; i++) {
+        const [t0, s0] = pts[i - 1], [t1, s1] = pts[i];
+        if (t <= t1) return s0 * Math.pow(Math.max(s1, 0.01) / s0, (t - t0) / (t1 - t0));
+      }
+      return last[1] * Math.exp(-tailRate * (t - last[0]));
+    };
+    return { at, end: last[0], pts: pts.slice(1) };
+  }
+
+  function kmFigure(k, W) {
+    const arms = (k.arms || []).filter((a) => (a.points || []).length);
+    if (!arms.length) return null;
+    const curves = arms.map((a) => survival(a.points));
+    const xmax = k.xmax || Math.ceil(Math.max(...curves.map((c) => c.end)) * 1.3 / 6) * 6;
+    const H = Math.round(W * 0.62), L = 40, R = 12, T = 14, B = 40;
+    const x = (t) => L + (t / xmax) * (W - L - R);
+    const y = (s) => T + (1 - s / 100) * (H - T - B);
+    const g = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "kt-svg kt-km", role: "img", "aria-label": `${k.label} : courbes reconstruites` });
+    for (const s of [0, 25, 50, 75, 100]) {
+      g.append(svg("line", { x1: L, x2: W - R, y1: y(s), y2: y(s), class: s === 50 ? "kt-grid mid" : "kt-grid" }));
+      g.append(svg("text", { x: L - 6, y: y(s) + 4, class: "kt-tick", "text-anchor": "end" }, s));
+    }
+    const step = xmax <= 24 ? 3 : xmax <= 36 ? 6 : 12;
+    for (let t = 0; t <= xmax; t += step) g.append(svg("text", { x: x(t), y: H - B + 16, class: "kt-tick", "text-anchor": "middle" }, t));
+    g.append(svg("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), class: "kt-axis-line" }));
+    g.append(svg("line", { x1: L, x2: L, y1: T, y2: y(0), class: "kt-axis-line" }));
+    g.append(svg("text", { x: (L + W - R) / 2, y: H - 6, class: "kt-axis", "text-anchor": "middle" }, "Mois depuis la randomisation"));
+    const dt = xmax / 90;
+    const path = (c, from, to) => {
+      let d = `M${x(from).toFixed(1)},${y(c.at(from)).toFixed(1)}`;
+      for (let t = from + dt; t < to + dt / 2; t += dt) d += `H${x(Math.min(t, to)).toFixed(1)}V${y(c.at(Math.min(t, to))).toFixed(1)}`;
+      return d;
+    };
+    curves.forEach((c, i) => {
+      const end = Math.min(c.end, xmax);
+      g.append(svg("path", { d: path(c, 0, end), class: "kt-curve " + ARM[i % 3] }));
+      if (end < xmax) g.append(svg("path", { d: path(c, end, xmax), class: "kt-curve extra " + ARM[i % 3] }));
+      for (const [t, s] of c.pts) {
+        if (s === 50) g.append(svg("line", { x1: x(t), x2: x(t), y1: y(50), y2: y(0), class: "kt-median " + ARM[i % 3] }));
+        const dot = svg("circle", { cx: x(t), cy: y(s), r: 4, class: "kt-dot " + ARM[i % 3] });
+        dot.append(svg("title", null, `${arms[i].arm} : ${num(s)} % à ${num(t)} mois`));
+        g.append(dot);
+      }
+    });
+    if (k.hr) g.append(svg("text", { x: W - R - 4, y: T + 14, class: "kt-val", "text-anchor": "end" }, k.hr));
+    const legend = el("ul", "kt-legend");
+    arms.forEach((a, i) => {
+      const li = el("li", ARM[i % 3]);
+      const m = (a.points || []).find((p) => p[1] === 50);
+      li.append(el("span", "kt-swatch"), `${a.arm} · ${m ? "médiane " + med(m[0]) + " mois" : "médiane non publiée"}`);
+      legend.append(li);
+    });
+    const f = el("figure", "kt-fig kt-km-fig");
+    const cap = el("figcaption");
+    cap.append(`Courbe reconstruite à partir des valeurs publiées (points) : ${k.source}. Pointillés : extrapolation à risque constant. Ne remplace pas la figure originale.`);
+    f.append(el("p", "kt-km-title", `${EP[k.ep] || k.ep} · ${k.label}`), g, legend, cap);
+    return f;
+  }
+
   // Forest plot en échelle logarithmique
   function forestPlot(outs) {
     const rows = outs.filter((o) => o.hr != null && o.lo != null && o.hi != null);
@@ -234,11 +453,19 @@
   }
 
   // ----- Administration -----
-  const EDITABLE = ["slug", "acronym", "title", "clinic", "diagnosis", "markers", "lines", "drugs", "phase", "design", "outcomes", "safety", "summary", "strengths", "limitations", "practice", "practice_text", "refs"];
+  const EDITABLE = ["slug", "acronym", "title", "clinic", "diagnosis", "markers", "lines", "drugs", "phase", "design", "outcomes", "km", "safety", "summary", "strengths", "limitations", "practice", "practice_text", "refs"];
   const TEMPLATE = {
     slug: "nom-de-l-etude", acronym: "NOM", title: "Traitement A vs traitement B, population", clinic: "Thoracique", diagnosis: "", markers: "", lines: ["1L"], drugs: "",
-    phase: "Phase III", design: { population: "", randomization: "1:1", arms: [{ name: "Bras A", n: null }, { name: "Bras B", n: null }], primary: "" },
+    phase: "Phase III",
+    design: {
+      population: "", inclusion: ["Critère 1", "Critère 2"], randomization: "1:1", stratification: "", primary: "", secondary: "",
+      arms: [{ name: "Bras A", n: null, regimen: [{ drug: "", dose: "", route: "IV", schedule: "J1, toutes les 3 semaines", duration: "" }] },
+             { name: "Bras B", n: null, regimen: [{ drug: "", dose: "", route: "IV", schedule: "", duration: "" }] }],
+      treatment_notes: ""
+    },
     outcomes: [{ ep: "OS", label: "Survie globale", hr: null, lo: null, hi: null, p: null, arms: [{ arm: "Bras A", median: null, rate: null }, { arm: "Bras B", median: null, rate: null }] }],
+    km: [{ ep: "OS", label: "Survie globale", source: "Médianes et taux publiés : auteur année", hr: "HR 0,00 (0,00–0,00)", xmax: 36,
+           arms: [{ arm: "Bras A", points: [[10.5, 50], [24, 22]] }, { arm: "Bras B", points: [[7.0, 50], [24, 12]] }] }],
     safety: "", summary: "", strengths: "", limitations: "", practice: "oui", practice_text: "", refs: [{ label: "", pmid: "", doi: "", journal: "", year: null }]
   };
 
@@ -284,6 +511,9 @@
     if (!rec.acronym || !rec.title) return err("acronym et title sont obligatoires.");
     if (rec.lines && !rec.lines.every((l) => LINE_LABEL[l])) return err("lines : valeurs autorisées neoadj, adj, 1L, 2L, 3L.");
     if (rec.practice && !PRACTICE[rec.practice]) return err("practice : oui, partiel ou non.");
+    if (rec.km != null && !(Array.isArray(rec.km) && rec.km.every((k) => Array.isArray(k.arms) && k.arms.every((a) => Array.isArray(a.points) && a.points.every((p) => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite) && p[1] >= 0 && p[1] <= 100)))))
+      return err("km : liste de courbes { ep, label, source, arms: [{ arm, points: [[mois, %], …] }] }, % entre 0 et 100.");
+    if (rec.km == null) rec.km = [];
     out.className = "form-msg"; out.textContent = "Enregistrement…";
     const q = state.editing ? sb.from("key_trials").update(rec).eq("id", state.editing.id) : sb.from("key_trials").insert(Object.assign(rec, { status: "draft" }));
     const { error } = await q;
