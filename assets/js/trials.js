@@ -363,52 +363,94 @@
     return { at, end: last[0], pts: pts.slice(1) };
   }
 
+  // Courbes de survie. Deux cas :
+  // - digitized : points relevés sur la figure publiée (pas mensuel), tracés en escalier, avec les effectifs à risque ;
+  // - sinon : reconstruction à partir des seules valeurs publiées (médianes, taux), extrapolée en pointillés.
   function kmFigure(k, W) {
     const arms = (k.arms || []).filter((a) => (a.points || []).length);
     if (!arms.length) return null;
-    const curves = arms.map((a) => survival(a.points));
-    const xmax = k.xmax || Math.ceil(Math.max(...curves.map((c) => c.end)) * 1.3 / 6) * 6;
-    const H = Math.round(W * 0.62), L = 40, R = 12, T = 14, B = 40;
+    const digitized = !!k.digitized;
+    const curves = digitized ? null : arms.map((a) => survival(a.points));
+    const ends = arms.map((a, i) => (digitized ? a.points[a.points.length - 1][0] : curves[i].end));
+    const xmax = k.xmax || Math.ceil(Math.max(...ends) * 1.3 / 6) * 6;
+    const risk = digitized && k.atrisk && (k.atrisk.times || []).length ? k.atrisk : null;
+    const L = 40, R = 12, T = 14, B = 40;
+    const plotH = Math.round(W * 0.56);
+    const riskH = risk ? 22 + arms.length * 16 : 0;
+    const H = plotH + riskH;
     const x = (t) => L + (t / xmax) * (W - L - R);
-    const y = (s) => T + (1 - s / 100) * (H - T - B);
-    const g = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "kt-svg kt-km", role: "img", "aria-label": `${k.label} : courbes reconstruites` });
+    const y = (s) => T + (1 - s / 100) * (plotH - T - B);
+    const g = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "kt-svg kt-km", role: "img", "aria-label": `${k.label} : courbes ${digitized ? "digitalisées" : "reconstruites"}` });
     for (const s of [0, 25, 50, 75, 100]) {
       g.append(svg("line", { x1: L, x2: W - R, y1: y(s), y2: y(s), class: s === 50 ? "kt-grid mid" : "kt-grid" }));
       g.append(svg("text", { x: L - 6, y: y(s) + 4, class: "kt-tick", "text-anchor": "end" }, s));
     }
+    const ticks = risk ? risk.times.filter((t, i) => risk.times.length <= 13 || i % 2 === 0) : [];
     const step = xmax <= 24 ? 3 : xmax <= 36 ? 6 : 12;
-    for (let t = 0; t <= xmax; t += step) g.append(svg("text", { x: x(t), y: H - B + 16, class: "kt-tick", "text-anchor": "middle" }, t));
+    const xt = ticks.length ? ticks : Array.from({ length: Math.floor(xmax / step) + 1 }, (_, i) => i * step);
+    for (const t of xt) g.append(svg("text", { x: x(t), y: plotH - B + 16, class: "kt-tick", "text-anchor": "middle" }, t));
     g.append(svg("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), class: "kt-axis-line" }));
     g.append(svg("line", { x1: L, x2: L, y1: T, y2: y(0), class: "kt-axis-line" }));
-    g.append(svg("text", { x: (L + W - R) / 2, y: H - 6, class: "kt-axis", "text-anchor": "middle" }, "Mois depuis la randomisation"));
+    g.append(svg("text", { x: (L + W - R) / 2, y: plotH - 6, class: "kt-axis", "text-anchor": "middle" }, "Mois"));
     const dt = xmax / 90;
     const path = (c, from, to) => {
       let d = `M${x(from).toFixed(1)},${y(c.at(from)).toFixed(1)}`;
       for (let t = from + dt; t < to + dt / 2; t += dt) d += `H${x(Math.min(t, to)).toFixed(1)}V${y(c.at(Math.min(t, to))).toFixed(1)}`;
       return d;
     };
-    curves.forEach((c, i) => {
-      const end = Math.min(c.end, xmax);
+    const stairs = (pts) => {
+      let d = `M${x(0).toFixed(1)},${y(100).toFixed(1)}`;
+      for (const [t, s] of pts) if (t <= xmax) d += `H${x(t).toFixed(1)}V${y(s).toFixed(1)}`;
+      return d;
+    };
+    const dot = (i, t, s, label) => {
+      const c = svg("circle", { cx: x(t), cy: y(s), r: 3.5, class: "kt-dot " + ARM[i % 3] });
+      c.append(svg("title", null, `${arms[i].arm} : ${num(s)} % à ${num(t)} mois${label ? " (" + label + ")" : ""}`));
+      g.append(c);
+    };
+    arms.forEach((a, i) => {
+      if (digitized) {
+        g.append(svg("path", { d: stairs(a.points), class: "kt-curve " + ARM[i % 3] }));
+        if (typeof a.median === "number" && a.median <= xmax) g.append(svg("line", { x1: x(a.median), x2: x(a.median), y1: y(50), y2: y(0), class: "kt-median " + ARM[i % 3] }));
+        for (const [t, s] of a.marks || []) dot(i, t, s, "valeur publiée");
+        return;
+      }
+      const c = curves[i], end = Math.min(c.end, xmax);
       g.append(svg("path", { d: path(c, 0, end), class: "kt-curve " + ARM[i % 3] }));
       if (end < xmax) g.append(svg("path", { d: path(c, end, xmax), class: "kt-curve extra " + ARM[i % 3] }));
       for (const [t, s] of c.pts) {
         if (s === 50) g.append(svg("line", { x1: x(t), x2: x(t), y1: y(50), y2: y(0), class: "kt-median " + ARM[i % 3] }));
-        const dot = svg("circle", { cx: x(t), cy: y(s), r: 4, class: "kt-dot " + ARM[i % 3] });
-        dot.append(svg("title", null, `${arms[i].arm} : ${num(s)} % à ${num(t)} mois`));
-        g.append(dot);
+        dot(i, t, s);
       }
     });
     if (k.hr) g.append(svg("text", { x: W - R - 4, y: T + 14, class: "kt-val", "text-anchor": "end" }, k.hr));
+    if (risk) {
+      const top = plotH + 4;
+      g.append(svg("text", { x: 0, y: top + 10, class: "kt-axis" }, "Patients à risque"));
+      arms.forEach((a, i) => {
+        const yy = top + 26 + i * 16;
+        g.append(svg("rect", { x: 0, y: yy - 9, width: 14, height: 4, class: "kt-risk-swatch " + ARM[i % 3] }));
+        (risk.counts[i] || []).forEach((n, j) => {
+          const t = risk.times[j];
+          if (n == null || t > xmax || !ticks.includes(t)) return;
+          g.append(svg("text", { x: x(t), y: yy - 4, class: "kt-tick kt-risk", "text-anchor": "middle" }, n));
+        });
+      });
+    }
     const legend = el("ul", "kt-legend");
     arms.forEach((a, i) => {
       const li = el("li", ARM[i % 3]);
-      const m = (a.points || []).find((p) => p[1] === 50);
-      li.append(el("span", "kt-swatch"), `${a.arm} · ${m ? "médiane " + med(m[0]) + " mois" : "médiane non publiée"}`);
+      let m;
+      if (digitized) m = typeof a.median === "number" ? "médiane " + med(a.median) + " mois" : "médiane non atteinte";
+      else { const p = (a.points || []).find((q) => q[1] === 50); m = p ? "médiane " + med(p[0]) + " mois" : "médiane non publiée"; }
+      li.append(el("span", "kt-swatch"), `${a.arm} · ${m}`);
       legend.append(li);
     });
     const f = el("figure", "kt-fig kt-km-fig");
     const cap = el("figcaption");
-    cap.append(`Courbe reconstruite à partir des valeurs publiées (points) : ${k.source}. Pointillés : extrapolation à risque constant. Ne remplace pas la figure originale.`);
+    cap.append(digitized
+      ? `Courbe digitalisée à partir de la figure publiée : ${k.source}. Points : valeurs publiées ; précision de la digitalisation ±1-2 points.`
+      : `Courbe reconstruite à partir des valeurs publiées (points) : ${k.source}. Pointillés : extrapolation à risque constant. Ne remplace pas la figure originale.`);
     f.append(el("p", "kt-km-title", `${EP[k.ep] || k.ep} · ${k.label}`), g, legend, cap);
     return f;
   }
