@@ -22,9 +22,11 @@
     .toLowerCase().replace(/[^a-z0-9+<>≥≤%]+/g, " ").trim();
   // Synonymes usuels : la recherche « NSCLC » trouve « CBNPC », etc.
   const SYN = [["cbnpc", "nsclc", "cpnpc"], ["cppc", "sclc"], ["her2", "erbb2"], ["epidermoide", "squameux", "squamous"]];
+  // Synonymes par mot entier (« nsclc » ne doit pas déclencher « sclc »)
   const expand = (s) => {
     let t = norm(s);
-    for (const g of SYN) if (g.some((w) => t.includes(w))) t += " " + g.join(" ");
+    const words = new Set(t.split(" "));
+    for (const g of SYN) if (g.some((w) => words.has(w))) t += " " + g.join(" ");
     return t;
   };
 
