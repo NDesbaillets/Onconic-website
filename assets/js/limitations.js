@@ -31,7 +31,7 @@
   const CLINICS = Object.keys(CANCERS);
   const GUARANTEE = /garantie|accord prealable|autorisation prealable|consultation prealable du medecin[- ]conseil/;
 
-  const state = { products: [], limits: [], rx: [], changes: [], meta: null, admin: false, uid: null, pick: {}, rxPick: {} };
+  const state = { products: [], limits: [], rx: [], changes: [], meta: null, admin: false, uid: null, pick: {}, rxPick: {}, cart: [] };
 
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
   function el(tag, cls, txt) {
@@ -257,7 +257,19 @@
     const text = lines.join("\n");
     const pre = el("pre", "ls-rx-text", text);
     wrap.append(pre);
-    wrap.append(button("Copier l'ordonnance", "btn ug-copy", (e) => copy(e.target, text, "Copier l'ordonnance")));
+    const row = el("div", "btn-row");
+    row.append(button("Copier l'ordonnance", "btn ug-copy", (e) => copy(e.target, text, "Copier l'ordonnance")));
+    const missingCode = !lim && limits.length > 0;
+    const inCart = state.cart.some((c) => c.id === t.id && c.text === text);
+    const add = button(inCart ? "Dans le panier" : "Ajouter au panier", "btn btn-outline ug-copy", () => {
+      addToCart({ id: t.id, label: t.product_line, text });
+      add.textContent = "Dans le panier"; add.disabled = true;
+    });
+    add.disabled = missingCode || inCart;
+    if (missingCode) add.title = "Choisissez d'abord la limitation";
+    row.append(add);
+    wrap.append(row);
+    if (missingCode) wrap.append(el("p", "muted ls-note", "Choisissez la limitation pour ajouter l'ordonnance au panier."));
     const levels = Array.isArray(t.dose_levels) ? t.dose_levels : [];
     if (levels.length) {
       const tbl = el("table", "ls-levels");
@@ -273,6 +285,44 @@
     if (t.dose_note) wrap.append(el("p", "ls-note", t.dose_note));
     wrap.append(el("p", "muted ls-src", [t.source, t.validated_at ? "validé le " + new Date(t.validated_at).toLocaleDateString("fr-CH") : ""].filter(Boolean).join(" · ")));
     return wrap;
+  }
+
+  // ----- Panier d'ordonnance : plusieurs textes per os copiés en un bloc (conservé pendant la session de l'onglet) -----
+  const CART_KEY = "onconic-ls-cart";
+  function loadCart() {
+    try { state.cart = JSON.parse(sessionStorage.getItem(CART_KEY) || "[]"); } catch (x) { state.cart = []; }
+  }
+  function saveCart() {
+    try { sessionStorage.setItem(CART_KEY, JSON.stringify(state.cart)); } catch (x) { /* navigation privée */ }
+  }
+  function addToCart(item) {
+    // Une seule ligne par présentation : un nouvel ajout remplace la précédente (autre code d'indication)
+    state.cart = state.cart.filter((c) => c.id !== item.id).concat(item);
+    saveCart(); renderCart();
+  }
+  const cartText = () => state.cart.map((c) => c.text).join("\n\n");
+  function renderCart() {
+    const box = $("ls-cart"), fl = $("ls-cart-float");
+    box.hidden = !state.cart.length;
+    fl.hidden = !state.cart.length;
+    fl.textContent = `Panier (${state.cart.length})`;
+    $("ls-cart-list").replaceChildren(...state.cart.map((c, i) => {
+      const li = el("li");
+      li.append(el("pre", "ls-rx-text", c.text));
+      const row = el("div", "btn-row");
+      if (i > 0) row.append(button("Monter", "btn btn-outline ug-copy", () => { const [x] = state.cart.splice(i, 1); state.cart.splice(i - 1, 0, x); saveCart(); renderCart(); }));
+      row.append(button("Retirer", "btn btn-outline ug-copy", () => { state.cart.splice(i, 1); saveCart(); renderCart(); render(); }));
+      li.append(row);
+      return li;
+    }));
+  }
+  function setupCart() {
+    loadCart(); renderCart();
+    $("ls-cart-copy").addEventListener("click", (e) => copy(e.target, cartText(), "Copier tout"));
+    $("ls-cart-clear").addEventListener("click", () => {
+      if (!confirm("Vider le panier d'ordonnance ?")) return;
+      state.cart = []; saveCart(); renderCart(); render();
+    });
   }
 
   // ----- Filtres -----
@@ -418,7 +468,7 @@
     try { await load(); } catch (e) { return ($("ug-status").textContent = "Chargement impossible : " + e.message); }
     $("ug-status").hidden = true;
     $("ls-tool").hidden = false;
-    fillClinics(); fillCancers(); renderMeta(); fillDatalist();
+    fillClinics(); fillCancers(); renderMeta(); fillDatalist(); setupCart();
     let t;
     $("ls-q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(render, 200); });
     const q = new URLSearchParams(location.search).get("q");

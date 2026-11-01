@@ -757,4 +757,12 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 .ls-editor h3 { margin: 0; font-size: 1.15rem; }
 .ls-editor label { display: grid; gap: 4px; font-weight: 500; font-size: .88rem; color: var(--navy-800); margin: 0; }
 .ls-editor input, .ls-editor textarea { font: inherit; font-weight: 400; min-height: 40px; padding: 8px 10px; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); width: 100%; }
+.ls-cart { background: var(--white); border: 1px solid var(--navy-200); border-top: 4px solid var(--amber-500); padding: var(--space-3); margin-bottom: var(--space-3); display: grid; gap: var(--space-2); scroll-margin-top: 90px; }
+.ls-cart[hidden] { display: none; }
+.ls-cart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-2); }
+.ls-cart-head h2 { margin: 0; font-size: 1.2rem; }
+.ls-cart-list { margin: 0; padding-left: 1.4em; display: grid; gap: var(--space-2); }
+.ls-cart-list li { display: grid; gap: 6px; }
+.ls-cart-float { position: fixed; right: 16px; bottom: 16px; z-index: 20; box-shadow: 0 4px 14px rgba(0, 18, 58, .25); }
+.ls-cart-float[hidden] { display: none; }
 @media (max-width: 760px) { .ls-bar { grid-template-columns: 1fr; } .ls-card { padding: var(--space-3); } }

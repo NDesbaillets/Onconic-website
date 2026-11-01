@@ -12,12 +12,12 @@
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#001B4D">
   <meta name="apple-mobile-web-app-title" content="Onconic">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261101c">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261101d">
   <script src="/assets/js/site.js?v=20261031" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
   <script src="/assets/js/sl-parse.js?v=20261101" defer></script>
-  <script src="/assets/js/limitations.js?v=20261101" defer></script>
+  <script src="/assets/js/limitations.js?v=20261101b" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -51,6 +51,17 @@
             <datalist id="ls-list"></datalist>
           </div>
           <p class="muted ls-help">Séparez plusieurs médicaments par une virgule ou « + ». La correspondance avec le type de cancer est indicative : lisez toujours le texte de la limitation.</p>
+          <section class="ls-cart" id="ls-cart" hidden aria-labelledby="ls-cart-title">
+            <div class="ls-cart-head">
+              <h2 id="ls-cart-title">Panier d'ordonnance</h2>
+              <div class="btn-row">
+                <button class="btn" id="ls-cart-copy" type="button">Copier tout</button>
+                <button class="btn btn-outline" id="ls-cart-clear" type="button">Vider</button>
+              </div>
+            </div>
+            <ol class="ls-cart-list" id="ls-cart-list"></ol>
+          </section>
+          <a class="btn ls-cart-float" id="ls-cart-float" href="#ls-cart" hidden></a>
           <div id="ls-results" aria-live="polite"></div>
         </div>
 
