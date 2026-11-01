@@ -8,7 +8,7 @@ alter table public.profiles add column if not exists med_plus boolean not null d
 
 create or replace function public.is_med_plus()
 returns boolean language sql stable security definer set search_path = public as $$
-  select coalesce((select role = 'admin' or (role = 'clinician' and med_plus) from public.profiles where id = auth.uid()), false);
+  select coalesce((select role = 'admin' or (role in ('clinician', 'pharmacist') and med_plus) from public.profiles where id = auth.uid()), false);
 $$;
 revoke execute on function public.is_med_plus() from public, anon;
 grant execute on function public.is_med_plus() to authenticated;
@@ -24,7 +24,7 @@ begin
   return query
     select p.id, coalesce(nullif(trim(concat_ws(' ', p.first_name, p.last_name)), ''), p.full_name, '(sans nom)'),
            p.institution, p.med_plus
-    from public.profiles p where p.role = 'clinician' order by 2;
+    from public.profiles p where p.role in ('clinician', 'pharmacist') order by 2;
 end;
 $$;
 revoke execute on function public.medletters_members() from public, anon;
@@ -36,7 +36,7 @@ begin
   if public.current_role_name() is distinct from 'admin' then
     raise exception 'admin only' using errcode = '42501';
   end if;
-  update public.profiles set med_plus = p_on where id = p_user and role = 'clinician';
+  update public.profiles set med_plus = p_on where id = p_user and role in ('clinician', 'pharmacist');
 end;
 $$;
 revoke execute on function public.medletters_set_access(uuid, boolean) from public, anon;

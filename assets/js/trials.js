@@ -660,7 +660,7 @@
     $("logout").addEventListener("click", async () => { await sb.auth.signOut(); location.href = "/fr/"; });
     const { data: profile } = await sb.from("profiles").select("role, full_name, first_name, last_name").eq("id", data.session.user.id).single();
     const role = profile ? profile.role : "member";
-    if (!["admin", "clinician", "assistant"].includes(role)) return ($("ug-status").textContent = "Cet espace est réservé aux membres validés de The Hive.");
+    if (!["admin", "clinician", "assistant", "pharmacist"].includes(role)) return ($("ug-status").textContent = "Cet espace est réservé aux membres validés de The Hive.");
     state.admin = role === "admin";
     state.me = [profile.first_name, profile.last_name].filter(Boolean).join(" ") || profile.full_name || data.session.user.email;
     try { await load(); } catch (e) { return ($("ug-status").textContent = "Chargement impossible : " + e.message); }

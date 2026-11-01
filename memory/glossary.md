@@ -17,3 +17,4 @@
 | Neuro-oncologie | Remplace « Neurologie » partout (base comprise) |
 | Blocs | Regroupement des cliniques : Bloc 1 (Sénologie, Gynécologie, Urologie), Bloc 2 (Thoracique, Neuro-oncologie, Mélanome), Bloc 3 (Lower GI, Upper GI, ORL, Sarcomes, Radiologie interventionnelle) |
 | clinician / assistant / admin | Rôles validés ; « member » = compte en attente |
+| pharmacist | Rôle pharmacien (01.11.2026) : accès médecin + assistante ; admin des outils Lettres d'assurance, Limitations LS, Durée de traitement via `public.is_app_admin()` ; peut recevoir l'accès « médecin plus » ; invitation « Inviter comme pharmacien·ne » dans l'e-mail de demande d'adhésion |

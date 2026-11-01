@@ -131,7 +131,9 @@
       const { data: profile } = await sb.from("profiles")
         .select("full_name, role, med_plus").eq("id", data.session.user.id).single();
       const role = profile ? profile.role : "member";
-      const plus = role === "admin" || (role === "clinician" && !!(profile && profile.med_plus));
+      const plus = role === "admin" || ((role === "clinician" || role === "pharmacist") && !!(profile && profile.med_plus));
+      // Le pharmacien cumule les droits du médecin et de l'assistante : leurs deux espaces sont les siens
+      const has = (list) => role === "admin" || list.includes(role) || (role === "pharmacist" && (list.includes("clinician") || list.includes("assistant")));
       document.getElementById("user-name").textContent = (profile && profile.full_name) || data.session.user.email;
 
       // Alvéoles groupées par public : son propre espace d'abord ; l'espace de l'autre métier reste visible,
@@ -139,14 +141,14 @@
       const LOCKED = lang === "fr"
         ? { clinician: "Réservé aux médecins", assistant: "Réservé au secrétariat" }
         : { clinician: "Physicians only", assistant: "Secretariat only" };
-      const active = (role === "clinician" || role === "assistant") ? role : null;
+      const active = (role === "clinician" || role === "assistant") ? role : null; // pharmacien : aucun espace grisé
       app.querySelectorAll(".hive-group").forEach((group) => {
         const gid = group.dataset.group;
         const other = active && gid !== "common" && gid !== active;
         // Outils « médecin plus » : invisibles pour tous les autres, même grisés
         group.querySelectorAll("[data-plus]").forEach((el) => { if (!plus) el.remove(); });
         group.querySelectorAll("[data-roles]").forEach((el) => {
-          const allowed = role === "admin" || el.dataset.roles.split(" ").includes(role);
+          const allowed = has(el.dataset.roles.split(" "));
           el.hidden = !allowed && !other;
           if (!allowed && other) {
             el.classList.add("hex-locked");

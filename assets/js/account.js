@@ -18,7 +18,7 @@
     pwWrong: "Mot de passe actuel incorrect.",
     pwDone: "Mot de passe modifié.",
     signedOut: "Déconnexion de tous les appareils…",
-    roles: { admin: "Administrateur", clinician: "Médecin", assistant: "Assistante médicale", member: "Membre (accès en attente)" },
+    roles: { admin: "Administrateur", clinician: "Médecin", assistant: "Assistante médicale", pharmacist: "Pharmacien·ne", member: "Membre (accès en attente)" },
     none: "—"
   } : {
     saved: "Profile saved.",
@@ -34,7 +34,7 @@
     pwWrong: "Current password is incorrect.",
     pwDone: "Password changed.",
     signedOut: "Signing out of all devices…",
-    roles: { admin: "Administrator", clinician: "Physician", assistant: "Medical assistant", member: "Member (access pending)" },
+    roles: { admin: "Administrator", clinician: "Physician", assistant: "Medical assistant", pharmacist: "Pharmacist", member: "Member (access pending)" },
     none: "—"
   };
 

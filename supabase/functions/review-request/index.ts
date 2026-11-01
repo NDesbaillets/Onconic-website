@@ -1,12 +1,12 @@
 // Traitement d'une demande depuis le lien reçu par e-mail (page /admin/review.html).
 // { confirm: false } renvoie le détail de la demande ; { confirm: true } exécute l'action :
-// invite_clinician / invite_assistant (invitation Supabase + rôle) ou decline.
+// invite_clinician / invite_assistant / invite_pharmacist (invitation Supabase + rôle) ou decline.
 // Le lien est signé (REVIEW_SECRET), expire, et ne sert qu'une fois (statut « pending »).
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const SITE = "https://onconic.ch";
 const ORIGINS = [SITE, "https://www.onconic.ch"];
-const ROLES: Record<string, string> = { invite_clinician: "clinician", invite_assistant: "assistant" };
+const ROLES: Record<string, string> = { invite_clinician: "clinician", invite_assistant: "assistant", invite_pharmacist: "pharmacist" };
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },

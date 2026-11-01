@@ -2,12 +2,14 @@
 -- À exécuter dans Supabase > SQL Editor > New query > Run. Peut être relancé sans risque.
 
 -- 1. Profils et rôles ---------------------------------------------------------
--- Rôles : member (compte créé, pas encore validé), clinician, assistant, admin.
+-- Rôles : member (compte créé, pas encore validé), clinician, assistant, pharmacist, admin.
+-- pharmacist : droits d'un médecin et d'une assistante réunis, et administration des outils
+-- Lettres d'assurance, Limitations LS et Durée de traitement (voir is_app_admin).
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   full_name text,
   role text not null default 'member'
-    check (role in ('member', 'clinician', 'assistant', 'admin')),
+    check (role in ('member', 'clinician', 'assistant', 'pharmacist', 'admin')),
   created_at timestamptz not null default now()
 );
 
@@ -18,6 +20,19 @@ create or replace function public.current_role_name()
 returns text language sql stable security definer set search_path = public as $$
   select role from public.profiles where id = auth.uid();
 $$;
+
+-- Ajout du rôle pharmacist sur une base déjà créée
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles add constraint profiles_role_check
+  check (role in ('member', 'clinician', 'assistant', 'pharmacist', 'admin'));
+
+-- Administration des outils Lettres d'assurance, Limitations LS et Durée de traitement : admin et pharmacien
+create or replace function public.is_app_admin()
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce(public.current_role_name() in ('admin', 'pharmacist'), false);
+$$;
+revoke execute on function public.is_app_admin() from public, anon;
+grant execute on function public.is_app_admin() to authenticated;
 
 -- Chacun lit son propre profil ; l'admin lit tout.
 drop policy if exists "profiles: read own" on public.profiles;
@@ -58,11 +73,14 @@ create table if not exists public.contact_requests (
   created_at timestamptz not null default now(),
   status text not null default 'pending'
     check (status in ('pending', 'processing', 'invited', 'declined')),
-  handled_role text check (handled_role in ('clinician', 'assistant')),
+  handled_role text check (handled_role in ('clinician', 'assistant', 'pharmacist')),
   handled_at timestamptz
 );
 
 create index if not exists contact_requests_email_created_idx on public.contact_requests (email, created_at);
+alter table public.contact_requests drop constraint if exists contact_requests_handled_role_check;
+alter table public.contact_requests add constraint contact_requests_handled_role_check
+  check (handled_role in ('clinician', 'assistant', 'pharmacist'));
 
 alter table public.contact_requests enable row level security;
 
@@ -91,7 +109,7 @@ on conflict (id) do nothing;
 drop policy if exists "hive files: validated members read" on storage.objects;
 create policy "hive files: validated members read" on storage.objects
   for select to authenticated
-  using (bucket_id = 'hive' and public.current_role_name() in ('clinician', 'assistant', 'admin'));
+  using (bucket_id = 'hive' and public.current_role_name() in ('clinician', 'assistant', 'pharmacist', 'admin'));
 
 drop policy if exists "hive files: admin writes" on storage.objects;
 create policy "hive files: admin writes" on storage.objects

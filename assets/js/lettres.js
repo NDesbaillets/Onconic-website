@@ -468,13 +468,14 @@
 
     const { data: profile } = await sb.from("profiles").select("role").eq("id", data.session.user.id).single();
     const role = profile ? profile.role : "member";
+    const appAdmin = role === "admin" || role === "pharmacist"; // administration des lettres
     for (const id of ["q", "f-dx", "f-mk"]) $(id).addEventListener("input", search);
     $("f-clinic").addEventListener("change", (e) => { state.clinic = e.target.value; search(); });
-    if (role === "admin") setupAdmin();
+    if (appAdmin) setupAdmin();
 
     const rows = await loadRows();
     if (!rows || !rows.length) {
-      $("ug-status").textContent = role === "admin"
+      $("ug-status").textContent = appAdmin
         ? "Aucune lettre. Déposez vos lettres Word ci-dessous."
         : "Cet outil est réservé aux médecins du CHUV. Contactez l'administrateur si vous pensez y avoir droit.";
       return;
