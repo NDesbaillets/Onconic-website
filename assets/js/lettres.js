@@ -483,6 +483,9 @@
     $("ug-tool").hidden = false;
     prepare(rows);
     setupFilters();
+    // Recherche transmise par un autre outil (ex. Limitations LS : médicament hors liste)
+    const q = new URLSearchParams(location.search).get("q");
+    if (q) { $("q").value = q; search(); }
     $("q").focus();
   })();
 })();
