@@ -221,7 +221,7 @@
     const msg = $("ml-msg");
     msg.className = "form-msg";
     if (!checkPii()) { msg.className = "form-msg error"; msg.textContent = "Saisie bloquée : données identifiantes détectées."; return; }
-    if (!$("ml-ack").checked) { msg.className = "form-msg error"; msg.textContent = "Cochez la case de responsabilité avant de générer."; return; }
+    if (!$("ml-ack").checked) { msg.className = "form-msg error"; msg.textContent = "Confirmez qu'il s'agit d'un cas fictif (case à cocher) avant de générer."; return; }
     const open = FIELDS.filter((id) => $(id).value.includes("…")).map((id) => labelOf($(id)));
     if (open.length) { msg.className = "form-msg error"; msg.textContent = "Valeurs à compléter (…) : " + open.join(", ") + "."; return; }
     if (!$("clinic").value || !$("histo").value.trim() || !$("attitude").value.trim()) {
@@ -295,6 +295,7 @@
       if (m) return new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: m[1] + " : ", bold: true }), new TextRun(m[2])] });
       return new Paragraph({ spacing: { after: 120 }, children: [new TextRun(l)] });
     });
+    paras.unshift(new Paragraph({ spacing: { after: 240 }, children: [new TextRun({ text: "Version de test : cas fictif, document sans valeur clinique.", italics: true, color: "B3261E" })] }));
     const doc = new Document({
       styles: { default: { document: { run: { font: "Arial", size: 20 } } } },
       sections: [{ children: paras }]

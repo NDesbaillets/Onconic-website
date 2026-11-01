@@ -17,6 +17,9 @@
 - Paragraphe 5 « suivi » (§S) repris de la lettre type ; inclus dans les modèles proposés.
 - Lien vers la fiche Key trials quand l'acronyme de l'étude figure dans l'attitude, l'étude de référence ou la lettre type.
 
+## Statut (01.11.2026)
+- Version de test à but de développement uniquement : cas fictifs seulement, aucune information réelle d'un patient existant (avertissement, case à cocher et mention dans le Word exporté).
+
 ## Mise en service (01.11.2026)
 - Fait : SQL appliqué et vérifié, fonction `medical-letter` déployée (v1, verify_jwt), PR #29 mergée.
 - Reste (Nicolas) : secret `ANTHROPIC_API_KEY` dans Supabase > Edge Functions > Secrets ; import des lettres types Word ; cocher les médecins plus.
