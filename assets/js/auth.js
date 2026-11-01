@@ -142,8 +142,8 @@
       // Alvéoles groupées par public : son propre espace d'abord ; l'espace de l'autre métier reste visible,
       // grisé, pour que chacun sache ce qui existe (accès réservé par la base de données de toute façon).
       const LOCKED = lang === "fr"
-        ? { clinician: "Réservé aux médecins", assistant: "Réservé au secrétariat" }
-        : { clinician: "Physicians only", assistant: "Secretariat only" };
+        ? { clinician: "Réservé aux médecins", assistant: "Réservé à l'admin" }
+        : { clinician: "Physicians only", assistant: "Admin only" };
       const active = (role === "clinician" || role === "assistant") ? role : null; // pharmacien : aucun espace grisé
       app.querySelectorAll(".hive-group").forEach((group) => {
         const gid = group.dataset.group;
