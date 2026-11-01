@@ -9,6 +9,8 @@
 - Per os : texte d'ordonnance « ligne produit / S. posologie / Code d'indication : … » et tableau des paliers de dose. Table `sl_rx` : brouillon invisible des médecins jusqu'à validation admin (éditeur dans la page).
 - 48 brouillons préparés depuis les RCP (thoracique, mélanome, sein, urologie, GI, neuro) : à relire et valider par Nicolas.
 
+- Panier d'ordonnance (01.11.2026) : ajout des textes per os (code d'indication obligatoire si limitation), réordonner, retirer, « Copier tout » ; conservé dans sessionStorage de l'onglet. Autres pistes (alerte d'échéance, lien Key trials, traitements de support, interactions) écartées par Nicolas pour l'instant.
+
 ## Points ouverts
 - Fichier Excel réel de Nicolas non reçu dans la session : tester l'import dès le premier dépôt.
 - Valider les 48 textes d'ordonnance ; compléter les substances per os sans texte (liste affichée à l'admin).
