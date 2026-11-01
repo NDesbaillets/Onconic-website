@@ -35,6 +35,16 @@
   const ready = cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase;
   const sb = ready ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
 
+  // Langue préférée du membre (profiles.lang) : français sauf choix exprès de l'anglais
+  async function homeFor(userId) {
+    let l = "fr";
+    try {
+      const { data } = await sb.from("profiles").select("lang").eq("id", userId).single();
+      if (data && data.lang === "en") l = "en";
+    } catch (e) { /* français par défaut */ }
+    return (l === "fr" ? "/fr" : "") + "/app/";
+  }
+
   function msg(el, text, kind) {
     if (!el) return;
     el.textContent = text;
@@ -45,17 +55,17 @@
   const login = document.getElementById("login-form");
   if (login) {
     const out = login.querySelector(".form-msg");
-    if (sb) sb.auth.getSession().then(({ data }) => { if (data.session) location.href = base + "/app/"; });
+    if (sb) sb.auth.getSession().then(({ data }) => { if (data.session) homeFor(data.session.user.id).then((u) => { location.href = u; }); });
 
     login.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (!sb) return msg(out, T.notConfigured, "error");
-      const { error } = await sb.auth.signInWithPassword({
+      const { data: signed, error } = await sb.auth.signInWithPassword({
         email: login.email.value.trim(),
         password: login.password.value
       });
       if (error) return msg(out, T.badLogin, "error");
-      location.href = base + "/app/";
+      location.href = await homeFor(signed.user.id);
     });
 
     const forgot = document.getElementById("forgot");
@@ -139,7 +149,7 @@
       const has = (list) => role === "admin" || list.includes(role) || (role === "pharmacist" && (list.includes("clinician") || list.includes("assistant")));
       document.getElementById("user-name").textContent = (profile && profile.full_name) || data.session.user.email;
 
-      // Alvéoles groupées par public : son propre espace d'abord ; l'espace de l'autre métier reste visible,
+      // Alvéoles groupées par public : l'espace collaboratif toujours en premier ; l'espace de l'autre métier reste visible,
       // grisé, pour que chacun sache ce qui existe (accès réservé par la base de données de toute façon).
       const LOCKED = lang === "fr"
         ? { clinician: "Réservé aux médecins", assistant: "Réservé à l'admin" }
@@ -168,10 +178,6 @@
         group.classList.toggle("hive-group-other", !!other && !anyAllowed);
         group.hidden = ![...group.querySelectorAll(".hex")].some((el) => !el.hidden);
       });
-      if (active) {
-        const own = app.querySelector(`.hive-group[data-group="${active}"]`);
-        if (own) own.parentNode.insertBefore(own, app.querySelector('.hive-group[data-group="common"]'));
-      }
       app.hidden = false;
 
       document.getElementById("logout").addEventListener("click", async () => {

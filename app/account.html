@@ -18,7 +18,7 @@
   <script src="/assets/js/site.js?v=20261031" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/account.js?v=20261101p" defer></script>
+  <script src="/assets/js/account.js?v=20261101q" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -51,6 +51,7 @@
               <label>Last name<input name="last_name" autocomplete="family-name" maxlength="80"></label>
               <label>Username (optional)<input name="username" autocomplete="nickname" maxlength="30" pattern="[a-z0-9._-]{3,30}"></label>
               <label>Phone (optional)<input name="phone" type="tel" autocomplete="tel" maxlength="20"></label>
+              <label>Default language<select name="lang"><option value="fr">Français</option><option value="en">English</option></select></label>
               <button class="btn" type="submit">Save</button>
               <p class="form-msg" role="status" aria-live="polite"></p>
             </form>

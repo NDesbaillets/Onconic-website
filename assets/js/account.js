@@ -55,7 +55,7 @@
     if (location.hash) history.replaceState(null, "", location.pathname);
 
     const { data: p } = await sb.from("profiles")
-      .select("first_name, last_name, username, phone, full_name, role, institution, show_in_events, contactable").eq("id", user.id).single();
+      .select("first_name, last_name, username, phone, lang, full_name, role, institution, show_in_events, contactable").eq("id", user.id).single();
     const prof = p || {};
     let first = prof.first_name, last = prof.last_name;
     if (!first && !last && prof.full_name) {
@@ -68,6 +68,7 @@
     f.last_name.value = last || "";
     f.username.value = prof.username || "";
     f.phone.value = prof.phone || "";
+    f.lang.value = prof.lang === "en" ? "en" : "fr";
     $("acc-role").textContent = T.roles[prof.role] || prof.role || T.none;
     $("acc-inst").textContent = prof.institution || T.none;
     $("acc-email").textContent = user.email;
@@ -100,11 +101,13 @@
       if (phone && !/^\+?[0-9 ().-]{6,20}$/.test(phone)) return msg(out, T.phoneFormat, "error");
       const fn = clean(f.first_name.value), ln = clean(f.last_name.value);
       const { error } = await sb.from("profiles").update({
-        first_name: fn, last_name: ln, username, phone,
+        first_name: fn, last_name: ln, username, phone, lang: f.lang.value === "en" ? "en" : "fr",
         full_name: [fn, ln].filter(Boolean).join(" ") || null
       }).eq("id", user.id);
       if (error) return msg(out, error.code === "23505" ? T.usernameTaken : T.error, "error");
       msg(out, T.saved, "ok");
+      // La page suit la langue choisie
+      if ((f.lang.value === "en") === fr) setTimeout(() => (location.href = f.lang.value === "en" ? "/app/account.html" : "/fr/app/compte.html"), 800);
     });
 
     $("email-form").addEventListener("submit", async (e) => {

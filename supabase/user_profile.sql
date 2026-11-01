@@ -43,3 +43,9 @@ create trigger on_auth_user_email_changed
   after update of email on auth.users
   for each row when (old.email is distinct from new.email)
   execute function public.handle_user_email_change();
+
+-- Langue par défaut du membre (page « Mon compte ») : français sauf choix exprès de l'anglais
+alter table public.profiles add column if not exists lang text not null default 'fr';
+alter table public.profiles drop constraint if exists profiles_lang_check;
+alter table public.profiles add constraint profiles_lang_check check (lang in ('fr', 'en'));
+grant update (lang) on public.profiles to authenticated;
