@@ -52,24 +52,24 @@ alter table public.ug_meta enable row level security;
 
 drop policy if exists "ug_slots: CHUV members read" on public.ug_slots;
 create policy "ug_slots: CHUV members read" on public.ug_slots for select to authenticated
-  using (public.current_role_name() = 'admin'
+  using (public.is_app_admin()
      or (public.current_role_name() in ('assistant', 'clinician') and public.current_institution() = 'CHUV'));
 
 drop policy if exists "ug_meta: CHUV members read" on public.ug_meta;
 create policy "ug_meta: CHUV members read" on public.ug_meta for select to authenticated
-  using (public.current_role_name() = 'admin'
+  using (public.is_app_admin()
      or (public.current_role_name() in ('assistant', 'clinician') and public.current_institution() = 'CHUV'));
 
 revoke all on public.ug_slots, public.ug_meta from anon;
 revoke insert, update, delete, truncate on public.ug_slots, public.ug_meta from authenticated;
 grant select on public.ug_slots, public.ug_meta to authenticated;
 
--- Remplacement atomique de toutes les lignes, réservé aux admins
+-- Remplacement atomique de toutes les lignes, réservé aux admins et aux pharmaciens
 create or replace function public.ug_replace(p_rows jsonb, p_source text)
 returns int language plpgsql security definer set search_path = public as $$
 declare n int;
 begin
-  if public.current_role_name() is distinct from 'admin' then
+  if not public.is_app_admin() then
     raise exception 'admin only' using errcode = '42501';
   end if;
   delete from public.ug_slots where true;

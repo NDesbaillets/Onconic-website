@@ -23,7 +23,8 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Congrès** | App « Qui d'autre butine au congrès ? » |
 | **LS** | Liste des spécialités de l'OFSP (limitations, codes d'indication) |
 | **médecin plus** | Drapeau caché `profiles.med_plus` donnant accès aux Lettres médicales |
-| **rôles** | admin, clinician, assistant ; « member » = en attente de validation |
+| **rôles** | admin, clinician, assistant, pharmacist ; « member » = en attente de validation |
+| **pharmacist** | Droits médecin + assistante réunis, et administration de Lettres d'assurance, Limitations LS et Durée (`is_app_admin()`) |
 → Glossaire complet : memory/glossary.md
 
 ## Projets actifs

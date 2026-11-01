@@ -301,14 +301,15 @@
 
     const { data: profile } = await sb.from("profiles").select("role").eq("id", data.session.user.id).single();
     const role = profile ? profile.role : "member";
-    if (role === "admin") setupImport();
+    const appAdmin = role === "admin" || role === "pharmacist"; // import du fichier Ultragenda
+    if (appAdmin) setupImport();
 
     const [{ data: rows, error }, { data: meta }] = await Promise.all([
       sb.from("ug_slots").select("position, clinic_sheet, clinic_letter, clinic_name, name, codes, synonyms, note, ug_label, minutes").order("position").range(0, 4999),
       sb.from("ug_meta").select("source_file, imported_at, row_count").maybeSingle()
     ]);
     if (error || !rows || !rows.length) {
-      $("ug-status").textContent = role === "admin"
+      $("ug-status").textContent = appAdmin
         ? "Aucune donnée. Importez le fichier Excel ci-dessous."
         : "Cet outil est réservé aux membres du CHUV. Contactez l'administrateur si vous pensez y avoir droit.";
       return;

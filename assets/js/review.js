@@ -10,6 +10,7 @@
   const ACTIONS = {
     invite_clinician: { title: "Inviter comme médecin", button: "Confirmer l'invitation (médecin)" },
     invite_assistant: { title: "Inviter comme assistante", button: "Confirmer l'invitation (assistante)" },
+    invite_pharmacist: { title: "Inviter comme pharmacien·ne", button: "Confirmer l'invitation (pharmacien·ne)" },
     decline: { title: "Refuser la demande", button: "Confirmer le refus" }
   };
   const ERRORS = {

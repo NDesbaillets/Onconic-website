@@ -9,7 +9,7 @@ grant update (show_in_events, contactable) on public.profiles to authenticated;
 -- Membre validé : tout rôle sauf « member » (accès en attente)
 create or replace function public.is_hive_member()
 returns boolean language sql stable security definer set search_path = public as $$
-  select coalesce(public.current_role_name() in ('admin', 'clinician', 'assistant'), false);
+  select coalesce(public.current_role_name() in ('admin', 'clinician', 'assistant', 'pharmacist'), false);
 $$;
 revoke execute on function public.is_hive_member() from public, anon;
 grant execute on function public.is_hive_member() to authenticated;

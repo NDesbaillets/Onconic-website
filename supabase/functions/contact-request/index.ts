@@ -1,6 +1,6 @@
 // Formulaire de contact : enregistre la demande et prévient les admins par e-mail.
 // Pour une demande d'adhésion, l'e-mail contient des liens signés vers /admin/review.html
-// (inviter comme médecin, comme assistante, ou refuser).
+// (inviter comme médecin, comme assistante, comme pharmacien·ne, ou refuser).
 // Secrets requis : SMTP_PASSWORD (boîte noreply@onconic.ch), REVIEW_SECRET (signature des liens).
 import nodemailer from "npm:nodemailer@6.9.16";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
@@ -81,6 +81,7 @@ async function notify(r: Request_) {
     ? [
       ["Inviter comme médecin", await reviewLink(r.id, "invite_clinician", exp), "#F0B12B", "#001B4D"],
       ["Inviter comme assistante", await reviewLink(r.id, "invite_assistant", exp), "#001B4D", "#FFFFFF"],
+      ["Inviter comme pharmacien·ne", await reviewLink(r.id, "invite_pharmacist", exp), "#001B4D", "#FFFFFF"],
       ["Refuser", await reviewLink(r.id, "decline", exp), "#FFFFFF", "#001B4D"],
     ]
     : [];
