@@ -18,7 +18,7 @@
   <script src="/assets/js/config.js?v=20261028"></script>
   <script src="/assets/js/tnm-stage.js?v=20261101" defer></script>
   <script src="/assets/js/onco-vocab.js?v=20261101" defer></script>
-  <script src="/assets/js/medletters.js?v=20261101b" defer></script>
+  <script src="/assets/js/medletters.js?v=20261101c" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -37,15 +37,16 @@
     <section class="section ug">
       <div class="container">
         <a class="btn btn-outline hive-back" href="/fr/app/">← The Hive</a>
-        <span class="eyebrow">Outil des médecins</span>
+        <span class="eyebrow">Outil des médecins · version de test</span>
         <h1>Lettres médicales</h1>
         <hr class="rule">
         <p class="form-msg" id="ug-status" role="status">Chargement…</p>
 
         <div id="ml-tool" hidden>
           <div class="ml-warning" role="note">
-            <p><strong>Outil non autorisé par le CHUV.</strong> Son utilisation se fait sous la seule responsabilité de l'utilisateur, qui vérifie et valide intégralement chaque lettre avant tout usage.</p>
-            <p><strong>Aucune donnée identifiante.</strong> Ne saisissez jamais de nom, d'initiales, de date de naissance, de date complète, d'adresse, de numéro (IPP, AVS, téléphone) ni de nom de soignant. La saisie est vérifiée avant l'envoi et la lettre produite est contrôlée ; rien n'est enregistré. Les dates s'écrivent au mois près (ex. 03.2026).</p>
+            <p><strong>Version de test, à but de développement uniquement.</strong> N'insérez aucune information réelle concernant un patient existant : utilisez exclusivement des cas fictifs.</p>
+            <p><strong>Outil non autorisé par le CHUV.</strong> Son utilisation se fait sous la seule responsabilité de l'utilisateur.</p>
+            <p><strong>Aucune donnée identifiante, même fictive.</strong> Pas de nom, d'initiales, de date de naissance, de date complète, d'adresse, de numéro (IPP, AVS, téléphone) ni de nom de soignant. La saisie est vérifiée avant l'envoi et la lettre produite est contrôlée ; rien n'est enregistré. Les dates s'écrivent au mois près (ex. 03.2026).</p>
           </div>
 
           <form id="ml-form" class="ml-form" novalidate>
@@ -87,7 +88,7 @@
               </div>
             </fieldset>
             <p class="form-msg error" id="ml-pii" role="alert" aria-live="assertive"></p>
-            <label class="cg-check ml-ack"><input type="checkbox" id="ml-ack" required><span>Je comprends que cet outil n'est pas autorisé par le CHUV, que je l'utilise sous ma responsabilité et que je relirai la lettre.</span></label>
+            <label class="cg-check ml-ack"><input type="checkbox" id="ml-ack" required><span>Je confirme qu'il s'agit d'un cas fictif, sans aucune information réelle sur un patient existant, et que j'utilise cette version de test, non autorisée par le CHUV, sous ma responsabilité.</span></label>
             <div class="btn-row">
               <button class="btn" id="ml-generate" type="submit">Générer la lettre</button>
               <button class="btn btn-outline" id="ml-reset" type="button">Nouveau cas</button>
