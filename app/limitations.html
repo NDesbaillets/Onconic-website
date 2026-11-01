@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Limitations LS · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <meta name="apple-mobile-web-app-title" content="Onconic">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261101c">
+  <script src="/assets/js/site.js?v=20261031" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/sl-parse.js?v=20261101" defer></script>
+  <script src="/assets/js/limitations.js?v=20261101" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug">
+      <div class="container">
+        <a class="btn btn-outline hive-back" href="/fr/app/">← The Hive</a>
+        <span class="eyebrow">Outil des médecins</span>
+        <h1>Limitations LS</h1>
+        <hr class="rule">
+        <p class="form-msg" id="ug-status" role="status">Chargement…</p>
+
+        <div id="ls-tool" hidden>
+          <p class="muted ls-source" id="ls-source"></p>
+          <details class="ls-changes" id="ls-changes" hidden><summary></summary><ul id="ls-changes-list"></ul></details>
+          <div class="ls-bar">
+            <label>Clinique<select id="ls-clinic"></select></label>
+            <label>Type de cancer<select id="ls-cancer"><option value="">Tous</option></select></label>
+            <label class="ls-drugs">Médicament(s)<input id="ls-q" type="search" autocomplete="off" list="ls-list" placeholder="ex. osimertinib, Keytruda, dabrafénib + tramétinib"></label>
+            <datalist id="ls-list"></datalist>
+          </div>
+          <p class="muted ls-help">Séparez plusieurs médicaments par une virgule ou « + ». La correspondance avec le type de cancer est indicative : lisez toujours le texte de la limitation.</p>
+          <div id="ls-results" aria-live="polite"></div>
+        </div>
+
+        <div class="card ug-admin" id="ls-admin" hidden>
+          <span class="eyebrow">Administration</span>
+          <h2>Mettre à jour la Liste des spécialités</h2>
+          <p class="muted">Export Excel de l'OFSP en français (onglets « Données de base » et « Limitations »). L'import remplace la liste en vigueur et enregistre les changements par rapport à la précédente.</p>
+          <label>Fichier Excel (.xlsx)<input type="file" id="ls-file" accept=".xlsx"></label>
+          <div class="btn-row"><button class="btn" id="ls-import" type="button" disabled>Importer</button></div>
+          <p class="form-msg" id="ls-import-msg" role="status" aria-live="polite"></p>
+
+          <h2 class="ls-h2">Textes d'ordonnance per os</h2>
+          <p class="muted">Un texte n'est visible des médecins qu'une fois validé. Le code d'indication est ajouté automatiquement en dernière ligne selon la limitation choisie.</p>
+          <div class="btn-row"><button class="btn btn-outline" id="ls-rx-new" type="button">Ajouter un texte</button></div>
+          <div id="ls-rx-editor"></div>
+          <div id="ls-rx-admin"></div>
+          <h3 class="ls-h3">Substances per os de la LS sans texte d'ordonnance</h3>
+          <p class="muted" id="ls-rx-missing"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>
