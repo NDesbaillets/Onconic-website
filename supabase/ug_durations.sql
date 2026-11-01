@@ -52,13 +52,11 @@ alter table public.ug_meta enable row level security;
 
 drop policy if exists "ug_slots: CHUV members read" on public.ug_slots;
 create policy "ug_slots: CHUV members read" on public.ug_slots for select to authenticated
-  using (public.is_app_admin()
-     or (public.current_role_name() in ('assistant', 'clinician') and public.current_institution() = 'CHUV'));
+  using ((select public.has_tool('duree')));
 
 drop policy if exists "ug_meta: CHUV members read" on public.ug_meta;
 create policy "ug_meta: CHUV members read" on public.ug_meta for select to authenticated
-  using (public.is_app_admin()
-     or (public.current_role_name() in ('assistant', 'clinician') and public.current_institution() = 'CHUV'));
+  using ((select public.has_tool('duree')));
 
 revoke all on public.ug_slots, public.ug_meta from anon;
 revoke insert, update, delete, truncate on public.ug_slots, public.ug_meta from authenticated;
@@ -69,7 +67,7 @@ create or replace function public.ug_replace(p_rows jsonb, p_source text)
 returns int language plpgsql security definer set search_path = public as $$
 declare n int;
 begin
-  if not public.is_app_admin() then
+  if not public.is_app_admin('duree') then
     raise exception 'admin only' using errcode = '42501';
   end if;
   delete from public.ug_slots where true;

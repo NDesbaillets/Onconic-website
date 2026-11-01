@@ -44,16 +44,16 @@ create index if not exists events_start on public.events (start_date);
 
 alter table public.events enable row level security;
 drop policy if exists "events: members read" on public.events;
-create policy "events: members read" on public.events for select to authenticated using (public.is_hive_member());
+create policy "events: members read" on public.events for select to authenticated using ((select public.has_tool('congres')));
 drop policy if exists "events: members insert" on public.events;
 create policy "events: members insert" on public.events for insert to authenticated
-  with check (public.is_hive_member() and created_by = auth.uid());
+  with check ((select public.has_tool('congres')) and created_by = auth.uid());
 drop policy if exists "events: members update" on public.events;
 create policy "events: members update" on public.events for update to authenticated
-  using (public.is_hive_member()) with check (public.is_hive_member());
+  using ((select public.has_tool('congres'))) with check ((select public.has_tool('congres')));
 drop policy if exists "events: creator or admin delete" on public.events;
 create policy "events: creator or admin delete" on public.events for delete to authenticated
-  using (public.current_role_name() = 'admin' or (public.is_hive_member() and created_by = auth.uid()));
+  using (public.current_role_name() = 'admin' or ((select public.has_tool('congres')) and created_by = auth.uid()));
 revoke all on public.events from anon;
 grant select, insert, update, delete on public.events to authenticated;
 
@@ -115,7 +115,7 @@ alter table public.event_participants enable row level security;
 -- Chacun ne lit et ne modifie directement que ses propres lignes ; les autres passent par event_attendees()
 drop policy if exists "event_participants: own" on public.event_participants;
 create policy "event_participants: own" on public.event_participants for all to authenticated
-  using (user_id = auth.uid()) with check (user_id = auth.uid() and public.is_hive_member());
+  using (user_id = auth.uid()) with check (user_id = auth.uid() and (select public.has_tool('congres')));
 revoke all on public.event_participants from anon;
 grant select, insert, update, delete on public.event_participants to authenticated;
 
@@ -132,7 +132,7 @@ language sql stable security definer set search_path = public as $$
   from public.event_participants p
   join public.profiles pr on pr.id = p.user_id
   join auth.users u on u.id = p.user_id
-  where public.is_hive_member() and p.event_id = any (p_event_ids)
+  where public.has_tool('congres') and p.event_id = any (p_event_ids)
   order by p.event_id, (p.status = 'presenting') desc, pr.last_name nulls last;
 $$;
 revoke execute on function public.event_attendees(bigint[]) from public, anon;

@@ -34,6 +34,71 @@ $$;
 revoke execute on function public.is_app_admin() from public, anon;
 grant execute on function public.is_app_admin() to authenticated;
 
+-- Accès par outil : droits par défaut selon le rôle (et l'institution), exceptions individuelles posées par l'admin
+-- depuis /admin/membres.html. Outils : congres, trials, lettres, limitations, duree, medletters.
+create table if not exists public.tool_access (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  tool text not null check (tool in ('congres', 'trials', 'lettres', 'limitations', 'duree')),
+  allowed boolean not null,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, tool)
+);
+alter table public.tool_access enable row level security;
+drop policy if exists "tool_access: admin read" on public.tool_access;
+create policy "tool_access: admin read" on public.tool_access for select to authenticated
+  using (public.current_role_name() = 'admin');
+revoke all on public.tool_access from anon;
+revoke insert, update, delete, truncate on public.tool_access from authenticated;
+grant select on public.tool_access to authenticated;
+
+-- plpgsql : colonnes institution et med_plus ajoutées par d'autres scripts, lues seulement à l'exécution
+create or replace function public.tool_allowed(p_user uuid, p_tool text)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+declare r text; i text; m boolean; o boolean;
+begin
+  select role, institution, med_plus into r, i, m from public.profiles where id = p_user;
+  if r is null or r = 'member' then return false; end if;
+  if r = 'admin' then return true; end if;
+  -- Lettres médicales : accès « médecin plus », attribué un par un
+  if p_tool = 'medletters' then return r in ('clinician', 'pharmacist') and coalesce(m, false); end if;
+  select allowed into o from public.tool_access where user_id = p_user and tool = p_tool;
+  if found then return o; end if;
+  i := coalesce(i, '');
+  return case p_tool
+    when 'congres' then r in ('clinician', 'assistant', 'pharmacist')
+    when 'trials' then r in ('clinician', 'assistant', 'pharmacist')
+    when 'lettres' then r = 'pharmacist' or (r = 'clinician' and i = 'CHUV')
+    when 'limitations' then r in ('clinician', 'pharmacist')
+    when 'duree' then r = 'pharmacist' or (r in ('assistant', 'clinician') and i = 'CHUV')
+    else false end;
+end;
+$$;
+revoke execute on function public.tool_allowed(uuid, text) from public, anon, authenticated;
+
+create or replace function public.has_tool(p_tool text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.tool_allowed(auth.uid(), p_tool);
+$$;
+revoke execute on function public.has_tool(text) from public, anon;
+grant execute on function public.has_tool(text) to authenticated;
+
+create or replace function public.my_tools()
+returns text[] language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(t), '{}') from unnest(array['congres', 'trials', 'lettres', 'limitations', 'duree', 'medletters']) t
+  where public.tool_allowed(auth.uid(), t);
+$$;
+revoke execute on function public.my_tools() from public, anon;
+grant execute on function public.my_tools() to authenticated;
+
+-- Administration d'un outil (import, textes) : admin, ou pharmacien qui a accès à cet outil
+create or replace function public.is_app_admin(p_tool text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce(public.current_role_name() = 'admin'
+    or (public.current_role_name() = 'pharmacist' and public.tool_allowed(auth.uid(), p_tool)), false);
+$$;
+revoke execute on function public.is_app_admin(text) from public, anon;
+grant execute on function public.is_app_admin(text) to authenticated;
+
 -- Chacun lit son propre profil ; l'admin lit tout.
 drop policy if exists "profiles: read own" on public.profiles;
 create policy "profiles: read own" on public.profiles

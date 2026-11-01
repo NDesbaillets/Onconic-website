@@ -513,7 +513,8 @@
     const { data: profile } = await sb.from("profiles").select("role, show_in_events, contactable").eq("id", data.session.user.id).single();
     state.role = profile ? profile.role : "member";
     state.me = Object.assign({ id: data.session.user.id }, profile || {});
-    if (!["admin", "clinician", "assistant", "pharmacist"].includes(state.role)) {
+    const { data: canUse } = await sb.rpc("has_tool", { p_tool: "congres" });
+    if (state.role !== "admin" && canUse !== true) {
       $("ug-status").textContent = "Cet espace est réservé aux membres validés de The Hive.";
       return;
     }

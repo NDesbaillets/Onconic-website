@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Membres · Administration · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <meta name="apple-mobile-web-app-title" content="Onconic">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261101e">
+  <script src="/assets/js/site.js?v=20261031" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/admin-members.js?v=20261101" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug">
+      <div class="container">
+        <a class="btn btn-outline hive-back" href="/fr/app/">← The Hive</a>
+        <span class="eyebrow">Administration</span>
+        <h1>Membres et accès</h1>
+        <hr class="rule">
+        <p class="form-msg" id="ug-status" role="status">Chargement…</p>
+
+        <div id="am-tool" hidden>
+          <div class="am-bar">
+            <label class="am-search">Rechercher<input id="am-q" type="search" autocomplete="off" placeholder="Nom, prénom ou e-mail"></label>
+            <label>Rôle<select id="am-role">
+              <option value="">Tous les rôles</option>
+              <option value="member">En attente de validation</option>
+              <option value="clinician">Médecin</option>
+              <option value="assistant">Assistante médicale</option>
+              <option value="pharmacist">Pharmacien·ne</option>
+              <option value="admin">Administrateur</option>
+            </select></label>
+          </div>
+          <p class="muted am-count" id="am-count" role="status" aria-live="polite"></p>
+          <p class="muted am-help">Les cases reflètent l'accès réel de chaque membre. Par défaut, il découle du rôle (et du CHUV pour les Lettres d'assurance et la Durée de traitement) ; une case modifiée à la main est signalée par « exception ». Changer le rôle remet les accès par défaut. Les Lettres médicales s'ouvrent une à une, aux médecins et pharmaciens.</p>
+          <div id="am-list"></div>
+          <p class="form-msg" id="am-msg" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>

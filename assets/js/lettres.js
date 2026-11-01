@@ -468,7 +468,8 @@
 
     const { data: profile } = await sb.from("profiles").select("role").eq("id", data.session.user.id).single();
     const role = profile ? profile.role : "member";
-    const appAdmin = role === "admin" || role === "pharmacist"; // administration des lettres
+    const { data: canUse } = await sb.rpc("has_tool", { p_tool: "lettres" });
+    const appAdmin = role === "admin" || (role === "pharmacist" && canUse === true); // administration des lettres
     for (const id of ["q", "f-dx", "f-mk"]) $(id).addEventListener("input", search);
     $("f-clinic").addEventListener("change", (e) => { state.clinic = e.target.value; search(); });
     if (appAdmin) setupAdmin();

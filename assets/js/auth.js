@@ -131,7 +131,10 @@
       const { data: profile } = await sb.from("profiles")
         .select("full_name, role, med_plus").eq("id", data.session.user.id).single();
       const role = profile ? profile.role : "member";
-      const plus = role === "admin" || ((role === "clinician" || role === "pharmacist") && !!(profile && profile.med_plus));
+      // Accès réels par outil (rôle + exceptions posées par l'admin) ; repli sur le rôle si la fonction manque
+      const { data: tools, error: toolsError } = await sb.rpc("my_tools");
+      const myTools = toolsError ? null : tools || [];
+      const plus = myTools ? myTools.includes("medletters") : role === "admin";
       // Le pharmacien cumule les droits du médecin et de l'assistante : leurs deux espaces sont les siens
       const has = (list) => role === "admin" || list.includes(role) || (role === "pharmacist" && (list.includes("clinician") || list.includes("assistant")));
       document.getElementById("user-name").textContent = (profile && profile.full_name) || data.session.user.email;
@@ -147,8 +150,11 @@
         const other = active && gid !== "common" && gid !== active;
         // Outils « médecin plus » : invisibles pour tous les autres, même grisés
         group.querySelectorAll("[data-plus]").forEach((el) => { if (!plus) el.remove(); });
+        let anyAllowed = false;
         group.querySelectorAll("[data-roles]").forEach((el) => {
-          const allowed = has(el.dataset.roles.split(" "));
+          const tool = el.dataset.tool;
+          const allowed = tool && myTools ? myTools.includes(tool) : has(el.dataset.roles.split(" "));
+          if (allowed && !el.classList.contains("hex-soon")) anyAllowed = true;
           el.hidden = !allowed && !other;
           if (!allowed && other) {
             el.classList.add("hex-locked");
@@ -158,7 +164,8 @@
             if (tag) tag.textContent = LOCKED[gid];
           }
         });
-        group.classList.toggle("hive-group-other", !!other);
+        // Espace de l'autre métier grisé, sauf si l'admin y a ouvert un outil à ce membre
+        group.classList.toggle("hive-group-other", !!other && !anyAllowed);
         group.hidden = ![...group.querySelectorAll(".hex")].some((el) => !el.hidden);
       });
       if (active) {

@@ -8,7 +8,7 @@ alter table public.profiles add column if not exists med_plus boolean not null d
 
 create or replace function public.is_med_plus()
 returns boolean language sql stable security definer set search_path = public as $$
-  select coalesce((select role = 'admin' or (role in ('clinician', 'pharmacist') and med_plus) from public.profiles where id = auth.uid()), false);
+  select public.tool_allowed(auth.uid(), 'medletters');
 $$;
 revoke execute on function public.is_med_plus() from public, anon;
 grant execute on function public.is_med_plus() to authenticated;

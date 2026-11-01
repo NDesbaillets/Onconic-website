@@ -40,7 +40,7 @@ alter table public.key_trials add column if not exists ae jsonb not null default
 alter table public.key_trials enable row level security;
 drop policy if exists "key_trials: members read published" on public.key_trials;
 create policy "key_trials: members read published" on public.key_trials for select to authenticated
-  using ((status = 'published' and public.is_hive_member()) or public.current_role_name() = 'admin');
+  using ((status = 'published' and (select public.has_tool('trials'))) or public.current_role_name() = 'admin');
 drop policy if exists "key_trials: admin write" on public.key_trials;
 create policy "key_trials: admin write" on public.key_trials for all to authenticated
   using (public.current_role_name() = 'admin') with check (public.current_role_name() = 'admin');
