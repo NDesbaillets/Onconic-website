@@ -11,6 +11,6 @@
 - Relire et publier les 14 fiches Key trials.
 - Recoller `supabase/templates/invite.html` dans Supabase.
 - Noms et rôles des contributeurs pour la section équipe de la page À propos (`#team`).
-- Tâche planifiée « Veille congrès Onconic » (1er jan/avr/juil/oct, 7h37 Zurich) : le connecteur Supabase n'est pas attaché à la tâche ; à ajouter dans l'interface des tâches planifiées, puis lancer un test.
+- Tâche planifiée « Veille congrès Onconic (mensuelle) » (1er de chaque mois, 7h37 Zurich, fenêtre de 18 mois, créée le 01.11.2026) ; l'ancienne tâche trimestrielle est désactivée. Le connecteur Supabase ne peut pas être attaché par Claude : à ajouter dans l'interface des tâches planifiées, sinon la tâche ne rend qu'une requête SQL à coller.
 - Lettres Word à corriger puis redéposer : titre de la lettre atezolizumab 1L ; Tafinlar® au lieu de Mekinist® dans dabrafenib-trametinib.
 - Proposés non retenus pour l'instant : 2FA admin, page d'administration des membres.
