@@ -73,23 +73,23 @@ alter table public.sl_rx enable row level security;
 
 drop policy if exists "sl_products: clinicians read" on public.sl_products;
 create policy "sl_products: clinicians read" on public.sl_products for select to authenticated
-  using (public.current_role_name() in ('admin', 'clinician', 'pharmacist'));
+  using ((select public.has_tool('limitations')));
 drop policy if exists "sl_limitations: clinicians read" on public.sl_limitations;
 create policy "sl_limitations: clinicians read" on public.sl_limitations for select to authenticated
-  using (public.current_role_name() in ('admin', 'clinician', 'pharmacist'));
+  using ((select public.has_tool('limitations')));
 drop policy if exists "sl_meta: clinicians read" on public.sl_meta;
 create policy "sl_meta: clinicians read" on public.sl_meta for select to authenticated
-  using (public.current_role_name() in ('admin', 'clinician', 'pharmacist'));
+  using ((select public.has_tool('limitations')));
 drop policy if exists "sl_changes: clinicians read" on public.sl_changes;
 create policy "sl_changes: clinicians read" on public.sl_changes for select to authenticated
-  using (public.current_role_name() in ('admin', 'clinician', 'pharmacist'));
+  using ((select public.has_tool('limitations')));
 
 drop policy if exists "sl_rx: read" on public.sl_rx;
 create policy "sl_rx: read" on public.sl_rx for select to authenticated
-  using (public.is_app_admin() or (public.current_role_name() = 'clinician' and status = 'validated'));
+  using ((select public.is_app_admin('limitations')) or ((select public.has_tool('limitations')) and status = 'validated'));
 drop policy if exists "sl_rx: admin write" on public.sl_rx;
 create policy "sl_rx: admin write" on public.sl_rx for all to authenticated
-  using (public.is_app_admin()) with check (public.is_app_admin());
+  using ((select public.is_app_admin('limitations'))) with check ((select public.is_app_admin('limitations')));
 
 revoke all on public.sl_products, public.sl_limitations, public.sl_meta, public.sl_changes, public.sl_rx from anon;
 revoke insert, update, delete, truncate on public.sl_products, public.sl_limitations, public.sl_meta, public.sl_changes from authenticated;
@@ -103,7 +103,7 @@ create or replace function public.sl_replace(p_products jsonb, p_limits jsonb, p
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare np int; nl int; first_import boolean;
 begin
-  if not public.is_app_admin() then
+  if not public.is_app_admin('limitations') then
     raise exception 'admin only' using errcode = '42501';
   end if;
   first_import := not exists (select 1 from public.sl_limitations);

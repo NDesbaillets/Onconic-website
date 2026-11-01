@@ -30,13 +30,11 @@ alter table public.letters_meta enable row level security;
 
 drop policy if exists "letters: CHUV clinicians read" on public.letters;
 create policy "letters: CHUV clinicians read" on public.letters for select to authenticated
-  using (public.is_app_admin()
-     or (public.current_role_name() = 'clinician' and public.current_institution() = 'CHUV'));
+  using ((select public.has_tool('lettres')));
 
 drop policy if exists "letters_meta: CHUV clinicians read" on public.letters_meta;
 create policy "letters_meta: CHUV clinicians read" on public.letters_meta for select to authenticated
-  using (public.is_app_admin()
-     or (public.current_role_name() = 'clinician' and public.current_institution() = 'CHUV'));
+  using ((select public.has_tool('lettres')));
 
 revoke all on public.letters, public.letters_meta from anon;
 revoke insert, update, delete, truncate on public.letters, public.letters_meta from authenticated;
@@ -47,7 +45,7 @@ create or replace function public.letters_replace(p_rows jsonb, p_source text)
 returns int language plpgsql security definer set search_path = public as $$
 declare n int;
 begin
-  if not public.is_app_admin() then
+  if not public.is_app_admin('lettres') then
     raise exception 'admin only' using errcode = '42501';
   end if;
   delete from public.letters where true;
@@ -73,7 +71,7 @@ create or replace function public.letters_upsert(p_row jsonb)
 returns bigint language plpgsql security definer set search_path = public as $$
 declare v_id bigint;
 begin
-  if not public.is_app_admin() then
+  if not public.is_app_admin('lettres') then
     raise exception 'admin only' using errcode = '42501';
   end if;
   v_id := coalesce((p_row ->> 'id')::bigint, (select id from public.letters where file = p_row ->> 'file' limit 1));
@@ -108,7 +106,7 @@ grant execute on function public.letters_upsert(jsonb) to authenticated;
 create or replace function public.letters_delete(p_id bigint)
 returns void language plpgsql security definer set search_path = public as $$
 begin
-  if not public.is_app_admin() then
+  if not public.is_app_admin('lettres') then
     raise exception 'admin only' using errcode = '42501';
   end if;
   delete from public.letters where id = p_id;

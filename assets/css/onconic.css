@@ -766,3 +766,26 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 .ls-cart-float { position: fixed; right: 16px; bottom: 16px; z-index: 20; box-shadow: 0 4px 14px rgba(0, 18, 58, .25); }
 .ls-cart-float[hidden] { display: none; }
 @media (max-width: 760px) { .ls-bar { grid-template-columns: 1fr; } .ls-card { padding: var(--space-3); } }
+
+/* ---------- Administration des membres ---------- */
+.am-bar { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--space-3); align-items: end; }
+.am-bar label { display: grid; gap: 4px; font-weight: 500; font-size: .9rem; color: var(--navy-800); min-width: 0; }
+.am-bar input, .am-bar select, .am-rolesel { font: inherit; font-weight: 400; min-height: 44px; padding: 8px 12px; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); color: var(--ink-900); min-width: 0; width: 100%; }
+.am-count { margin: var(--space-3) 0 0; font-size: .9rem; }
+.am-help { font-size: .85rem; margin: var(--space-1) 0 var(--space-3); }
+#am-list { display: grid; gap: var(--space-3); }
+.am-card { padding: var(--space-3) var(--space-4); display: grid; gap: var(--space-2); }
+.am-card.am-pending { border-left: 4px solid var(--amber-500); }
+.am-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 240px); gap: var(--space-3); align-items: start; }
+.am-who h3 { margin: 0; font-size: 1.15rem; }
+.am-mail { font-size: .92rem; word-break: break-all; }
+.am-meta { margin: 4px 0 0; font-size: .82rem; }
+.am-rolebox { display: grid; gap: 4px; font-weight: 500; font-size: .85rem; color: var(--navy-800); }
+.am-tools { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px 16px; }
+.am-tools legend { font-weight: 500; font-size: .85rem; color: var(--navy-800); padding-bottom: 6px; }
+.am-tool { flex-wrap: wrap; }
+.am-tool input:disabled + span { color: var(--ink-600); }
+.ug-badge.am-exc { background: var(--amber-500); color: var(--navy-800); font-size: .7rem; padding: 1px 6px; }
+.am-note { margin: 0; font-size: .85rem; }
+.am-card .ug-copy { justify-self: start; }
+@media (max-width: 640px) { .am-bar, .am-head { grid-template-columns: 1fr; } .am-card { padding: var(--space-3); } }

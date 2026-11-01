@@ -463,7 +463,8 @@
     $("logout").addEventListener("click", async () => { await sb.auth.signOut(); location.href = "/fr/"; });
     state.uid = data.session.user.id;
     const { data: role } = await sb.rpc("current_role_name");
-    if (!["admin", "clinician", "pharmacist"].includes(role)) return ($("ug-status").textContent = "Outil réservé aux médecins et pharmaciens validés de The Hive.");
+    const { data: canUse } = await sb.rpc("has_tool", { p_tool: "limitations" });
+    if (role !== "admin" && canUse !== true) return ($("ug-status").textContent = "Cet outil ne fait pas partie de vos accès. Contactez l'administrateur si besoin.");
     state.admin = role === "admin" || role === "pharmacist"; // administration de la LS et des textes d'ordonnance
     try { await load(); } catch (e) { return ($("ug-status").textContent = "Chargement impossible : " + e.message); }
     $("ug-status").hidden = true;

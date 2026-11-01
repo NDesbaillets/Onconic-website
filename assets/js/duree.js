@@ -301,7 +301,8 @@
 
     const { data: profile } = await sb.from("profiles").select("role").eq("id", data.session.user.id).single();
     const role = profile ? profile.role : "member";
-    const appAdmin = role === "admin" || role === "pharmacist"; // import du fichier Ultragenda
+    const { data: canUse } = await sb.rpc("has_tool", { p_tool: "duree" });
+    const appAdmin = role === "admin" || (role === "pharmacist" && canUse === true); // import du fichier Ultragenda
     if (appAdmin) setupImport();
 
     const [{ data: rows, error }, { data: meta }] = await Promise.all([
