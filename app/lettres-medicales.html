@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Lettres médicales · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <meta name="apple-mobile-web-app-title" content="Onconic">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261101">
+  <script src="/assets/js/site.js?v=20261031" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/medletters.js?v=20261101" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug">
+      <div class="container">
+        <a class="btn btn-outline hive-back" href="/fr/app/">← The Hive</a>
+        <span class="eyebrow">Outil des médecins</span>
+        <h1>Lettres médicales</h1>
+        <hr class="rule">
+        <p class="form-msg" id="ug-status" role="status">Chargement…</p>
+
+        <div id="ml-tool" hidden>
+          <div class="ml-warning" role="note">
+            <strong>Aucune donnée identifiante.</strong>
+            Ne saisissez jamais de nom, d'initiales, de date de naissance, de date complète, d'adresse, de numéro (IPP, AVS, téléphone) ni de nom de soignant. La saisie est vérifiée avant l'envoi et la lettre produite est contrôlée ; rien n'est enregistré. Les dates s'écrivent au mois près (ex. 03.2026).
+          </div>
+
+          <form id="ml-form" class="ml-form" novalidate>
+            <fieldset class="ml-grid">
+              <legend>Cas</legend>
+              <label>Clinique<select id="clinic" required></select></label>
+              <label>Sexe<select id="sex"><option value="">Non précisé</option><option>Femme</option><option>Homme</option></select></label>
+              <label>Âge (ans)<input id="age" type="number" min="18" max="110" inputmode="numeric"></label>
+              <label>Performance status OMS<select id="ecog"><option value="">Non précisé</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+            </fieldset>
+            <fieldset class="ml-grid">
+              <legend>Diagnostic</legend>
+            <label class="ml-wide">Diagnostic histopathologique complet<textarea id="histo" rows="3" placeholder="Type histologique, grade, IHC, biologie moléculaire (ex. adénocarcinome pulmonaire TTF-1+, PD-L1 TPS 60 %, EGFR/ALK/ROS1 négatifs)"></textarea></label>
+            <label>Classification TNM<input id="tnm" type="text" autocomplete="off" placeholder="ex. cT2b cN2 cM1c (8e éd.)"></label>
+              <label>Stade<input id="stage" type="text" autocomplete="off" placeholder="ex. IVB"></label>
+            </fieldset>
+            <fieldset class="ml-grid">
+              <legend>Anamnèse</legend>
+            <label class="ml-wide">Comorbidités significatives<textarea id="comorbid" rows="3" placeholder="ex. BPCO GOLD 2, cardiopathie ischémique stentée en 2019, diabète de type 2"></textarea></label>
+            <label class="ml-wide">Circonstances du diagnostic<textarea id="circumstances" rows="3" placeholder="ex. toux et perte pondérale de 6 kg en 3 mois ; CT thoracique puis EBUS"></textarea></label>
+            <label class="ml-wide">Anamnèse actuelle<textarea id="current" rows="3" placeholder="Plaintes actuelles, état général, examen clinique"></textarea></label>
+            <label class="ml-wide">Anamnèse oncologique familiale<textarea id="family" rows="2" placeholder="ex. mère : cancer du sein à 52 ans"></textarea></label>
+            <label class="ml-wide">Habitus<textarea id="habits" rows="2" placeholder="ex. tabagisme actif 40 UPA, OH occasionnel"></textarea></label>
+            <label class="ml-wide">Anamnèse sociale<textarea id="social" rows="2" placeholder="ex. marié, 2 enfants, retraité, autonome"></textarea></label>
+            </fieldset>
+            <fieldset class="ml-grid">
+              <legend>Attitude</legend>
+            <label class="ml-wide">Attitude retenue (mots-clés)<textarea id="attitude" rows="2" placeholder="ex. 1re ligne pembrolizumab + carboplatine + pemetrexed, KEYNOTE-189, 4 cycles puis maintenance"></textarea></label>
+              <div class="ml-wide ml-match" id="ml-match" aria-live="polite"></div>
+              <div class="ml-wide ml-denovo" id="ml-denovo" hidden>
+                <label>Étude de référence à citer<input id="trial" type="text" autocomplete="off" placeholder="ex. KEYNOTE-189 (Gandhi, NEJM 2018)"></label>
+                <label>Schéma et doses connus (facultatif)<textarea id="details" rows="2" placeholder="ex. pembrolizumab 200 mg J1/21 j ; carboplatine AUC 5 ; pemetrexed 500 mg/m²"></textarea></label>
+              </div>
+            </fieldset>
+            <p class="form-msg error" id="ml-pii" role="alert" aria-live="assertive"></p>
+            <div class="btn-row">
+              <button class="btn" id="ml-generate" type="submit">Générer la lettre</button>
+              <button class="btn btn-outline" id="ml-reset" type="button">Nouveau cas</button>
+            </div>
+            <p class="form-msg" id="ml-msg" role="status" aria-live="polite"></p>
+          </form>
+
+          <section class="card ml-out" id="ml-out" hidden>
+            <span class="eyebrow">Lettre</span>
+            <p class="ml-flag" id="ml-flag" hidden></p>
+            <label class="visually-hidden" for="ml-text">Texte de la lettre</label>
+            <textarea id="ml-text" class="ml-text" spellcheck="true"></textarea>
+            <div class="btn-row">
+              <button class="btn" id="ml-docx" type="button">Télécharger (.docx)</button>
+              <button class="btn btn-outline" id="ml-copy" type="button">Copier le texte</button>
+            </div>
+            <div class="ml-save" id="ml-save" hidden>
+              <p><strong>Aucune lettre type n'existait pour ce traitement.</strong> Enregistrer les paragraphes traitement et effets secondaires comme modèle ? Il restera en brouillon jusqu'à validation par un administrateur.</p>
+              <div class="ml-grid">
+                <label>Intitulé<input id="sv-title" type="text"></label>
+                <label>Médicaments (DCI, séparées par des virgules)<input id="sv-drugs" type="text"></label>
+                <label>Schéma<input id="sv-treatment" type="text"></label>
+                <label>Étude de référence<input id="sv-trial" type="text"></label>
+              </div>
+              <div class="btn-row">
+                <button class="btn" id="sv-yes" type="button">Enregistrer comme modèle</button>
+                <button class="btn btn-outline" id="sv-no" type="button">Non merci</button>
+              </div>
+              <p class="form-msg" id="sv-msg" role="status" aria-live="polite"></p>
+            </div>
+          </section>
+        </div>
+
+        <div class="card ug-admin" id="ml-admin" hidden>
+          <span class="eyebrow">Administration</span>
+          <h2>Lettres types</h2>
+          <div class="lt-drop" id="ml-drop" role="button" tabindex="0">
+            <strong>Glissez ici une ou plusieurs lettres types Word</strong>
+            <span>ou cliquez pour les choisir (.docx) ; l'index est proposé automatiquement</span>
+          </div>
+          <input type="file" id="ml-drop-input" accept=".docx" multiple hidden>
+          <div id="ml-imports"></div>
+          <p class="form-msg" id="ml-drop-msg" role="status" aria-live="polite"></p>
+          <h3 class="ml-h3">Brouillons à valider</h3>
+          <div id="ml-drafts"></div>
+          <h3 class="ml-h3">Index des lettres types</h3>
+          <div id="ml-index"></div>
+          <h3 class="ml-h3">Accès « médecin plus »</h3>
+          <p class="muted">Seuls les médecins cochés voient et utilisent cet outil. Il reste invisible pour les autres membres.</p>
+          <div id="ml-members"></div>
+          <p class="muted" id="ml-usage"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>

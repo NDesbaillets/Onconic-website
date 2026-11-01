@@ -129,8 +129,9 @@
       if (!data.session) return (location.href = base + (lang === "fr" ? "/the-hive.html" : "/hive.html"));
 
       const { data: profile } = await sb.from("profiles")
-        .select("full_name, role").eq("id", data.session.user.id).single();
+        .select("full_name, role, med_plus").eq("id", data.session.user.id).single();
       const role = profile ? profile.role : "member";
+      const plus = role === "admin" || (role === "clinician" && !!(profile && profile.med_plus));
       document.getElementById("user-name").textContent = (profile && profile.full_name) || data.session.user.email;
 
       // Alvéoles groupées par public : son propre espace d'abord ; l'espace de l'autre métier reste visible,
@@ -142,6 +143,8 @@
       app.querySelectorAll(".hive-group").forEach((group) => {
         const gid = group.dataset.group;
         const other = active && gid !== "common" && gid !== active;
+        // Outils « médecin plus » : invisibles pour tous les autres, même grisés
+        group.querySelectorAll("[data-plus]").forEach((el) => { if (!plus) el.remove(); });
         group.querySelectorAll("[data-roles]").forEach((el) => {
           const allowed = role === "admin" || el.dataset.roles.split(" ").includes(role);
           el.hidden = !allowed && !other;

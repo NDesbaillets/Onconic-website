@@ -21,6 +21,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Key trials** | App des études clés (fiches, schéma, traitements, courbes KM) |
 | **Lettres** | App des lettres types de garantie de prise en charge (assurances) |
 | **Congrès** | App « Qui d'autre butine au congrès ? » |
+| **médecin plus** | Drapeau caché `profiles.med_plus` donnant accès aux Lettres médicales |
 | **rôles** | admin, clinician, assistant ; « member » = en attente de validation |
 → Glossaire complet : memory/glossary.md
 
@@ -30,6 +31,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Key trials** | 14 fiches thoraciques en brouillon, courbes digitalisées ; à relire/publier |
 | **Lettres d'assurance** | 31 lettres importées (thoracique) ; 2 Word à corriger |
 | **Congrès** | En ligne ; veille mensuelle programmée sur 18 mois (connecteur Supabase à attacher) |
+| **Lettres médicales** | Accès « médecin plus » caché, Haiku via Edge Function ; mise en service à finaliser |
 | **Page d'accueil** | Ton médical, abeilles discrètes (PR #25-26) |
 → Détails : memory/projects/
 
