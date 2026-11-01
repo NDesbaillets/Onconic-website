@@ -9,11 +9,11 @@
   const FN = (cfg.supabaseUrl || "") + "/functions/v1/medical-letter";
   const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome",
     "Lower GI", "Upper GI", "ORL", "Sarcomes", "Radiologie interventionnelle"];
-  const FIELDS = ["clinic", "sex", "age", "ecog", "histo", "tnm", "stage", "comorbid", "circumstances", "current",
+  const FIELDS = ["clinic", "sex", "age", "ecog", "histo", "markers", "tnm", "stage", "comorbid", "circumstances", "current",
     "family", "habits", "social", "attitude", "trial", "details"];
 
   const $ = (id) => document.getElementById(id);
-  const state = { templates: [], brands: {}, admin: false, match: null, denovo: false, example: null, last: null, cache: new Map() };
+  const state = { templates: [], brands: {}, trials: [], stageAuto: "", admin: false, match: null, denovo: false, example: null, last: null, cache: new Map() };
 
   function el(tag, cls, txt) {
     const e = document.createElement(tag);
@@ -101,7 +101,7 @@
         const lab = el("label", "cg-check ml-choice");
         const r = el("input"); r.type = "radio"; r.name = "ml-tpl"; r.value = m.t.id;
         r.checked = i === 0 && strong;
-        r.addEventListener("change", () => { state.match = m.t; setDenovo(false); });
+        r.addEventListener("change", () => { state.match = m.t; setDenovo(false); showTrialLinks("ml-kt", ktTexts()); });
         lab.append(r, el("span", null, m.t.title + (m.t.trial ? ` · ${m.t.trial}` : "") + (m.t.clinic ? ` · ${m.t.clinic}` : "")));
         box.append(lab);
       });
@@ -110,11 +110,12 @@
     const none = el("label", "cg-check ml-choice");
     const r = el("input"); r.type = "radio"; r.name = "ml-tpl"; r.value = "";
     r.checked = !state.match;
-    r.addEventListener("change", () => { state.match = null; setDenovo(true); });
+    r.addEventListener("change", () => { state.match = null; setDenovo(true); showTrialLinks("ml-kt", ktTexts()); });
     if (!list.length) box.append(el("p", "ml-nomatch", "Aucune lettre type ne correspond à ce traitement. Voulez-vous générer une lettre de novo ?"));
     none.append(r, el("span", null, list.length ? "Aucune de ces lettres : générer une lettre de novo" : "Oui, générer une lettre de novo (indiquez l'étude de référence ci-dessous)"));
     box.append(none);
     setDenovo(!state.match);
+    showTrialLinks("ml-kt", ktTexts());
   }
 
   function setDenovo(on) {
@@ -127,6 +128,83 @@
     const clinic = norm($("clinic").value);
     const val = state.templates.filter((t) => t.status === "validated");
     return val.find((t) => t._clinic === clinic) || val[0] || null;
+  }
+
+  // ----- Listes de saisie rapide par clinique -----
+  function renderChips() {
+    const v = (window.OncoVocab || {})[$("clinic").value] || { histo: [], markers: [] };
+    const make = (box, target, list) => {
+      $(box).replaceChildren(...list.map((txt) => button(txt, "ug-chip ml-chip", () => insert(target, txt))));
+      $(box).hidden = !list.length;
+    };
+    make("chips-histo", "histo", v.histo);
+    make("chips-markers", "markers", v.markers);
+  }
+  // Ajoute le terme en fin de champ et sélectionne « … » pour que la valeur soit tapée directement
+  function insert(id, txt) {
+    const f = $(id);
+    const base = f.value.trim();
+    f.value = base ? base.replace(/[;,.]?$/, "") + ", " + txt : txt;
+    f.focus();
+    const i = f.value.lastIndexOf("…");
+    if (i >= 0 && i >= f.value.length - txt.length) f.setSelectionRange(i, i + 1);
+    else f.setSelectionRange(f.value.length, f.value.length);
+    f.dispatchEvent(new Event("input"));
+  }
+
+  // ----- Stade calculé depuis le TNM (le médecin garde la main : une saisie manuelle n'est jamais écrasée) -----
+  function updateStage() {
+    const note = $("ml-stage-note");
+    const S = window.TnmStage;
+    let sys = $("stage-sys").value;
+    if (sys === "auto") sys = S.guess($("clinic").value, $("histo").value);
+    const stageField = $("stage");
+    const tnm = $("tnm").value.trim();
+    note.className = "ml-wide ml-stage-note";
+    if (sys === "none") { note.textContent = ""; return; }
+    if (!sys) {
+      note.textContent = tnm && $("clinic").value ? "Pas de calcul automatique pour cette tumeur : saisissez le stade (FIGO, OMS, etc.) ou choisissez un système." : "";
+      return;
+    }
+    if (!tnm) { note.textContent = "Stade calculé automatiquement à partir du TNM (" + S.SYSTEMS[sys].label + ")."; return; }
+    const r = S.stage(sys, tnm);
+    if (!r || !r.stage) {
+      note.textContent = r ? r.note : "TNM non reconnu (ex. cT2a cN1 cM0).";
+      if (stageField.value === state.stageAuto) { stageField.value = ""; state.stageAuto = ""; }
+      return;
+    }
+    const manual = stageField.value && stageField.value !== state.stageAuto;
+    if (!manual) { stageField.value = r.stage; state.stageAuto = r.stage; }
+    note.classList.add("ok");
+    note.textContent = `Stade calculé : ${r.stage} (${r.label})${r.note ? ". " + r.note : ""}` +
+      (manual && stageField.value !== r.stage ? ` Votre saisie (${stageField.value}) diffère : vérifiez.` : " À vérifier.");
+  }
+
+  // ----- Lien vers la fiche Key trials de l'étude citée -----
+  function trialLinks(texts) {
+    const hay = norm(texts.filter(Boolean).join(" "));
+    return state.trials.filter((k) => k._n && has(hay, k._n));
+  }
+  function showTrialLinks(boxId, texts) {
+    const box = $(boxId);
+    const list = trialLinks(texts);
+    box.replaceChildren();
+    if (!list.length) { box.hidden = true; return; }
+    box.append("Fiche Key trials : ");
+    list.forEach((k, i) => {
+      const a = el("a", null, k.acronym);
+      a.href = "/app/trials.html?t=" + encodeURIComponent(k.slug); a.target = "_blank"; a.rel = "noopener";
+      if (i) box.append(" · ");
+      box.append(a);
+    });
+    box.hidden = false;
+  }
+  const ktTexts = () => [$("attitude").value, $("trial").value, state.match && state.match.trial];
+
+  async function loadTrials() {
+    // Fiches lisibles par l'utilisateur (publiées ; toutes pour l'admin) ; silencieux si la table est inaccessible
+    const { data } = await sb.from("key_trials").select("slug, acronym, status");
+    state.trials = (data || []).map((k) => Object.assign(k, { _n: norm(k.acronym) }));
   }
 
   // ----- Génération -----
@@ -143,6 +221,9 @@
     const msg = $("ml-msg");
     msg.className = "form-msg";
     if (!checkPii()) { msg.className = "form-msg error"; msg.textContent = "Saisie bloquée : données identifiantes détectées."; return; }
+    if (!$("ml-ack").checked) { msg.className = "form-msg error"; msg.textContent = "Cochez la case de responsabilité avant de générer."; return; }
+    const open = FIELDS.filter((id) => $(id).value.includes("…")).map((id) => labelOf($(id)));
+    if (open.length) { msg.className = "form-msg error"; msg.textContent = "Valeurs à compléter (…) : " + open.join(", ") + "."; return; }
     if (!$("clinic").value || !$("histo").value.trim() || !$("attitude").value.trim()) {
       msg.className = "form-msg error"; msg.textContent = "Clinique, diagnostic histopathologique et attitude sont nécessaires."; return;
     }
@@ -181,10 +262,15 @@
   // Les marqueurs §T / §E délimitent les paragraphes traitement et effets secondaires (réutilisables comme modèle)
   function show(out, body) {
     const raw = out.text || "";
-    const tIdx = raw.indexOf("§T"), eIdx = raw.indexOf("§E");
-    const part = (a, b) => (a >= 0 ? raw.slice(a + 2, b > a ? b : undefined).trim() : "");
-    state.last = { body, treatment: part(tIdx, eIdx), effects: part(eIdx, -1) };
-    $("ml-text").value = raw.replace(/§[TE]\s*/g, "");
+    const idx = ["§T", "§E", "§S"].map((m) => raw.indexOf(m));
+    const part = (i) => {
+      if (idx[i] < 0) return "";
+      const next = idx.filter((x) => x > idx[i]);
+      return raw.slice(idx[i] + 2, next.length ? Math.min(...next) : undefined).trim();
+    };
+    state.last = { body, paras: [part(0), part(1), part(2)].filter(Boolean) };
+    $("ml-text").value = raw.replace(/§[TES]\s*/g, "");
+    showTrialLinks("ml-kt-out", ktTexts());
     const flags = [];
     if (state.denovo) flags.push("Lettre de novo : vérifiez le schéma, les doses et les effets secondaires.");
     if (out.redacted) flags.push("Des éléments ressemblant à des données identifiantes ont été masqués […].");
@@ -238,7 +324,7 @@
     const txt = $("ml-text").value;
     const att = txt.split(/\n\s*ATTITUDE\s*\n/)[1] || "";
     const paras = att.split(/\n\s*\n|\n/).map((p) => p.trim()).filter(Boolean);
-    const keep = paras.length > 2 ? paras.slice(2) : [state.last.treatment, state.last.effects].filter(Boolean);
+    const keep = paras.length > 2 ? paras.slice(2) : state.last.paras;
     return keep.join("\n\n");
   }
 
@@ -430,18 +516,23 @@
     state.admin = role === "admin";
     const sel = $("clinic");
     sel.append(el("option", null, ""), ...CLINICS.map((c) => el("option", null, c)));
-    try { await Promise.all([loadTemplates(), loadBrands()]); } catch (e) { return ($("ug-status").textContent = "Chargement impossible : " + e.message); }
+    try { await Promise.all([loadTemplates(), loadBrands(), loadTrials()]); } catch (e) { return ($("ug-status").textContent = "Chargement impossible : " + e.message); }
     $("ug-status").hidden = true;
     $("ml-tool").hidden = false;
     let t;
     $("attitude").addEventListener("input", () => { clearTimeout(t); t = setTimeout(renderMatch, 250); });
-    sel.addEventListener("change", renderMatch);
+    sel.addEventListener("change", () => { renderMatch(); renderChips(); updateStage(); });
+    for (const id of ["tnm", "histo", "stage-sys"]) $(id).addEventListener(id === "stage-sys" ? "change" : "input", updateStage);
+    $("stage").addEventListener("input", () => { if (!$("stage").value) state.stageAuto = ""; updateStage(); });
+    $("trial").addEventListener("input", () => showTrialLinks("ml-kt", ktTexts()));
+    renderChips();
     for (const id of FIELDS) $(id).addEventListener("input", () => { if ($("ml-pii").textContent || $(id).classList.contains("ml-bad")) checkPii(); });
     for (const id of FIELDS) $(id).addEventListener("blur", checkPii);
     $("ml-form").addEventListener("submit", generate);
     $("ml-reset").addEventListener("click", () => {
       if (!confirm("Effacer la saisie et la lettre ?")) return;
-      $("ml-form").reset(); $("ml-text").value = ""; $("ml-out").hidden = true; state.cache.clear(); checkPii(); renderMatch();
+      $("ml-form").reset(); $("ml-text").value = ""; $("ml-out").hidden = true; state.cache.clear(); state.stageAuto = "";
+      checkPii(); renderMatch(); renderChips(); updateStage();
     });
     $("ml-docx").addEventListener("click", () => downloadDocx().catch((e) => alert(e.message)));
     $("ml-copy").addEventListener("click", async (e) => {

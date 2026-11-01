@@ -12,11 +12,13 @@
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#001B4D">
   <meta name="apple-mobile-web-app-title" content="Onconic">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261101">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261101b">
   <script src="/assets/js/site.js?v=20261031" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/medletters.js?v=20261101" defer></script>
+  <script src="/assets/js/tnm-stage.js?v=20261101" defer></script>
+  <script src="/assets/js/onco-vocab.js?v=20261101" defer></script>
+  <script src="/assets/js/medletters.js?v=20261101b" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -42,8 +44,8 @@
 
         <div id="ml-tool" hidden>
           <div class="ml-warning" role="note">
-            <strong>Aucune donnée identifiante.</strong>
-            Ne saisissez jamais de nom, d'initiales, de date de naissance, de date complète, d'adresse, de numéro (IPP, AVS, téléphone) ni de nom de soignant. La saisie est vérifiée avant l'envoi et la lettre produite est contrôlée ; rien n'est enregistré. Les dates s'écrivent au mois près (ex. 03.2026).
+            <p><strong>Outil non autorisé par le CHUV.</strong> Son utilisation se fait sous la seule responsabilité de l'utilisateur, qui vérifie et valide intégralement chaque lettre avant tout usage.</p>
+            <p><strong>Aucune donnée identifiante.</strong> Ne saisissez jamais de nom, d'initiales, de date de naissance, de date complète, d'adresse, de numéro (IPP, AVS, téléphone) ni de nom de soignant. La saisie est vérifiée avant l'envoi et la lettre produite est contrôlée ; rien n'est enregistré. Les dates s'écrivent au mois près (ex. 03.2026).</p>
           </div>
 
           <form id="ml-form" class="ml-form" novalidate>
@@ -52,13 +54,18 @@
               <label>Clinique<select id="clinic" required></select></label>
               <label>Sexe<select id="sex"><option value="">Non précisé</option><option>Femme</option><option>Homme</option></select></label>
               <label>Âge (ans)<input id="age" type="number" min="18" max="110" inputmode="numeric"></label>
-              <label>Performance status OMS<select id="ecog"><option value="">Non précisé</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+              <label>Performance status ECOG<select id="ecog"><option value="">Non précisé</option><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
             </fieldset>
             <fieldset class="ml-grid">
               <legend>Diagnostic</legend>
-            <label class="ml-wide">Diagnostic histopathologique complet<textarea id="histo" rows="3" placeholder="Type histologique, grade, IHC, biologie moléculaire (ex. adénocarcinome pulmonaire TTF-1+, PD-L1 TPS 60 %, EGFR/ALK/ROS1 négatifs)"></textarea></label>
+            <label class="ml-wide">Diagnostic histopathologique complet<textarea id="histo" rows="3" placeholder="Type histologique, grade, immunohistochimie (ex. adénocarcinome pulmonaire TTF-1+)"></textarea></label>
+              <div class="ml-wide ml-chips" id="chips-histo" aria-label="Histologies fréquentes"></div>
+            <label class="ml-wide">Biomarqueurs et biologie moléculaire<textarea id="markers" rows="2" placeholder="ex. PD-L1 TPS 60 %, EGFR/ALK/ROS1 négatifs, KRAS G12C"></textarea></label>
+              <div class="ml-wide ml-chips" id="chips-markers" aria-label="Biomarqueurs fréquents"></div>
             <label>Classification TNM<input id="tnm" type="text" autocomplete="off" placeholder="ex. cT2b cN2 cM1c (8e éd.)"></label>
-              <label>Stade<input id="stage" type="text" autocomplete="off" placeholder="ex. IVB"></label>
+              <label>Stade<input id="stage" type="text" autocomplete="off" placeholder="calculé depuis le TNM si possible"></label>
+              <label class="ml-wide">Calcul du stade<select id="stage-sys"><option value="auto">Automatique (selon clinique et histologie)</option><option value="lung">Poumon, UICC/IASLC 9e éd.</option><option value="colorectal">Côlon-rectum, AJCC 8e éd.</option><option value="breast">Sein, stade anatomique AJCC 8e éd.</option><option value="melanoma">Mélanome cutané, AJCC 8e éd.</option><option value="kidney">Rein, AJCC 8e éd.</option><option value="bladder">Vessie, AJCC 8e éd.</option><option value="none">Aucun (saisie libre)</option></select></label>
+              <p class="ml-wide ml-stage-note" id="ml-stage-note" aria-live="polite"></p>
             </fieldset>
             <fieldset class="ml-grid">
               <legend>Anamnèse</legend>
@@ -73,12 +80,14 @@
               <legend>Attitude</legend>
             <label class="ml-wide">Attitude retenue (mots-clés)<textarea id="attitude" rows="2" placeholder="ex. 1re ligne pembrolizumab + carboplatine + pemetrexed, KEYNOTE-189, 4 cycles puis maintenance"></textarea></label>
               <div class="ml-wide ml-match" id="ml-match" aria-live="polite"></div>
+              <p class="ml-wide ml-kt" id="ml-kt" hidden></p>
               <div class="ml-wide ml-denovo" id="ml-denovo" hidden>
                 <label>Étude de référence à citer<input id="trial" type="text" autocomplete="off" placeholder="ex. KEYNOTE-189 (Gandhi, NEJM 2018)"></label>
                 <label>Schéma et doses connus (facultatif)<textarea id="details" rows="2" placeholder="ex. pembrolizumab 200 mg J1/21 j ; carboplatine AUC 5 ; pemetrexed 500 mg/m²"></textarea></label>
               </div>
             </fieldset>
             <p class="form-msg error" id="ml-pii" role="alert" aria-live="assertive"></p>
+            <label class="cg-check ml-ack"><input type="checkbox" id="ml-ack" required><span>Je comprends que cet outil n'est pas autorisé par le CHUV, que je l'utilise sous ma responsabilité et que je relirai la lettre.</span></label>
             <div class="btn-row">
               <button class="btn" id="ml-generate" type="submit">Générer la lettre</button>
               <button class="btn btn-outline" id="ml-reset" type="button">Nouveau cas</button>
@@ -89,6 +98,7 @@
           <section class="card ml-out" id="ml-out" hidden>
             <span class="eyebrow">Lettre</span>
             <p class="ml-flag" id="ml-flag" hidden></p>
+            <p class="ml-kt" id="ml-kt-out" hidden></p>
             <label class="visually-hidden" for="ml-text">Texte de la lettre</label>
             <textarea id="ml-text" class="ml-text" spellcheck="true"></textarea>
             <div class="btn-row">
@@ -96,7 +106,7 @@
               <button class="btn btn-outline" id="ml-copy" type="button">Copier le texte</button>
             </div>
             <div class="ml-save" id="ml-save" hidden>
-              <p><strong>Aucune lettre type n'existait pour ce traitement.</strong> Enregistrer les paragraphes traitement et effets secondaires comme modèle ? Il restera en brouillon jusqu'à validation par un administrateur.</p>
+              <p><strong>Aucune lettre type n'existait pour ce traitement.</strong> Enregistrer les paragraphes traitement, effets secondaires et suivi comme modèle ? Il restera en brouillon jusqu'à validation par un administrateur.</p>
               <div class="ml-grid">
                 <label>Intitulé<input id="sv-title" type="text"></label>
                 <label>Médicaments (DCI, séparées par des virgules)<input id="sv-drugs" type="text"></label>

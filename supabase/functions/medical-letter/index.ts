@@ -59,18 +59,19 @@ Règles absolues :
 Format de sortie, texte brut, dans cet ordre exact :
 ANAMNÈSE
 Un paragraphe : âge et sexe s'ils sont fournis, comorbidités significatives, puis circonstances du diagnostic.
-Un paragraphe : présentation clinique actuelle (plaintes, état général, performance status si fourni).
+Un paragraphe : présentation clinique actuelle (plaintes, état général, performance status ECOG si fourni).
 Anamnèse oncologique familiale : une phrase.
 Habitus : une phrase (tabac en UPA, alcool, autres).
 Situation sociale : une phrase.
 
 ATTITUDE
-Paragraphe 1 : synthèse du nouveau diagnostic (histologie complète, caractéristiques moléculaires et immunohistochimiques, TNM, stade).
+Paragraphe 1 : synthèse du nouveau diagnostic (histologie complète, immunohistochimie, biomarqueurs et biologie moléculaire, TNM, stade).
 Paragraphe 2 : « La situation a été discutée au colloque multidisciplinaire de [clinique], qui propose … » en reprenant l'attitude retenue.
 Paragraphe 3, commençant par le marqueur §T : traitement proposé, rationnel et étude de référence, modalités d'administration (voie, rythme, durée, nombre de cycles), doses.
 Paragraphe 4, commençant par le marqueur §E : les effets secondaires ont été discutés avec le patient ou la patiente ; résume les effets attendus fréquents et graves et la conduite à tenir.
+Paragraphe 5, commençant par le marqueur §S : suivi (bilan biologique et clinique avant chaque cycle, examens de surveillance spécifiques, date ou délai de la prochaine évaluation radiologique).
 
-Quand une lettre type est fournie, reprends-en fidèlement le schéma, les doses, les modalités, l'étude citée et les effets secondaires, en les adaptant au cas ; n'en recopie aucune donnée propre à un autre patient. Sans lettre type, rédige les paragraphes §T et §E d'après l'étude de référence et le schéma indiqués par le médecin, dans le style de l'exemple s'il y en a un, et signale toute dose non fournie par [dose à vérifier].`;
+Quand une lettre type est fournie, reprends-en fidèlement le schéma, les doses, les modalités, l'étude citée, les effets secondaires et le suivi, en les adaptant au cas ; n'en recopie aucune donnée propre à un autre patient. Sans lettre type, rédige les paragraphes §T, §E et §S d'après l'étude de référence et le schéma indiqués par le médecin, dans le style de l'exemple s'il y en a un, et signale toute dose non fournie par [dose à vérifier].`;
 
 const INDEX_SYSTEM = `Extrais les métadonnées d'une lettre type d'oncologie. Réponds uniquement en JSON conforme au schéma. title : intitulé court du traitement et de l'indication. clinic : une valeur parmi Sénologie, Gynécologie, Urologie, Thoracique, Neuro-oncologie, Mélanome, Lower GI, Upper GI, ORL, Sarcomes, Radiologie interventionnelle, ou "" si incertain. treatment : schéma en clair. drugs : DCI en minuscules, sans nom commercial. trial : étude de référence ou "".`;
 
@@ -85,8 +86,8 @@ const INDEX_SCHEMA = {
 };
 
 const LABELS: Record<string, string> = {
-  clinic: "Clinique", sex: "Sexe", age: "Âge", ecog: "Performance status (OMS/ECOG)",
-  histo: "Diagnostic histopathologique", tnm: "Classification TNM", stage: "Stade",
+  clinic: "Clinique", sex: "Sexe", age: "Âge", ecog: "Performance status ECOG",
+  histo: "Diagnostic histopathologique", markers: "Biomarqueurs et biologie moléculaire", tnm: "Classification TNM", stage: "Stade",
   comorbid: "Comorbidités significatives", circumstances: "Circonstances du diagnostic",
   current: "Anamnèse actuelle", family: "Anamnèse oncologique familiale", habits: "Habitus",
   social: "Anamnèse sociale", attitude: "Attitude (mots-clés)",

@@ -659,7 +659,19 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 
 /* ---------- Lettres médicales ---------- */
 .ml-warning { background: var(--amber-50); border-left: 4px solid var(--amber-500); padding: var(--space-3); margin-bottom: var(--space-4); font-size: .95rem; }
+.ml-warning p { margin: 0 0 6px; max-width: none; }
+.ml-warning p:last-child { margin: 0; }
 .ml-warning strong { color: var(--navy-800); margin-right: 4px; }
+.ml-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -2px; }
+.ml-chips[hidden] { display: none; }
+.ug-chip.ml-chip { font-size: .8rem; min-height: 32px; padding: 4px 10px; font-weight: 400; }
+.ml-stage-note { margin: 0; font-size: .88rem; color: var(--ink-600); }
+.ml-stage-note:empty { display: none; }
+.ml-stage-note.ok { color: var(--navy-800); }
+.ml-kt { margin: 0; font-size: .92rem; }
+.ml-kt a { font-weight: 500; }
+.ml-ack { align-items: flex-start; font-size: .92rem; }
+.ml-ack input { margin-top: 3px; }
 .ml-form { display: grid; gap: var(--space-4); }
 .ml-grid { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-3); min-width: 0; }
 .ml-grid legend { font-size: 1.15rem; font-weight: 500; color: var(--navy-800); padding: 0 0 var(--space-2); border-bottom: 1px solid var(--navy-100); width: 100%; margin-bottom: var(--space-2); }

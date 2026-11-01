@@ -9,6 +9,14 @@
 - Garde-fous : regex de données identifiantes (dates complètes, naissance, AVS, IPP, e-mail, téléphone, « Dr/Mme + Nom ») côté navigateur ET serveur ; sortie masquée « […] » si détection ; rien n'est stocké ni journalisé ; limite 40 appels/jour/médecin (`medletter_usage`).
 - Lettres types : import Word par l'admin (mammoth, index proposé par Haiku puis vérifié) ; lettre de novo proposée comme modèle → brouillon, validation admin.
 
+## Ajouts du 01.11.2026 (2e lot)
+- Avertissement : outil non autorisé par le CHUV, utilisation sous la responsabilité de l'utilisateur ; case à cocher obligatoire avant chaque génération.
+- Performance status ECOG (plus « OMS »). Champ séparé « Biomarqueurs et biologie moléculaire ».
+- Listes cliquables d'histologies et de biomarqueurs par clinique : `assets/js/onco-vocab.js` (« … » = valeur à saisir, bloque la génération tant qu'il reste).
+- Stade calculé depuis le TNM : `assets/js/tnm-stage.js` (poumon UICC/IASLC 9e éd. ; côlon-rectum, sein anatomique, mélanome cutané clinique/pathologique, rein, vessie AJCC 8e). Jamais d'écrasement d'une saisie manuelle ; pas de calcul pour ypTNM, x, FIGO, prostate, ORL, sarcomes, SNC. 73 cas testés.
+- Paragraphe 5 « suivi » (§S) repris de la lettre type ; inclus dans les modèles proposés.
+- Lien vers la fiche Key trials quand l'acronyme de l'étude figure dans l'attitude, l'étude de référence ou la lettre type.
+
 ## Mise en service (ordre impératif)
 1. Exécuter `supabase/medletters.sql` AVANT de merger (auth.js lit `med_plus`).
 2. Déployer la fonction `medical-letter` (verify_jwt true), créer le secret `ANTHROPIC_API_KEY`.
