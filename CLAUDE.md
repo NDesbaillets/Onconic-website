@@ -29,7 +29,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 |-----|------|
 | **Key trials** | 14 fiches thoraciques en brouillon, courbes digitalisées ; à relire/publier |
 | **Lettres d'assurance** | 31 lettres importées (thoracique) ; 2 Word à corriger |
-| **Congrès** | En ligne ; veille trimestrielle programmée (connecteur Supabase à attacher) |
+| **Congrès** | En ligne ; veille mensuelle programmée sur 18 mois (connecteur Supabase à attacher) |
 | **Page d'accueil** | Ton médical, abeilles discrètes (PR #25-26) |
 → Détails : memory/projects/
 
