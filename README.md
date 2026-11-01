@@ -64,7 +64,7 @@ Page `/app/duree.html`, réservée aux membres rattachés au CHUV (adresse `@chu
 
 ## Outil « Lettres d'assurance » (médecins)
 
-- Page `/app/lettres.html` (français), réservée aux médecins du CHUV et aux admins.
+- Page `/app/lettres.html` (français), réservée aux médecins et au secrétariat du CHUV, et aux admins.
 - Installation : exécuter une fois `supabase/lettres.sql` dans le SQL Editor.
 - Ajout courant (admin) : glisser une ou plusieurs lettres Word sur la page. Titre, médicaments, codes LS, voie, diagnostic, drivers, lignes et études sont détectés dans la lettre et proposés dans un formulaire à vérifier avant d'enregistrer. Un fichier de même nom remplace la lettre existante en gardant ses champs. Chaque lettre peut être modifiée ou supprimée depuis sa fiche.
 - La base fait office d'index ; « Exporter l'index (.xlsx) » en donne une copie. L'import complet (toutes les lettres, avec ou sans tableur) reste disponible pour une reprise globale.

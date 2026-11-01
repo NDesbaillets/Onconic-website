@@ -478,7 +478,7 @@
     if (!rows || !rows.length) {
       $("ug-status").textContent = appAdmin
         ? "Aucune lettre. Déposez vos lettres Word ci-dessous."
-        : "Cet outil est réservé aux médecins du CHUV. Contactez l'administrateur si vous pensez y avoir droit.";
+        : "Cet outil est réservé aux membres du CHUV. Contactez l'administrateur si vous pensez y avoir droit.";
       return;
     }
     $("ug-status").hidden = true;

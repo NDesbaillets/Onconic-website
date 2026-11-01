@@ -67,7 +67,7 @@ begin
   return case p_tool
     when 'congres' then r in ('clinician', 'assistant', 'pharmacist')
     when 'trials' then r in ('clinician', 'assistant', 'pharmacist')
-    when 'lettres' then r = 'pharmacist' or (r = 'clinician' and i = 'CHUV')
+    when 'lettres' then r = 'pharmacist' or (r in ('clinician', 'assistant') and i = 'CHUV')
     when 'limitations' then r in ('clinician', 'pharmacist')
     when 'duree' then r = 'pharmacist' or (r in ('assistant', 'clinician') and i = 'CHUV')
     else false end;
