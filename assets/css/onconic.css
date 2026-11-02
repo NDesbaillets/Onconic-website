@@ -807,13 +807,13 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 
 /* ---------- Revue d'interface : accueil compact, fichiers, filtres, sections repliables ---------- */
 .hive-hero-compact { padding: var(--space-5) 0; }
-.hive-hero-compact .container { grid-template-columns: minmax(0, 1fr) 150px; gap: var(--space-4); }
+.hive-hero-compact .container { grid-template-columns: minmax(0, 1fr) 200px; gap: var(--space-4); }
 .hive-hero-compact h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin-bottom: var(--space-2); }
 .hive-hero-compact .eyebrow { margin-bottom: var(--space-2); }
 .hive-hero-compact .rule, .hive-hero-compact .lead { display: none; }
 .hive-hero-compact .btn-row { margin-top: var(--space-3); }
-.hive-hero-compact .hive-logo { max-width: 150px; }
-@media (max-width: 860px) { .hive-hero-compact .container { grid-template-columns: 1fr; } .hive-hero-compact .hive-logo { display: none; } }
+.hive-hero-compact .hive-logo { max-width: 200px; order: 0; }
+@media (max-width: 860px) { .hive-hero-compact .container { grid-template-columns: minmax(0, 1fr) 110px; gap: var(--space-3); } .hive-hero-compact .hive-logo { max-width: 110px; } }
 .hive-soon { margin: var(--space-3) 0 0; font-size: .92rem; max-width: none; }
 
 input[type="file"] { font: inherit; font-size: .92rem; color: var(--ink-600); max-width: 100%; }
