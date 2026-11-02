@@ -281,8 +281,9 @@
     const de = r.design || {};
     const arms = de.arms || [];
     if (!arms.length) return null;
-    const horizontal = width >= 680;
-    const W = horizontal ? Math.min(width, 980) : Math.min(width, 520);
+    // Même schéma sur tous les écrans (disposition de l'ordinateur) : dessiné sur 980 px puis mis à l'échelle par le navigateur
+    const horizontal = true;
+    const W = 980;
     const randomized = de.randomization && !/^aucune/i.test(de.randomization);
     const ratio = randomized ? de.randomization.split(" ")[0] : "";
     const popW = horizontal ? W * 0.29 : W;
