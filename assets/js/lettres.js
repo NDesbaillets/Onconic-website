@@ -164,8 +164,8 @@
     const out = $("ug-results");
     out.replaceChildren(...list.map(card));
     $("ug-count").textContent = filtered
-      ? `${list.length} lettre${list.length > 1 ? "s" : ""} sur ${state.rows.length}`
-      : `${state.rows.length} lettres`;
+      ? `${plur(list.length, "lettre", "lettres")} sur ${state.rows.length}`
+      : plur(state.rows.length, "lettre", "lettres");
     if (list.length === 1) out.firstChild.open = true;
   }
 
@@ -240,7 +240,7 @@
     ]);
     if (meta) {
       const d = new Date(meta.imported_at);
-      $("ug-source").textContent = `Source : ${meta.source_file}, mis à jour le ${d.toLocaleDateString("fr-CH")} (${meta.row_count} lettres).`;
+      $("ug-source").textContent = `Source : ${meta.source_file}, mis à jour le ${d.toLocaleDateString("fr-CH")} (${plur(meta.row_count, "lettre", "lettres")}).`;
     }
     return error ? null : rows || [];
   }
@@ -368,7 +368,7 @@
         const existing = state.rows.find((r) => r.file === row.file);
         $("lt-editors").prepend(editor(row, { existing, fromDrop: true }));
       }
-      msg.textContent = `${docs.length} lettre${docs.length > 1 ? "s" : ""} à vérifier puis enregistrer.`;
+      msg.textContent = `${plur(docs.length, "lettre", "lettres")} à vérifier puis enregistrer.`;
     } catch (err) { msg.className = "form-msg error"; msg.textContent = "Lecture impossible : " + err.message; }
   }
 
@@ -432,7 +432,7 @@
         if (res.errors.length) throw new Error(`${res.errors.length} erreur(s) à corriger dans le tableur`);
         if (!res.rows.length) throw new Error("aucune lettre");
         parsed = { rows: res.rows, name: index ? index.name : "détection automatique" };
-        out.textContent = `${res.rows.length} lettres prêtes à importer.` + (res.warnings.length ? ` ${res.warnings.length} remarque(s) ci-dessous.` : "");
+        out.textContent = `${plur(res.rows.length, "lettre prête", "lettres prêtes")} à importer.` + (res.warnings.length ? ` ${plur(res.warnings.length, "remarque", "remarques")} ci-dessous.` : "");
         $("ug-import").disabled = false;
       } catch (err) {
         out.className = "form-msg error";
@@ -442,7 +442,7 @@
     $("lt-index").addEventListener("change", read);
     $("lt-docx").addEventListener("change", read);
     $("ug-import").addEventListener("click", async () => {
-      if (!parsed || !confirm(`Remplacer toutes les lettres par ces ${parsed.rows.length} lettres ?`)) return;
+      if (!parsed || !confirm(`Remplacer toutes les lettres par ${parsed.rows.length > 1 ? "ces " + parsed.rows.length + " lettres" : "cette lettre"} ?`)) return;
       $("ug-import").disabled = true;
       out.className = "form-msg";
       out.textContent = "Import en cours…";

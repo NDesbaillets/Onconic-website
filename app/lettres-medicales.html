@@ -12,8 +12,8 @@
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#001B4D">
   <meta name="apple-mobile-web-app-title" content="Onconic">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261101e">
-  <script src="/assets/js/site.js?v=20261031" defer></script>
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261102g">
+  <script src="/assets/js/site.js?v=20261102f" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
   <script src="/assets/js/tnm-stage.js?v=20261101" defer></script>
@@ -36,7 +36,7 @@
   <main>
     <section class="section ug">
       <div class="container">
-        <a class="btn btn-outline hive-back" href="/fr/app/">← The Hive</a>
+        <a class="hive-back" href="/fr/app/">← The Hive</a>
         <span class="eyebrow">Outil des médecins · version de test</span>
         <h1>Lettres médicales</h1>
         <hr class="rule">
@@ -68,8 +68,10 @@
               <label class="ml-wide">Calcul du stade<select id="stage-sys"><option value="auto">Automatique (selon clinique et histologie)</option><option value="lung">Poumon, UICC/IASLC 9e éd.</option><option value="colorectal">Côlon-rectum, AJCC 8e éd.</option><option value="breast">Sein, stade anatomique AJCC 8e éd.</option><option value="melanoma">Mélanome cutané, AJCC 8e éd.</option><option value="kidney">Rein, AJCC 8e éd.</option><option value="bladder">Vessie, AJCC 8e éd.</option><option value="none">Aucun (saisie libre)</option></select></label>
               <p class="ml-wide ml-stage-note" id="ml-stage-note" aria-live="polite"></p>
             </fieldset>
+            <details class="ml-details">
+            <summary>Anamnèse (facultatif) : comorbidités, circonstances, antécédents, habitus, social</summary>
             <fieldset class="ml-grid">
-              <legend>Anamnèse</legend>
+              <legend class="visually-hidden">Anamnèse</legend>
             <label class="ml-wide">Comorbidités significatives<textarea id="comorbid" rows="3" placeholder="ex. BPCO GOLD 2, cardiopathie ischémique stentée en 2019, diabète de type 2"></textarea></label>
             <label class="ml-wide">Circonstances du diagnostic<textarea id="circumstances" rows="3" placeholder="ex. toux et perte pondérale de 6 kg en 3 mois ; CT thoracique puis EBUS"></textarea></label>
             <label class="ml-wide">Anamnèse actuelle<textarea id="current" rows="3" placeholder="Plaintes actuelles, état général, examen clinique"></textarea></label>
@@ -77,6 +79,7 @@
             <label class="ml-wide">Habitus<textarea id="habits" rows="2" placeholder="ex. tabagisme actif 40 UPA, OH occasionnel"></textarea></label>
             <label class="ml-wide">Anamnèse sociale<textarea id="social" rows="2" placeholder="ex. marié, 2 enfants, retraité, autonome"></textarea></label>
             </fieldset>
+            </details>
             <fieldset class="ml-grid">
               <legend>Attitude</legend>
             <label class="ml-wide">Attitude retenue (mots-clés)<textarea id="attitude" rows="2" placeholder="ex. 1re ligne pembrolizumab + carboplatine + pemetrexed, KEYNOTE-189, 4 cycles puis maintenance"></textarea></label>

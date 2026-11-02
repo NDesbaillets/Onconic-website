@@ -12,12 +12,12 @@
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#001B4D">
   <meta name="apple-mobile-web-app-title" content="Onconic">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261101e">
-  <script src="/assets/js/site.js?v=20261031" defer></script>
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261102g">
+  <script src="/assets/js/site.js?v=20261102f" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
   <script src="/assets/js/sl-parse.js?v=20261101" defer></script>
-  <script src="/assets/js/limitations.js?v=20261101t" defer></script>
+  <script src="/assets/js/limitations.js?v=20261102f" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -35,15 +35,13 @@
   <main>
     <section class="section ug">
       <div class="container">
-        <a class="btn btn-outline hive-back" href="/fr/app/">← The Hive</a>
+        <a class="hive-back" href="/fr/app/">← The Hive</a>
         <span class="eyebrow">Outil des médecins</span>
         <h1>Limitations LS</h1>
         <hr class="rule">
         <p class="form-msg" id="ug-status" role="status">Chargement…</p>
 
         <div id="ls-tool" hidden>
-          <p class="muted ls-source" id="ls-source"></p>
-          <details class="ls-changes" id="ls-changes" hidden><summary></summary><ul id="ls-changes-list"></ul></details>
           <div class="ls-bar">
             <label>Clinique<select id="ls-clinic"></select></label>
             <label>Type de cancer<select id="ls-cancer"><option value="">Tous</option></select></label>
@@ -63,6 +61,8 @@
           </section>
           <a class="btn ls-cart-float" id="ls-cart-float" href="#ls-cart" hidden></a>
           <div id="ls-results" aria-live="polite"></div>
+          <p class="muted ls-source" id="ls-source"></p>
+          <details class="ls-changes" id="ls-changes" hidden><summary></summary><ul id="ls-changes-list"></ul></details>
         </div>
 
         <div class="card ug-admin" id="ls-admin" hidden>

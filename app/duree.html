@@ -12,12 +12,12 @@
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#001B4D">
   <meta name="apple-mobile-web-app-title" content="Onconic">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261101e">
-  <script src="/assets/js/site.js?v=20261031" defer></script>
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261102g">
+  <script src="/assets/js/site.js?v=20261102f" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
   <script src="/assets/js/ug-parse.js?v=20261031" defer></script>
-  <script src="/assets/js/duree.js?v=20261101t" defer></script>
+  <script src="/assets/js/duree.js?v=20261102f" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -35,7 +35,7 @@
   <main>
     <section class="section ug">
       <div class="container">
-        <a class="btn btn-outline hive-back" href="/fr/app/">← The Hive</a>
+        <a class="hive-back" href="/fr/app/">← The Hive</a>
         <span class="eyebrow">Outil des assistantes</span>
         <h1>Durée de traitement</h1>
         <hr class="rule">
@@ -43,8 +43,8 @@
 
         <div id="ug-tool" hidden>
           <label class="ug-search">
-            <span class="visually-hidden">Rechercher un traitement</span>
-            <input id="q" type="search" autocomplete="off" placeholder="Médicament, nom commercial, acronyme ou code de plan (ex. pembro, Keytruda, FOLFOX)">
+            <span class="visually-hidden">Rechercher un traitement par médicament, nom commercial, acronyme ou code de plan (ex. pembro, Keytruda, FOLFOX)</span>
+            <input id="q" type="search" autocomplete="off" placeholder="Médicament, acronyme, code">
           </label>
           <div class="ug-filters">
             <div class="ug-chips" id="ug-clinics" role="group" aria-label="Clinique"></div>
@@ -61,7 +61,7 @@
           <h2>Importer une nouvelle version du fichier</h2>
           <p class="muted">Le fichier est lu dans votre navigateur puis remplace toutes les lignes existantes. Il n'est jamais publié.</p>
           <label>Fichier Excel Ultragenda (.xlsx)<input type="file" id="ug-file" accept=".xlsx"></label>
-          <button class="btn" id="ug-import" type="button" disabled>Remplacer les données</button>
+          <button class="btn btn-outline" id="ug-import" type="button" disabled>Remplacer les données</button>
           <p class="form-msg" id="ug-import-msg" role="status" aria-live="polite"></p>
         </div>
       </div>

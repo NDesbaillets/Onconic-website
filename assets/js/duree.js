@@ -266,8 +266,8 @@
         if (!res.rows.length) throw new Error("Aucune ligne trouvée");
         parsed = { rows: res.rows, name: file.name };
         const sheets = new Set(res.rows.map((r) => r.clinic_sheet)).size;
-        out.textContent = `${res.rows.length} lignes lues dans ${sheets} onglets.` +
-          (res.errors.length ? ` ${res.errors.length} ligne(s) ignorée(s) : ${res.errors.join(" ; ")}` : "");
+        out.textContent = `${plur(res.rows.length, "ligne lue", "lignes lues")} dans ${plur(sheets, "onglet", "onglets")}.` +
+          (res.errors.length ? ` ${plur(res.errors.length, "ligne ignorée", "lignes ignorées")} : ${res.errors.join(" ; ")}` : "");
         $("ug-import").disabled = false;
       } catch (err) {
         out.className = "form-msg error";
@@ -276,6 +276,7 @@
     });
     $("ug-import").addEventListener("click", async () => {
       if (!parsed) return;
+      if (!confirm(`Remplacer toutes les lignes existantes par ${parsed.rows.length > 1 ? "les " + parsed.rows.length + " lignes" : "la ligne"} de « ${parsed.name} » ?`)) return;
       $("ug-import").disabled = true;
       out.className = "form-msg";
       out.textContent = "Import en cours…";
@@ -317,7 +318,7 @@
     }
     if (meta) {
       const d = new Date(meta.imported_at);
-      $("ug-source").textContent = `Source : ${meta.source_file}, importé le ${d.toLocaleDateString("fr-CH")} (${meta.row_count} lignes).`;
+      $("ug-source").textContent = `Source : ${meta.source_file}, importé le ${d.toLocaleDateString("fr-CH")} (${plur(meta.row_count, "ligne", "lignes")}).`;
     }
     $("ug-status").hidden = true;
     $("ug-tool").hidden = false;

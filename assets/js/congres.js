@@ -105,7 +105,13 @@
   // ----- Affichage : calendrier par défaut ; liste seulement sur recherche ou si demandée -----
   const listMode = () => state.view === "list" || state.q.trim() !== "";
 
+  function filterCount() {
+    const n = (state.clinic ? 1 : 0) + (state.kind ? 1 : 0) + (state.mine ? 1 : 0) + (state.past ? 1 : 0);
+    $("cg-fcount").textContent = n ? `(${n})` : "";
+  }
+
   function render() {
+    filterCount();
     const list = state.events.filter((e) => matches(e));
     $("ug-count").textContent = `${list.length} événement${list.length > 1 ? "s" : ""}` + (state.past ? "" : " à venir");
     renderPrivacyHint();
@@ -524,6 +530,10 @@
     fillClinics();
     kindChips();
     $("q").addEventListener("input", (e) => { state.q = e.target.value; render(); });
+    $("cg-filter-toggle").addEventListener("click", (e) => {
+      const open = $("cg-tool").classList.toggle("filters-open");
+      e.currentTarget.setAttribute("aria-expanded", String(open));
+    });
     $("f-clinic").addEventListener("change", (e) => { state.clinic = e.target.value; render(); });
     $("f-mine").addEventListener("change", (e) => { state.mine = e.target.checked; render(); });
     $("f-past").addEventListener("change", (e) => { state.past = e.target.checked; render(); });
