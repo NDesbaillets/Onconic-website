@@ -1,7 +1,7 @@
-// Service worker Onconic : coquille hors ligne et chargement plus rapide.
+// Service worker Onconic : coquille hors ligne, chargement plus rapide, notifications push.
 // Ne touche qu'aux fichiers du site (même origine). Supabase, les CDN et toute requête autre que GET passent sans cache.
 // Pour désactiver : remplacer ce fichier par un script qui se désinscrit (voir memory/projects/pwa.md).
-const VERSION = "onconic-v1";
+const VERSION = "onconic-v2";
 const STATIC = VERSION + "-static"; // CSS, JS, images
 const PAGES = VERSION + "-pages";   // pages HTML déjà visitées
 const OFFLINE = "/offline.html";
@@ -56,3 +56,30 @@ async function asset(e, req) {
   if (hit) { e.waitUntil(net.catch(() => {})); return hit; }
   try { return await net; } catch (err) { return (await caches.match(req, { ignoreSearch: true })) || Response.error(); }
 }
+
+// Notifications push (envoyées par la fonction « notify-event-join » : { title, body, url, tag })
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.title || "Onconic", {
+    body: d.body || "",
+    icon: "/assets/img/icon-192.png",
+    tag: d.tag || undefined,
+    data: { url: d.url || "/fr/app/" },
+  }));
+});
+
+// Un clic ouvre l'événement dans l'app (ou le site) ; l'adresse doit rester sur onconic.ch
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  let target = new URL("/fr/app/", self.location.origin);
+  try {
+    const u = new URL((e.notification.data && e.notification.data.url) || "/fr/app/", self.location.origin);
+    if (u.origin === self.location.origin) target = u;
+  } catch (err) { /* adresse invalide : accueil membres */ }
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+    const open = list.find((c) => c.url.startsWith(self.location.origin));
+    if (open) return open.navigate(target.href).then((c) => (c || open).focus()).catch(() => open.focus());
+    return self.clients.openWindow(target.href);
+  }));
+});

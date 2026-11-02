@@ -307,6 +307,8 @@
       : sb.from("event_participants").delete().eq("event_id", e.id).eq("user_id", state.me.id);
     const { error } = await q;
     if (error) return alert("Impossible d'enregistrer : " + error.message);
+    // Prévient (une seule fois par événement) les autres membres qui ont accepté les notifications ; sans effet sur la page
+    if (status === "going" || status === "presenting") sb.functions.invoke("notify-event-join", { body: { event_id: e.id } }).catch(() => {});
     await refresh(e.id);
   }
 
