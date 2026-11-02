@@ -276,6 +276,7 @@
     });
     $("ug-import").addEventListener("click", async () => {
       if (!parsed) return;
+      if (!confirm(`Remplacer toutes les lignes existantes par les ${parsed.rows.length} lignes de « ${parsed.name} » ?`)) return;
       $("ug-import").disabled = true;
       out.className = "form-msg";
       out.textContent = "Import en cours…";

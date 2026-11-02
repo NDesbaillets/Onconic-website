@@ -802,3 +802,29 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
   .ug-copy { min-height: 44px; }
   .am-mail { display: inline-flex; align-items: center; min-height: 44px; }
 }
+
+/* ---------- Revue d'interface : accueil compact, fichiers, filtres, sections repliables ---------- */
+.hive-hero-compact { padding: var(--space-5) 0; }
+.hive-hero-compact .container { grid-template-columns: minmax(0, 1fr) 150px; gap: var(--space-4); }
+.hive-hero-compact h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin-bottom: var(--space-2); }
+.hive-hero-compact .eyebrow { margin-bottom: var(--space-2); }
+.hive-hero-compact .rule, .hive-hero-compact .lead { display: none; }
+.hive-hero-compact .btn-row { margin-top: var(--space-3); }
+.hive-hero-compact .hive-logo { max-width: 150px; }
+@media (max-width: 860px) { .hive-hero-compact .container { grid-template-columns: 1fr; } .hive-hero-compact .hive-logo { display: none; } }
+.hive-soon { margin: var(--space-3) 0 0; font-size: .92rem; max-width: none; }
+
+input[type="file"] { font: inherit; font-size: .92rem; color: var(--ink-600); max-width: 100%; }
+input[type="file"]::file-selector-button { font: inherit; font-weight: 500; min-height: 44px; padding: 0 18px; margin-right: var(--space-3); border: 1px solid var(--navy-800); border-radius: 0; background: transparent; color: var(--navy-800); cursor: pointer; transition: background-color var(--transition); }
+input[type="file"]::file-selector-button:hover { background: var(--mist); }
+
+.cg-filter-toggle { display: none; min-height: 44px; }
+@media (max-width: 720px) {
+  .cg-filter-toggle { display: inline-flex; justify-self: start; gap: 6px; }
+  #cg-tool:not(.filters-open) .cg-clinic, #cg-tool:not(.filters-open) .ug-filters { display: none; }
+}
+
+.ml-details { margin: var(--space-4) 0; }
+.ml-details > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 500; color: var(--navy-800); border-bottom: 1px solid var(--navy-100); }
+.ml-details[open] > summary { margin-bottom: var(--space-3); }
+.hive-hero-compact + .section { padding-top: var(--space-5); }
