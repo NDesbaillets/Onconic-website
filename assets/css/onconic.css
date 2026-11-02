@@ -834,3 +834,7 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .account-consent .form-msg:empty { display: none; }
 .lt-actions { gap: var(--space-3); }
 @media (max-width: 640px) { .lt-actions .lt-danger { margin-left: auto; } }
+
+/* PWA : astuce d'installation sur iPhone */
+.pwa-hint { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; background: var(--amber-50); border-left: 4px solid var(--amber-500); padding: var(--space-3); margin-bottom: var(--space-4); }
+.pwa-hint p { margin: 0; font-size: .95rem; max-width: 60ch; }
