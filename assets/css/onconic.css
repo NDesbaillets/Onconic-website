@@ -439,7 +439,7 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 .cg-grid-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--navy-100); border-left: 1px solid var(--navy-100); }
 .cg-dow { padding: 6px; font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-600); border-right: 1px solid var(--navy-100); border-bottom: 1px solid var(--navy-100); background: var(--mist); }
 .cg-day { min-height: 96px; padding: 4px; border-right: 1px solid var(--navy-100); border-bottom: 1px solid var(--navy-100); background: var(--white); display: flex; flex-direction: column; gap: 3px; cursor: pointer; min-width: 0; }
-.cg-day.out { background: var(--paper); color: var(--ink-400); }
+.cg-day.out { background: var(--paper); color: var(--ink-600); }
 .cg-day.today .cg-num { background: var(--amber-500); color: var(--navy-800); }
 .cg-day.sel { outline: 2px solid var(--navy-800); outline-offset: -2px; }
 .cg-num { font-size: .8rem; align-self: flex-start; padding: 0 5px; }
@@ -799,4 +799,6 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
   .site-footer .footer-links { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-4); font-size: 0; }
   .site-footer .footer-links a { display: inline-flex; align-items: center; min-height: 44px; font-size: .9rem; }
   .form .row a { display: inline-flex; align-items: center; min-height: 44px; }
+  .ug-copy { min-height: 44px; }
+  .am-mail { display: inline-flex; align-items: center; min-height: 44px; }
 }
