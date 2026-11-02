@@ -53,3 +53,36 @@ window.plur = (n, one, many) => n + " " + (n > 1 ? many : one);
   }, { threshold: 0.15 });
   items.forEach((el) => io.observe(el));
 })();
+
+// PWA : service worker (coquille hors ligne, voir /sw.js)
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("/sw.js").catch(() => {}); });
+}
+
+// Astuce d'installation sur iPhone/iPad : Safari ne propose pas d'invite, il faut passer par « Partager »
+(function () {
+  const hub = document.getElementById("hive-app");
+  if (!hub) return;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (!ios || navigator.standalone === true || (window.matchMedia && matchMedia("(display-mode: standalone)").matches)) return;
+  try { if (localStorage.getItem("onconic-pwa-hint") === "1") return; } catch (e) { /* stockage indisponible : on affiche */ }
+  const fr = document.documentElement.lang === "fr";
+  const box = document.createElement("aside");
+  box.className = "pwa-hint";
+  box.setAttribute("role", "note");
+  const p = document.createElement("p");
+  p.textContent = fr
+    ? "Pour retrouver Onconic comme une app : touchez Partager (le carré avec une flèche), puis « Sur l'écran d'accueil »."
+    : "To get Onconic like an app: tap Share (the square with an arrow), then “Add to Home Screen”.";
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "btn btn-outline";
+  b.textContent = fr ? "Compris" : "Got it";
+  b.addEventListener("click", () => {
+    try { localStorage.setItem("onconic-pwa-hint", "1"); } catch (e) { /* tant pis */ }
+    box.remove();
+  });
+  box.append(p, b);
+  const first = hub.querySelector(".section .container");
+  if (first) first.prepend(box);
+})();
