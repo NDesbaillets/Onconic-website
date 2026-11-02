@@ -14,9 +14,9 @@
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#001B4D">
   <meta name="apple-mobile-web-app-title" content="Onconic">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261102e">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261102f">
   <script src="/assets/js/js-flag.js?v=20261028"></script>
-  <script src="/assets/js/site.js?v=20261102a" defer></script>
+  <script src="/assets/js/site.js?v=20261102f" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
   <script src="/assets/js/auth.js?v=20261101v" defer></script>
@@ -27,11 +27,10 @@
       <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
       <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
       <nav class="nav" id="nav">
-        <a href="/fr/">Accueil</a>
-        <a href="/fr/a-propos.html">À propos</a>
-        <a href="/fr/the-hive.html">The Hive</a>
-        <a href="/fr/contact.html">Contact</a>
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
         <a class="lang" href="/app/" hreflang="en" lang="en">EN</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
       </nav>
     </div>
   </header>
@@ -44,10 +43,6 @@
           <h1>Bienvenue, <span id="user-name"></span></h1>
           <hr class="rule">
           <p class="lead">Vos alvéoles, selon votre rôle. Les outils s'ajoutent au fil du temps.</p>
-          <div class="btn-row">
-            <a class="btn" href="/fr/app/compte.html">Mon compte</a>
-            <button class="btn btn-light" id="logout" type="button">Se déconnecter</button>
-          </div>
         </div>
         <img class="hive-logo" src="/assets/img/the-hive.webp" alt="The Hive Onconic" width="536" height="720">
       </div>

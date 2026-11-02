@@ -1,3 +1,6 @@
+// Accord singulier/pluriel (français : 0 et 1 au singulier). plur(2, "lettre", "lettres") -> "2 lettres"
+window.plur = (n, one, many) => n + " " + (n > 1 ? many : one);
+
 // Menu mobile : se ferme avec Échap, un clic extérieur ou le choix d'un lien
 (function () {
   const setOpen = (btn, open, focusBtn) => {

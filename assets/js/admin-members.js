@@ -34,7 +34,7 @@
     const rows = state.rows.filter((r) => (!role || r.role === role)
       && (!q || norm([r.first_name, r.last_name, r.full_name, r.email].join(" ")).includes(q)));
     const pending = state.rows.filter((r) => r.role === "member").length;
-    $("am-count").textContent = `${rows.length} membre(s) affiché(s) sur ${state.rows.length}` + (pending ? ` · ${pending} en attente de validation` : "");
+    $("am-count").textContent = `${plur(rows.length, "membre affiché", "membres affichés")} sur ${state.rows.length}` + (pending ? ` · ${pending} en attente de validation` : "");
     $("am-list").replaceChildren(...rows.map(card));
   }
 

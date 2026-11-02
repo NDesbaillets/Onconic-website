@@ -83,7 +83,7 @@
   function renderMeta() {
     const m = state.meta;
     $("ls-source").textContent = m
-      ? `Liste des spécialités : ${m.source_file}, importée le ${new Date(m.imported_at).toLocaleDateString("fr-CH")} (${m.product_count} produits, ${m.limitation_count} limitations, oncologie et traitements associés).`
+      ? `Liste des spécialités : ${m.source_file}, importée le ${new Date(m.imported_at).toLocaleDateString("fr-CH")} (${plur(m.product_count, "produit", "produits")}, ${plur(m.limitation_count, "limitation", "limitations")}, oncologie et traitements associés).`
       : "Liste des spécialités pas encore importée.";
     const box = $("ls-changes");
     if (!state.changes.length) { box.hidden = true; return; }
@@ -354,11 +354,11 @@
         await wb.xlsx.load(await file.arrayBuffer());
         const res = window.SLParse.parseWorkbook(wb);
         if (!res.products.length) throw new Error("aucun produit oncologique trouvé (codes ATC L01, L02…)");
-        msg.textContent = `${res.products.length} produits et ${res.limits.length} limitations lus. Enregistrement…`;
+        msg.textContent = `${plur(res.products.length, "produit lu", "produits lus")} et ${plur(res.limits.length, "limitation lue", "limitations lues")}. Enregistrement…`;
         const { data, error } = await sb.rpc("sl_replace", { p_products: res.products, p_limits: res.limits, p_source: file.name });
         if (error) throw error;
         msg.className = "form-msg ok";
-        msg.textContent = `Import terminé : ${data.products} produits, ${data.limitations} limitations` + (data.first_import ? "." : `, ${data.changes} changements par rapport à la liste précédente.`);
+        msg.textContent = `Import terminé : ${plur(data.products, "produit", "produits")}, ${plur(data.limitations, "limitation", "limitations")}` + (data.first_import ? "." : `, ${plur(data.changes, "changement", "changements")} par rapport à la liste précédente.`);
         await load(); renderMeta(); fillDatalist(); renderRxAdmin(); render();
       } catch (e) {
         msg.className = "form-msg error"; msg.textContent = "Import impossible : " + (e.message || e);
@@ -382,7 +382,7 @@
       ul.append(li);
     }
     const n = state.rx.filter((r) => r.status !== "validated").length;
-    box.replaceChildren(el("p", "muted", `${state.rx.length} textes, dont ${n} à valider.`), ul);
+    box.replaceChildren(el("p", "muted", `${plur(state.rx.length, "texte", "textes")}, dont ${n} à valider.`), ul);
     // Substances per os présentes dans la LS sans aucun texte
     const subs = new Set(state.products.filter((p) => p.peros && /^L0[12]/.test(p.atc)).map((p) => norm(shortSubstance(p.substance))));
     const missing = [...subs].filter((s) => !state.rx.some((r) => s.includes(r._k))).sort();

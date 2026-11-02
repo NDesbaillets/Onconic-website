@@ -136,6 +136,10 @@
       msg(out, T.pwDone, "ok");
     });
 
+    $("logout").addEventListener("click", async () => {
+      await sb.auth.signOut();
+      location.href = base + "/";
+    });
     $("signout-all").addEventListener("click", async () => {
       msg($("session-msg"), T.signedOut);
       await sb.auth.signOut({ scope: "global" });
