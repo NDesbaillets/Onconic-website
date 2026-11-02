@@ -38,6 +38,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Administration** | `/admin/membres.html` : membres, rôles, accès par outil (`has_tool`, exceptions `tool_access`) |
 | **Page d'accueil** | Ton médical, abeilles discrètes (PR #25-26) |
 | **PWA** | Manifeste, service worker, page hors ligne, astuce iPhone (branche en relecture) |
+| **Notifications congrès** | Web Push « un autre membre participe au même congrès » ; SQL et fonction à déployer avant fusion (voir memory/projects/notifications.md) |
 → Détails : memory/projects/
 
 ## Règles de sécurité (ne jamais enfreindre)

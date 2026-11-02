@@ -18,6 +18,11 @@
     pwWrong: "Mot de passe actuel incorrect.",
     pwDone: "Mot de passe modifié.",
     signedOut: "Déconnexion de tous les appareils…",
+    notifyOn: "Notifications activées sur cet appareil.",
+    notifyOff: "Notifications désactivées sur cet appareil.",
+    notifyDenied: "Les notifications sont bloquées pour ce site. Autorisez-les dans les réglages du navigateur ou de l'iPhone, puis réessayez.",
+    notifyUnsupported: "Ce navigateur ne permet pas les notifications.",
+    notifyIos: "Sur iPhone et iPad, ajoutez d'abord Onconic à l'écran d'accueil (Partager, puis « Sur l'écran d'accueil »), ouvrez l'app, puis revenez ici.",
     roles: { admin: "Administrateur", clinician: "Médecin", assistant: "Assistante médicale", pharmacist: "Pharmacien·ne", member: "Membre (accès en attente)" },
     none: "—"
   } : {
@@ -34,6 +39,11 @@
     pwWrong: "Current password is incorrect.",
     pwDone: "Password changed.",
     signedOut: "Signing out of all devices…",
+    notifyOn: "Notifications turned on for this device.",
+    notifyOff: "Notifications turned off for this device.",
+    notifyDenied: "Notifications are blocked for this site. Allow them in the browser or iPhone settings, then try again.",
+    notifyUnsupported: "This browser does not support notifications.",
+    notifyIos: "On iPhone and iPad, first add Onconic to your Home Screen (Share, then “Add to Home Screen”), open the app, then come back here.",
     roles: { admin: "Administrator", clinician: "Physician", assistant: "Medical assistant", pharmacist: "Pharmacist", member: "Member (access pending)" },
     none: "—"
   };
@@ -91,6 +101,79 @@
       });
       if (h.has("ruche")) $("ruche").scrollIntoView();
     }
+
+    // Notifications push : « un autre membre participe au même congrès que moi » (réglage par appareil)
+    const nf = $("notify-form");
+    if (nf) (async () => {
+      const box = nf.notify_events, out = $("notify-msg");
+      const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const installed = navigator.standalone === true || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
+      if (!("serviceWorker" in navigator && "PushManager" in window && "Notification" in window)) {
+        box.disabled = true;
+        return msg(out, ios && !installed ? T.notifyIos : T.notifyUnsupported, "");
+      }
+      const ready = () => Promise.race([navigator.serviceWorker.ready, new Promise((_, no) => setTimeout(() => no(new Error("sw")), 8000))]);
+      const bytes = (s) => { const b = atob((s + "=".repeat((4 - s.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(b, (c) => c.charCodeAt(0)); };
+      const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+      const publicKey = async () => {
+        const { data, error } = await sb.functions.invoke("notify-event-join", { body: { action: "public_key" } });
+        if (error || !data || !data.publicKey) throw error || new Error("key");
+        return bytes(data.publicKey);
+      };
+      // Abonne cet appareil (ou rafraîchit son abonnement) et l'enregistre côté serveur
+      const subscribe = async (reg) => {
+        const key = await publicKey();
+        let sub = await reg.pushManager.getSubscription();
+        if (sub && sub.options && sub.options.applicationServerKey && !same(new Uint8Array(sub.options.applicationServerKey), key)) {
+          await sub.unsubscribe(); // clés serveur changées : nouvel abonnement
+          sub = null;
+        }
+        if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+        const j = sub.toJSON();
+        const { error } = await sb.rpc("push_subscribe", { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_ua: navigator.userAgent });
+        if (error) throw error;
+      };
+      let reg;
+      try { reg = await ready(); } catch (e) { box.disabled = true; return msg(out, T.notifyUnsupported, ""); }
+      if (Notification.permission === "denied") msg(out, T.notifyDenied, "");
+      else {
+        const { data: me } = await sb.from("profiles").select("notify_events").eq("id", user.id).single();
+        const sub = await reg.pushManager.getSubscription();
+        if (sub && me && me.notify_events && Notification.permission === "granted") {
+          box.checked = true;
+          subscribe(reg).catch(() => {}); // rafraîchit l'abonnement sans bruit
+        }
+      }
+      nf.addEventListener("change", async () => {
+        box.disabled = true;
+        msg(out, "", "");
+        try {
+          if (box.checked) {
+            if (Notification.permission !== "granted") {
+              const perm = await Notification.requestPermission();
+              if (perm !== "granted") { box.checked = false; return msg(out, T.notifyDenied, "error"); }
+            }
+            await subscribe(await ready());
+            const { error } = await sb.from("profiles").update({ notify_events: true }).eq("id", user.id);
+            if (error) throw error;
+            msg(out, T.notifyOn, "ok");
+          } else {
+            const sub = await (await ready()).pushManager.getSubscription();
+            if (sub) {
+              await sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+              await sub.unsubscribe();
+            }
+            // Plus aucun appareil : le consentement du compte est retiré
+            const { count } = await sb.from("push_subscriptions").select("id", { count: "exact", head: true });
+            if (!count) await sb.from("profiles").update({ notify_events: false }).eq("id", user.id);
+            msg(out, T.notifyOff, "ok");
+          }
+        } catch (e) {
+          box.checked = !box.checked;
+          msg(out, T.error, "error");
+        } finally { box.disabled = false; }
+      });
+    })();
 
     f.addEventListener("submit", async (e) => {
       e.preventDefault();
