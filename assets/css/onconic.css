@@ -795,7 +795,8 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 
 /* Zones tactiles : 44 px minimum sur écran tactile ou étroit (le visuel ne change pas) */
 @media (max-width: 760px), (pointer: coarse) {
-  .site-footer .footer-links { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-2); }
-  .site-footer .footer-links a { display: inline-flex; align-items: center; min-height: 44px; }
+  /* font-size 0 masque les séparateurs « · » (texte brut) ; les liens sont espacés par le gap */
+  .site-footer .footer-links { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-4); font-size: 0; }
+  .site-footer .footer-links a { display: inline-flex; align-items: center; min-height: 44px; font-size: .9rem; }
   .form .row a { display: inline-flex; align-items: center; min-height: 44px; }
 }
