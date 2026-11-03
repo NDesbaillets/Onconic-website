@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Annuaire des médecins · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <meta name="apple-mobile-web-app-title" content="Onconic">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261103f">
+  <script src="/assets/js/site.js?v=20261102i" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/contacts.js?v=20261103a" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug an">
+      <div class="container">
+        <a class="hive-back" href="/fr/app/">← The Hive</a>
+        <span class="eyebrow">Outil des médecins et des pharmaciens</span>
+        <h1>Annuaire des médecins</h1>
+        <p class="cg-sub">Numéros internes du CHUV et contacts externes</p>
+        <hr class="rule">
+        <p class="muted" id="ug-status">Chargement…</p>
+
+        <div id="an-tool" hidden>
+          <label class="ug-search an-search">
+            <span class="visually-hidden">Rechercher par nom, prénom, service, e-mail ou numéro</span>
+            <input id="q" type="search" autocomplete="off" placeholder="Nom, prénom, service, e-mail, numéro">
+          </label>
+          <div class="an-actions">
+            <div class="an-toggles">
+              <div class="ug-chips" id="an-f-scope" role="group" aria-label="Origine"></div>
+            </div>
+            <button class="btn" id="an-new" type="button">Nouveau contact</button>
+          </div>
+
+          <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
+          <div id="an-list"></div>
+          <p class="muted ug-source">Les numéros internes s'affichent en 5 chiffres ; le numéro complet est enregistré et utilisé pour l'appel. Les fiches sont partagées et modifiables par tous les utilisateurs de l'outil. N'y inscrivez aucune donnée de patient.</p>
+        </div>
+
+        <dialog class="cg-dialog" id="an-dialog" aria-labelledby="an-form-title">
+          <form class="cg-form" id="an-form" method="dialog" novalidate>
+            <h2 id="an-form-title">Nouveau contact</h2>
+            <div class="cg-similar" id="an-similar" hidden></div>
+            <div class="cg-grid">
+              <label>Prénom<input name="first_name" maxlength="100" autocomplete="off"></label>
+              <label>Nom<input name="last_name" maxlength="100" autocomplete="off"></label>
+              <label class="cg-wide">Service *<input name="service" required maxlength="200" list="an-services" autocomplete="off"></label>
+              <datalist id="an-services"></datalist>
+              <label class="cg-wide">Fonction ou précision (garde nuit/WE, cadre, plage horaire…)<input name="detail" maxlength="200" autocomplete="off"></label>
+              <label>Origine *<select name="scope" required>
+                <option value="">Choisir</option><option value="interne">Interne (CHUV)</option><option value="externe">Externe</option>
+              </select></label>
+              <label>Téléphone<input name="phone" type="tel" maxlength="40" autocomplete="off" placeholder="44436 ou 021 314 44 36"></label>
+              <label class="cg-wide">E-mail<input name="email" type="email" maxlength="200" autocomplete="off"></label>
+              <label class="cg-wide">Remarques<textarea name="notes" maxlength="1000" rows="3"></textarea></label>
+            </div>
+            <p class="muted an-note">Numéro à 5 chiffres du CHUV : commençant par 4, il devient +41 21 314 xx xx ; commençant par 6, +41 79 556 xx xx. Aucune donnée de patient dans les remarques.</p>
+            <p class="form-msg" id="an-form-msg" role="status" aria-live="polite"></p>
+            <div class="btn-row">
+              <button class="btn" type="submit" value="save">Enregistrer</button>
+              <button class="btn btn-outline" type="button" id="an-cancel">Annuler</button>
+            </div>
+          </form>
+        </dialog>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>
