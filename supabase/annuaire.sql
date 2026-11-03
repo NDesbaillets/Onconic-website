@@ -80,6 +80,8 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 revoke all on public.providers from anon;
 grant select, insert, update, delete on public.providers to authenticated;
+-- Les droits par défaut de Supabase incluent aussi TRUNCATE, REFERENCES et TRIGGER : on ne garde que le nécessaire
+revoke truncate, references, trigger on public.providers from authenticated;
 
 -- ===== Favoris (propres à chaque utilisateur) =====
 create table if not exists public.provider_favorites (
@@ -95,6 +97,7 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 revoke all on public.provider_favorites from anon;
 grant select, insert, delete on public.provider_favorites to authenticated;
+revoke truncate, references, trigger, update on public.provider_favorites from authenticated;
 
 -- ===== Import Excel (admin) : ajoute les nouvelles fiches et met à jour celles de même nom et même adresse ; ne supprime rien =====
 create or replace function public.providers_import(p_rows jsonb)
