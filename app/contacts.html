@@ -38,7 +38,7 @@
     <section class="section ug an">
       <div class="container">
         <a class="hive-back" href="/fr/app/">← The Hive</a>
-        <span class="eyebrow">Outil des médecins et des pharmaciens</span>
+        <span class="eyebrow">Outil des médecins, des assistantes et des pharmaciens</span>
         <h1>Annuaire des médecins</h1>
         <p class="cg-sub">Numéros internes du CHUV et contacts externes</p>
         <hr class="rule">
@@ -59,6 +59,19 @@
           <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
           <div id="an-list"></div>
           <p class="muted ug-source">Les numéros internes s'affichent en 5 chiffres ; le numéro complet est enregistré et utilisé pour l'appel. Les fiches sont partagées et modifiables par tous les utilisateurs de l'outil. N'y inscrivez aucune donnée de patient.</p>
+
+          <div class="card ug-admin" id="an-admin" hidden>
+            <span class="eyebrow">Administration</span>
+            <h2>Importer ou exporter l'annuaire</h2>
+            <p class="muted">L'import ajoute les nouvelles fiches et met à jour celles qui ont les mêmes nom, prénom, service, précision et numéro ; il ne supprime jamais rien. Les cellules vides ne remplacent pas les données existantes. Un numéro à 5 chiffres du CHUV est converti en numéro complet.</p>
+            <label>Fichier Excel (.xlsx)<input type="file" id="an-file" accept=".xlsx"></label>
+            <p class="form-msg" id="an-import-msg" role="status" aria-live="polite"></p>
+            <div id="an-import-preview"></div>
+            <div class="btn-row">
+              <button class="btn btn-outline" id="an-export" type="button">Exporter l'annuaire (.xlsx)</button>
+              <button class="btn btn-outline" id="an-template" type="button">Télécharger le modèle Excel</button>
+            </div>
+          </div>
         </div>
 
         <dialog class="cg-dialog" id="an-dialog" aria-labelledby="an-form-title">
