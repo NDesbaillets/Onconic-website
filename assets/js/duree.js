@@ -216,7 +216,7 @@
     state.rows.forEach((r) => {
       if (r.clinic_letter === null || seen.has(r.clinic_sheet)) return;
       seen.add(r.clinic_sheet);
-      clinics.push([r.clinic_sheet, `${r.clinic_name} (${r.clinic_letter})`]);
+      clinics.push([r.clinic_sheet, r.clinic_name]);
     });
     chips($("ug-clinics"), [["", "Toutes"]].concat(clinics), (v) => {
       state.clinic = v;
