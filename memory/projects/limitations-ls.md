@@ -14,3 +14,10 @@
 ## Points ouverts
 - Fichier Excel réel de Nicolas non reçu dans la session : tester l'import dès le premier dépôt.
 - Valider les 48 textes d'ordonnance ; compléter les substances per os sans texte (liste affichée à l'admin).
+
+## Posologie selon l'indication (03.11.2026)
+- Une même ligne produit peut avoir plusieurs textes `sl_rx`, un par indication (colonnes `indication` et `indication_match`, voir `supabase/sl_rx_indication.sql`). Chaque texte garde sa posologie, ses paliers, sa remarque et sa validation.
+- Génération : s'il y a plusieurs textes pour la ligne produit, un sélecteur « Indication » apparaît. Présélection si un seul texte correspond (mots-clés cherchés dans la limitation choisie et le type de cancer), sinon **choix obligatoire** : sans choix, la dose n'est pas affichée et la copie et le panier sont bloqués. Alerte si l'indication choisie ne correspond pas à la limitation sélectionnée.
+- Panier : une seule ligne par présentation, quelle que soit l'indication ; l'indication est rappelée dans le panier.
+- Éditeur admin : champs Indication et Mots-clés, bouton « Dupliquer pour une autre indication », refus des doublons.
+- Aucune donnée de dosage par indication n'est préremplie : les variantes sont à saisir (ou à préparer depuis les RCP, à valider par un médecin).

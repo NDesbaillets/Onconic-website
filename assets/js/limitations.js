@@ -31,7 +31,7 @@
   const CLINICS = Object.keys(CANCERS);
   const GUARANTEE = /garantie|accord prealable|autorisation prealable|consultation prealable du medecin[- ]conseil/;
 
-  const state = { products: [], limits: [], rx: [], changes: [], meta: null, admin: false, uid: null, pick: {}, rxPick: {}, cart: [] };
+  const state = { products: [], limits: [], rx: [], changes: [], meta: null, admin: false, uid: null, pick: {}, rxPick: {}, varPick: {}, cart: [] };
 
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
   function el(tag, cls, txt) {
@@ -69,7 +69,7 @@
     const [products, limits, rx, changes, meta] = await Promise.all([
       all("sl_products", "specialty, galenic, substance, atc, limited, peros"),
       all("sl_limitations", "specialty, substance, atc, galenics, lim_code, ind_code, valid_from, valid_to, body"),
-      all("sl_rx", "id, substance, product_line, sig, dose_levels, dose_note, source, status, position, updated_at, validated_at"),
+      all("sl_rx", "id, substance, product_line, indication, indication_match, sig, dose_levels, dose_note, source, status, position, updated_at, validated_at"),
       all("sl_changes", "kind, specialty, substance, lim_code, ind_code"),
       sb.from("sl_meta").select("source_file, imported_at, product_count, limitation_count").maybeSingle()
     ]);
@@ -205,7 +205,7 @@
       }
     }
     const peros = g.products.some((p) => p.peros);
-    if (peros) c.append(rxBlock(g, limits));
+    if (peros) c.append(rxBlock(g, limits, cancer));
     return c;
   }
 
@@ -234,7 +234,14 @@
   }
 
   // ----- Ordonnance per os (textes validés uniquement côté médecins) -----
-  function rxBlock(g, limits) {
+  // Indication d'une posologie : présélection par mots-clés (texte de la limitation choisie, type de cancer), sinon choix manuel
+  const keywords = (v) => norm(v.indication_match).split(";").map((k) => k.trim()).filter(Boolean);
+  function matchesIndication(v, lim, cancer) {
+    const hay = (lim ? lim._body : "") + " " + (cancer ? norm(cancer.name) : "");
+    return keywords(v).some((k) => hay.includes(k));
+  }
+
+  function rxBlock(g, limits, cancer) {
     const wrap = el("div", "ls-rx");
     const tpls = state.rx.filter((r) => r.status === "validated" && g.key.includes(r._k));
     wrap.append(el("h4", null, "Ordonnance (per os)"));
@@ -242,33 +249,57 @@
       wrap.append(el("p", "muted", "Aucun texte d'ordonnance validé pour cette substance."));
       return wrap;
     }
-    let t = tpls.find((x) => x.id === state.rxPick[g.key]) || tpls[0];
-    if (tpls.length > 1) {
+    // Présentations (lignes produit) ; chacune peut avoir plusieurs posologies selon l'indication
+    const lines = [...new Set(tpls.map((x) => x.product_line))];
+    const line = lines.includes(state.rxPick[g.key]) ? state.rxPick[g.key] : lines[0];
+    if (lines.length > 1) {
       const sel = el("select", "ls-rx-sel");
-      tpls.forEach((x) => { const o = el("option", null, x.product_line); o.value = x.id; sel.append(o); });
-      sel.value = t.id;
-      sel.addEventListener("change", () => { state.rxPick[g.key] = Number(sel.value); render(); });
+      lines.forEach((l) => { const o = el("option", null, l); o.value = l; sel.append(o); });
+      sel.value = line;
+      sel.addEventListener("change", () => { state.rxPick[g.key] = sel.value; render(); });
       const lab = el("label", "ls-rx-label", "Présentation"); lab.append(sel); wrap.append(lab);
     }
+    const variants = tpls.filter((x) => x.product_line === line);
     const lim = limits.find((l) => key(l) === state.pick[g.key]);
-    const lines = [t.product_line, t.sig];
-    if (lim) lines.push(lim.ind_code ? `Code d'indication : ${lim.ind_code}` : `Limitation : ${lim.lim_code}`);
-    else if (limits.length) lines.push("Code d'indication : [choisir la limitation ci-dessus]");
-    const text = lines.join("\n");
-    const pre = el("pre", "ls-rx-text", text);
-    wrap.append(pre);
+    let t = variants[0], choose = false;
+    if (variants.length > 1) {
+      // La dose dépend de l'indication : jamais de choix par défaut silencieux
+      const vk = g.key + "|" + line;
+      t = variants.find((v) => v.id === state.varPick[vk]);
+      if (!t) { const m = variants.filter((v) => matchesIndication(v, lim, cancer)); if (m.length === 1) t = m[0]; }
+      choose = !t;
+      const sel = el("select", "ls-rx-sel");
+      sel.append(new Option("Choisir l'indication", ""));
+      variants.forEach((v) => sel.append(new Option(v.indication || "Posologie standard", String(v.id))));
+      sel.value = t ? String(t.id) : "";
+      sel.addEventListener("change", () => { state.varPick[vk] = sel.value ? Number(sel.value) : null; render(); });
+      const lab = el("label", "ls-rx-label", "Indication"); lab.append(sel); wrap.append(lab);
+      wrap.append(el("p", "ls-note ls-variant-note", "La posologie de cette substance varie selon l'indication."));
+    }
+    if (!choose && variants.length > 1 && lim && keywords(t).length && !matchesIndication(t, lim, null)) {
+      wrap.append(el("p", "ls-note ls-warn", "L'indication choisie ne correspond pas au texte de la limitation sélectionnée : vérifiez la dose."));
+    }
+    const text = choose
+      ? [line, "[choisir l'indication pour afficher la posologie]"].join("\n")
+      : [line, t.sig].concat(lim ? [lim.ind_code ? `Code d'indication : ${lim.ind_code}` : `Limitation : ${lim.lim_code}`]
+        : limits.length ? ["Code d'indication : [choisir la limitation ci-dessus]"] : []).join("\n");
+    wrap.append(el("pre", "ls-rx-text", text));
     const row = el("div", "btn-row");
-    row.append(button("Copier l'ordonnance", "btn ug-copy", (e) => copy(e.target, text, "Copier l'ordonnance")));
+    const copyBtn = button("Copier l'ordonnance", "btn ug-copy", (e) => copy(e.target, text, "Copier l'ordonnance"));
+    copyBtn.disabled = choose;
+    row.append(copyBtn);
     const missingCode = !lim && limits.length > 0;
-    const inCart = state.cart.some((c) => c.id === t.id && c.text === text);
+    const inCart = !choose && state.cart.some((c) => c.id === t.id && c.text === text);
     const add = button(inCart ? "Dans le panier" : "Ajouter au panier", "btn btn-outline ug-copy", () => {
-      addToCart({ id: t.id, label: t.product_line, text });
+      addToCart({ id: t.id, grp: g.key + "|" + line, label: line, indication: t.indication || "", text });
       add.textContent = "Dans le panier"; add.disabled = true;
     });
-    add.disabled = missingCode || inCart;
-    if (missingCode) add.title = "Choisissez d'abord la limitation";
+    add.disabled = missingCode || choose || inCart;
+    if (choose) add.title = "Choisissez d'abord l'indication";
+    else if (missingCode) add.title = "Choisissez d'abord la limitation";
     row.append(add);
     wrap.append(row);
+    if (choose) { wrap.append(el("p", "muted ls-note", "Choisissez l'indication pour copier l'ordonnance ou l'ajouter au panier.")); return wrap; }
     if (missingCode) wrap.append(el("p", "muted ls-note", "Choisissez la limitation pour ajouter l'ordonnance au panier."));
     const levels = Array.isArray(t.dose_levels) ? t.dose_levels : [];
     if (levels.length) {
@@ -296,8 +327,8 @@
     try { sessionStorage.setItem(CART_KEY, JSON.stringify(state.cart)); } catch (x) { /* navigation privée */ }
   }
   function addToCart(item) {
-    // Une seule ligne par présentation : un nouvel ajout remplace la précédente (autre code d'indication)
-    state.cart = state.cart.filter((c) => c.id !== item.id).concat(item);
+    // Une seule ligne par présentation : un nouvel ajout remplace la précédente (autre code d'indication ou autre posologie)
+    state.cart = state.cart.filter((c) => (c.grp ? c.grp !== item.grp : c.id !== item.id)).concat(item);
     saveCart(); renderCart();
   }
   const cartText = () => state.cart.map((c) => c.text).join("\n\n");
@@ -308,6 +339,7 @@
     fl.textContent = `Panier (${state.cart.length})`;
     $("ls-cart-list").replaceChildren(...state.cart.map((c, i) => {
       const li = el("li");
+      if (c.indication) li.append(el("p", "muted ls-note", "Indication : " + c.indication));
       li.append(el("pre", "ls-rx-text", c.text));
       const row = el("div", "btn-row");
       if (i > 0) row.append(button("Monter", "btn btn-outline ug-copy", () => { const [x] = state.cart.splice(i, 1); state.cart.splice(i - 1, 0, x); saveCart(); renderCart(); }));
@@ -375,6 +407,7 @@
       const head = el("div", "ls-rx-head");
       head.append(el("span", "ug-badge " + (r.status === "validated" ? "ls-ok" : "ls-draft"), r.status === "validated" ? "Validé" : "Brouillon"),
         el("strong", null, r.product_line));
+      if (r.indication) head.append(el("span", "ug-badge", r.indication));
       const row = el("div", "btn-row");
       row.append(button("Voir / modifier", "btn btn-outline ug-copy", () => openEditor(r)));
       if (r.status !== "validated") row.append(button("Valider", "btn ug-copy", () => save(r.id, { status: "validated", validated_by: state.uid, validated_at: new Date().toISOString() })));
@@ -389,7 +422,8 @@
     $("ls-rx-missing").textContent = missing.length ? missing.join(", ") : state.products.length ? "Aucune." : "Importez d'abord la LS.";
   }
 
-  function openEditor(r) {
+  function openEditor(r, prefill) {
+    const b0 = r || prefill || null; // prefill : copie d'un texte existant pour une autre indication
     const box = $("ls-rx-editor");
     const f = el("div", "ls-editor");
     const field = (label, value, area, rows) => {
@@ -399,24 +433,34 @@
       l.append(i); f.append(l); return i;
     };
     f.append(el("h3", null, r ? "Modifier le texte d'ordonnance" : "Nouveau texte d'ordonnance"));
-    const sub = field("Clé de substance (DCI sans accent, ex. osimertinib)", r && r.substance);
-    const line = field("Ligne produit (ex. osimertinib, comprimé 80 mg)", r && r.product_line);
-    const sig = field("Posologie (ex. S. 80 mg = 1 cp à prendre une fois par jour)", r && r.sig, true, 2);
-    const lev = field("Paliers de dose, un par ligne : palier | dose", r ? (r.dose_levels || []).map((x) => x.join(" | ")).join("\n") : "Dose initiale | \n1re réduction | ", true, 5);
-    const note = field("Remarque", r && r.dose_note, true, 2);
-    const src = field("Source", r ? r.source : "RCP Swissmedic (Compendium)");
+    const sub = field("Clé de substance (DCI sans accent, ex. osimertinib)", b0 && b0.substance);
+    const line = field("Ligne produit (ex. osimertinib, comprimé 80 mg)", b0 && b0.product_line);
+    const ind = field("Indication, si la posologie varie selon l'indication (ex. Cancer colorectal, avec oxaliplatine) ; sinon laisser vide", b0 && b0.indication);
+    const imatch = field("Mots-clés pour présélectionner cette indication, séparés par « ; » (ex. colorect;rectum)", b0 && b0.indication_match);
+    const sig = field("Posologie (ex. S. 80 mg = 1 cp à prendre une fois par jour)", b0 && b0.sig, true, 2);
+    const lev = field("Paliers de dose, un par ligne : palier | dose", b0 ? (b0.dose_levels || []).map((x) => x.join(" | ")).join("\n") : "Dose initiale | \n1re réduction | ", true, 5);
+    const note = field("Remarque", b0 && b0.dose_note, true, 2);
+    const src = field("Source", b0 ? b0.source : "RCP Swissmedic (Compendium)");
     const msg = el("p", "form-msg");
     const preview = el("pre", "ls-rx-text");
     const upd = () => (preview.textContent = [line.value, sig.value, "Code d'indication : XXXXX.XX"].join("\n"));
     [line, sig].forEach((i) => i.addEventListener("input", upd)); upd();
     f.append(el("p", "ls-levels-title", "Aperçu"), preview);
     const values = () => ({
-      substance: norm(sub.value), product_line: line.value.trim(), sig: sig.value.trim(),
+      substance: norm(sub.value), product_line: line.value.trim(), indication: ind.value.trim() || null, indication_match: imatch.value.trim() || null, sig: sig.value.trim(),
       dose_levels: lev.value.split("\n").map((x) => x.split("|").map((y) => y.trim())).filter((x) => x[0] && x[1]).map((x) => [x[0], x.slice(1).join(" | ")]),
       dose_note: note.value.trim() || null, source: src.value.trim() || null, updated_by: state.uid, updated_at: new Date().toISOString()
     });
     const row = el("div", "btn-row");
-    const check = (v) => { if (!v.substance || !v.product_line || !v.sig) { msg.className = "form-msg error"; msg.textContent = "Clé, ligne produit et posologie sont nécessaires."; return false; } return true; };
+    const check = (v) => {
+      if (!v.substance || !v.product_line || !v.sig) { msg.className = "form-msg error"; msg.textContent = "Clé, ligne produit et posologie sont nécessaires."; return false; }
+      if (state.rx.some((x) => x.id !== (r && r.id) && x.substance === v.substance && x.product_line === v.product_line && (x.indication || "") === (v.indication || ""))) {
+        msg.className = "form-msg error";
+        msg.textContent = v.indication ? "Ce texte existe déjà pour cette indication." : "Un texte sans indication existe déjà pour cette ligne produit : précisez l'indication de l'un des deux.";
+        return false;
+      }
+      return true;
+    };
     row.append(button(r && r.status === "validated" ? "Enregistrer (reste validé)" : "Enregistrer en brouillon", "btn btn-outline", async () => {
       const v = values(); if (!check(v)) return;
       await save(r && r.id, v, msg);
@@ -426,6 +470,7 @@
       await save(r && r.id, Object.assign(v, { status: "validated", validated_by: state.uid, validated_at: new Date().toISOString() }), msg);
     }));
     if (r && r.status === "validated") row.append(button("Repasser en brouillon", "btn btn-outline", () => save(r.id, { status: "draft", validated_at: null, validated_by: null }, msg)));
+    if (r) row.append(button("Dupliquer pour une autre indication", "btn btn-outline", () => openEditor(null, Object.assign({}, r, { indication: "", indication_match: "", status: "draft" }))));
     if (r) row.append(button("Supprimer", "btn btn-outline lt-danger", async () => {
       if (!confirm("Supprimer ce texte d'ordonnance ?")) return;
       const { error } = await sb.from("sl_rx").delete().eq("id", r.id);
@@ -449,7 +494,7 @@
     await reloadRx();
   }
   async function reloadRx() {
-    const rx = await all("sl_rx", "id, substance, product_line, sig, dose_levels, dose_note, source, status, position, updated_at, validated_at");
+    const rx = await all("sl_rx", "id, substance, product_line, indication, indication_match, sig, dose_levels, dose_note, source, status, position, updated_at, validated_at");
     for (const r of rx) r._k = stem(norm(r.substance));
     state.rx = rx.sort((a, b) => a.position - b.position || a.product_line.localeCompare(b.product_line));
     renderRxAdmin(); render();
