@@ -838,3 +838,24 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 /* PWA : astuce d'installation sur iPhone */
 .pwa-hint { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; background: var(--amber-50); border-left: 4px solid var(--amber-500); padding: var(--space-3); margin-bottom: var(--space-4); }
 .pwa-hint p { margin: 0; font-size: .95rem; max-width: 60ch; }
+
+/* ---------- Congrès : présentation, retours, abonnement à l'agenda ---------- */
+.cg-talk, .cg-note-form { display: grid; gap: var(--space-2); border-top: 1px solid var(--navy-100); padding-top: var(--space-3); }
+.cg-talk h4, .cg-talks h4, .cg-note-form h4 { margin: 0; font-size: 1rem; font-weight: 500; color: var(--navy-800); }
+.cg-talk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-2); }
+.cg-talk label { display: grid; gap: 4px; font-size: .9rem; font-weight: 500; color: var(--navy-800); }
+.cg-talk input, .cg-talk select, .cg-note-form textarea, .cg-note-form select, .cg-subscribe input { font: inherit; font-weight: 400; min-height: 44px; padding: 8px 12px; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); min-width: 0; width: 100%; }
+.cg-talk .btn, .cg-note-form .btn-row { justify-self: start; }
+.cg-talks { display: grid; gap: var(--space-2); }
+.cg-notes { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+.cg-notes h3 { margin: 0; font-size: 1.05rem; font-weight: 500; }
+.cg-note { background: var(--white); border: 1px solid var(--navy-100); border-left: 3px solid var(--amber-500); padding: var(--space-3); display: grid; gap: 6px; }
+.cg-note p { margin: 0; max-width: none; }
+.cg-note-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.cg-note .btn { justify-self: start; }
+.cg-subscribe { margin-top: var(--space-4); border: 1px solid var(--navy-100); background: var(--white); }
+.cg-subscribe > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; padding: 0 var(--space-3); font-weight: 500; color: var(--navy-800); }
+.cg-subscribe-body { display: grid; gap: var(--space-2); padding: 0 var(--space-3) var(--space-3); }
+.cg-subscribe-body p { margin: 0; max-width: 66ch; }
+.cg-subscribe-body .cg-wa-row input { flex: 1 1 260px; }
+.cg-steps { margin: 0; padding-left: 1.3em; display: grid; gap: 4px; font-size: .92rem; color: var(--ink-600); }
