@@ -15,12 +15,13 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261103d">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261103e">
   <script src="/assets/js/site.js?v=20261102i" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
   <script src="/assets/js/letter-parse.js?v=20261029b" defer></script>
-  <script src="/assets/js/lettres.js?v=20261102f" defer></script>
+  <script src="/assets/js/lettres-bulk.js?v=20261103a" defer></script>
+  <script src="/assets/js/lettres.js?v=20261103a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -79,6 +80,10 @@
           <div class="btn-row">
             <button class="btn btn-outline" id="lt-export" type="button">Exporter l'index (.xlsx)</button>
           </div>
+          <details class="lt-bulk" id="lt-subst">
+            <summary>Changer le nom commercial ou la firme d'une substance (en bloc)</summary>
+            <div class="lt-subst-body" id="lt-subst-body"></div>
+          </details>
           <details class="lt-bulk">
             <summary>Import complet (remplace toutes les lettres)</summary>
             <p class="muted">Sélectionnez toutes les lettres Word, avec ou sans tableur d'index. Sans index, les champs sont détectés automatiquement.</p>
