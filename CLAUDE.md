@@ -40,6 +40,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **PWA** | Manifeste, service worker, page hors ligne, astuce iPhone (branche en relecture) |
 | **Notifications congrès** | Web Push « un autre membre participe au même congrès » ; SQL et fonction à déployer avant fusion (voir memory/projects/notifications.md) |
 | **Congrès plus** | Détail de présentation, retours de congrès, abonnement agenda (voir memory/projects/congres-plus.md) ; SQL et fonction à déployer avant fusion |
+| **Annuaire prestataires** | Nouvel outil (médecins, assistantes, pharmaciens) : fiches, recherche, filtres, favoris, import/export Excel (voir memory/projects/annuaire.md) |
 → Détails : memory/projects/
 
 ## Règles de sécurité (ne jamais enfreindre)
