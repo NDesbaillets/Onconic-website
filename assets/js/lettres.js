@@ -399,6 +399,8 @@
     zone.addEventListener("dragleave", () => zone.classList.remove("over"));
     zone.addEventListener("drop", (e) => { e.preventDefault(); zone.classList.remove("over"); dropped(e.dataTransfer.files); });
     $("lt-export").addEventListener("click", exportIndex);
+    // Changement en bloc du nom commercial ou de la firme d'une substance
+    if (window.LettersBulk) window.LettersBulk.init({ sb, getRows: () => state.rows, refresh, sanitize: (h) => window.LetterParse.sanitize(h) });
 
     // Import complet
     const out = $("ug-import-msg");
