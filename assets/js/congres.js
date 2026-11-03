@@ -18,7 +18,7 @@
 
   const $ = (id) => document.getElementById(id);
   const state = {
-    events: [], att: new Map(), me: null, role: "", q: "", clinic: "", kind: "", mine: false, past: false,
+    events: [], att: new Map(), talks: new Map(), notes: new Map(), trials: [], me: null, role: "", q: "", clinic: "", kind: "", mine: false, past: false,
     view: "calendar", month: null, day: null, detail: null, editing: null
   };
 
@@ -66,10 +66,15 @@
         if (!state.att.has(r.event_id)) state.att.set(r.event_id, []);
         state.att.get(r.event_id).push(r);
       }
-    }
+      // Présentations et retours : une erreur (fonctions absentes) n'empêche pas d'afficher le reste
+      const ids = state.events.map((e) => e.id);
+      const [talks, notes] = await Promise.all([sb.rpc("event_talks", { p_event_ids: ids }), sb.rpc("event_takeaways_list", { p_event_ids: ids })]);
+      state.talks = group(talks.data); state.notes = group(notes.data);
+    } else { state.talks = new Map(); state.notes = new Map(); }
     for (const e of state.events) e._hay = norm([e.title, e.description, e.city, e.country, e.venue, e.kind, (e.clinics || []).join(" ")].join(" "));
   }
   const mine = (e) => (state.att.get(e.id) || []).find((a) => a.is_me);
+  const group = (rows) => { const m = new Map(); for (const r of rows || []) { if (!m.has(r.event_id)) m.set(r.event_id, []); m.get(r.event_id).push(r); } return m; };
 
   // ----- Filtres -----
   function matches(e, ignorePast) {
@@ -238,8 +243,12 @@
     }
     if (named.length) part.append(ul);
     if (anon) part.append(el("p", "muted", `${named.length ? "Et " : ""}${anon} membre${anon > 1 ? "s" : ""} qui préfère${anon > 1 ? "nt" : ""} rester discret${anon > 1 ? "s" : ""}.`));
+    const talks = state.talks.get(e.id) || [];
+    if (me && me.status === "presenting") part.append(talkForm(e, talks.find((t) => t.is_me)));
+    if (talks.length) part.append(talkList(talks));
     part.append(whatsapp(e, !!me));
     b.append(part);
+    b.append(notesBlock(e, !!me));
 
     // Gestion
     const tools = el("div", "btn-row cg-tools");
@@ -249,6 +258,184 @@
     b.append(tools);
     b.append(el("p", "muted cg-stamp", `Dernière modification le ${new Date(e.updated_at).toLocaleDateString("fr-CH")}${e.source ? " · source : " + e.source : ""}`));
     d.append(b);
+  }
+
+  // ----- Détail de la présentation (statut « Je présente ») -----
+  const TALK_TYPES = [["oral", "Communication orale"], ["poster", "Poster"], ["invité", "Orateur invité"], ["table ronde", "Table ronde"]];
+  const TALK_LABEL = Object.fromEntries(TALK_TYPES);
+
+  function field(label, input) { const l = el("label", null, label); l.append(input); return l; }
+  function say(msg, text, ok) { msg.className = "form-msg" + (text ? (ok ? " ok" : " error") : ""); msg.textContent = text || ""; }
+
+  function talkForm(e, t) {
+    const f = el("form", "cg-talk");
+    f.noValidate = true;
+    f.append(el("h4", null, "Ma présentation"));
+    const title = el("input");
+    title.maxLength = 200; title.value = t ? t.talk_title : ""; title.placeholder = "Titre de la communication";
+    const type = el("select");
+    type.append(new Option("Choisir", ""));
+    TALK_TYPES.forEach(([v, l]) => type.append(new Option(l, v)));
+    type.value = (t && t.talk_type) || "";
+    const date = el("input");
+    date.type = "date"; date.min = e.start_date; date.max = e.end_date; date.value = (t && t.talk_date) || "";
+    const time = el("input");
+    time.type = "time"; time.value = t && t.talk_time ? t.talk_time.slice(0, 5) : "";
+    const msg = el("p", "form-msg");
+    msg.setAttribute("role", "status");
+    const save = el("button", "btn ug-copy", "Enregistrer");
+    save.type = "submit";
+    const grid = el("div", "cg-talk-grid");
+    grid.append(field("Titre", title), field("Type", type), field("Date", date), field("Heure", time));
+    f.append(grid, save, msg);
+    f.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const v = title.value.trim();
+      if (v && v.length < 3) return say(msg, "Titre : 3 caractères au moins.");
+      if (time.value && !date.value) return say(msg, "Indiquez aussi la date.");
+      const values = v ? { talk_title: v, talk_type: type.value || null, talk_date: date.value || null, talk_time: time.value || null }
+        : { talk_title: null, talk_type: null, talk_date: null, talk_time: null };
+      const { error } = await sb.from("event_participants").update(values).eq("event_id", e.id).eq("user_id", state.me.id);
+      if (error) return say(msg, "Enregistrement impossible : " + error.message);
+      await refresh(e.id);
+    });
+    return f;
+  }
+
+  function talkList(talks) {
+    const box = el("div", "cg-talks");
+    box.append(el("h4", null, "Présentations"));
+    const ul = el("ul", "cg-people");
+    for (const t of talks) {
+      const li = el("li");
+      li.append(el("strong", null, t.talk_title));
+      const when = t.talk_date ? fmtCH(t.talk_date) + (t.talk_time ? " à " + t.talk_time.slice(0, 5) : "") : "";
+      li.append(el("span", "muted", " " + [t.is_me ? "Vous" : t.name, TALK_LABEL[t.talk_type], when].filter(Boolean).join(" · ")));
+      ul.append(li);
+    }
+    box.append(ul);
+    return box;
+  }
+
+  // ----- Retours de congrès : « ce que j'en retiens » -----
+  function notesBlock(e, going) {
+    const box = el("div", "cg-notes");
+    box.append(el("h3", null, "Retours de congrès"));
+    const notes = state.notes.get(e.id) || [];
+    const started = e.start_date <= todayIso();
+    if (!notes.length) box.append(el("p", "muted", started ? "Aucun retour pour l'instant." : "Les retours s'ouvrent le premier jour de l'événement."));
+    for (const n of notes) box.append(noteCard(e, n));
+    if (started && going) box.append(noteForm(e, notes.find((n) => n.is_me)));
+    else if (started) box.append(el("p", "muted", "Seuls les membres qui participent à l'événement peuvent publier un retour : indiquez votre participation ci-dessus."));
+    return box;
+  }
+
+  function noteCard(e, n) {
+    const c = el("article", "cg-note");
+    const head = el("p", "cg-note-head");
+    head.append(el("strong", null, n.is_me ? "Vous" : n.author || "Un membre"), el("span", "muted", " · " + new Date(n.updated_at).toLocaleDateString("fr-CH")));
+    c.append(head, el("p", "cg-note-body", n.body));
+    if (n.trial_slug) {
+      const t = state.trials.find((x) => x.slug === n.trial_slug);
+      const a = el("a", null, "Fiche Key trials : " + (t ? t.acronym : n.trial_slug));
+      a.href = "/app/trials.html?t=" + encodeURIComponent(n.trial_slug);
+      const p = el("p", "cg-note-link");
+      p.append(a);
+      c.append(p);
+    }
+    if (state.role === "admin" && !n.is_me) {
+      c.append(button("Supprimer ce retour", "btn btn-outline ug-copy lt-danger", async () => {
+        if (!confirm("Supprimer ce retour ?")) return;
+        const { error } = await sb.from("event_takeaways").delete().eq("id", n.id);
+        if (error) return alert("Suppression refusée : " + error.message);
+        await refresh(e.id);
+      }));
+    }
+    return c;
+  }
+
+  function noteForm(e, existing) {
+    const f = el("form", "cg-note-form");
+    f.noValidate = true;
+    f.append(el("h4", null, existing ? "Modifier mon retour" : "Mon retour"));
+    const ta = el("textarea");
+    ta.rows = 4; ta.maxLength = 1200; ta.value = existing ? existing.body : "";
+    ta.placeholder = "3 à 5 lignes : ce que vous retenez, ce qui change votre pratique. Aucune donnée de patient.";
+    ta.setAttribute("aria-label", "Mon retour de congrès");
+    f.append(ta);
+    const sel = el("select");
+    sel.setAttribute("aria-label", "Fiche Key trials liée");
+    sel.append(new Option("Lier une fiche Key trials (facultatif)", ""));
+    state.trials.forEach((t) => sel.append(new Option(t.acronym, t.slug)));
+    sel.value = (existing && existing.trial_slug) || "";
+    if (state.trials.length) f.append(sel);
+    const msg = el("p", "form-msg");
+    msg.setAttribute("role", "status");
+    const row = el("div", "btn-row");
+    const save = el("button", "btn ug-copy", existing ? "Enregistrer" : "Publier");
+    save.type = "submit";
+    row.append(save);
+    if (existing) row.append(button("Supprimer", "btn btn-outline ug-copy lt-danger", async () => {
+      if (!confirm("Supprimer votre retour ?")) return;
+      const { error } = await sb.from("event_takeaways").delete().eq("id", existing.id);
+      if (error) return say(msg, "Suppression impossible : " + error.message);
+      await refresh(e.id);
+    }));
+    f.append(row, msg);
+    f.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const body = ta.value.trim();
+      if (body.length < 10) return say(msg, "Écrivez au moins quelques mots (10 caractères).");
+      const trial_slug = sel.value || null;
+      const { error } = existing
+        ? await sb.from("event_takeaways").update({ body, trial_slug }).eq("id", existing.id)
+        : await sb.from("event_takeaways").insert({ event_id: e.id, body, trial_slug });
+      if (error) return say(msg, "Publication impossible : " + error.message);
+      await refresh(e.id);
+    });
+    return f;
+  }
+
+  // ----- Abonnement à l'agenda personnel (flux iCal) -----
+  async function subscribeBody(box) {
+    const get = async (reset) => {
+      const { data, error } = await sb.rpc("calendar_token", { p_reset: !!reset });
+      if (error || !data) throw error || new Error("jeton");
+      return data;
+    };
+    const feed = (t) => `${cfg.supabaseUrl}/functions/v1/calendar-feed?t=${t}`;
+    box.replaceChildren(el("p", "muted", "Chargement…"));
+    let token;
+    try { token = await get(false); } catch (err) { box.replaceChildren(el("p", "form-msg error", "Abonnement indisponible pour l'instant.")); return; }
+    const render = () => {
+      const url = feed(token);
+      box.replaceChildren();
+      box.append(el("p", null, "Un lien privé garde votre agenda à jour : les événements où vous participez, leurs échéances (abstracts, tarif réduit, avec rappel) et vos présentations. Ne le partagez pas."));
+      const row = el("div", "cg-wa-row");
+      const input = el("input");
+      input.readOnly = true; input.value = url; input.setAttribute("aria-label", "Lien d'abonnement à votre agenda");
+      input.addEventListener("focus", () => input.select());
+      const copy = button("Copier le lien", "btn btn-outline ug-copy", async () => {
+        try { await navigator.clipboard.writeText(url); copy.textContent = "Copié"; } catch (x) { input.select(); copy.textContent = "Sélectionné : copiez"; }
+        setTimeout(() => (copy.textContent = "Copier le lien"), 1800);
+      });
+      row.append(input, copy);
+      box.append(row);
+      const open = el("a", "btn ug-copy", "Ouvrir dans mon agenda");
+      open.href = url.replace(/^https:/, "webcal:");
+      const actions = el("div", "btn-row");
+      actions.append(open, button("Générer un nouveau lien", "btn btn-outline ug-copy", async () => {
+        if (!confirm("Générer un nouveau lien ? L'ancien cessera de fonctionner dans vos agendas.")) return;
+        try { token = await get(true); render(); } catch (x) { alert("Impossible de renouveler le lien."); }
+      }));
+      box.append(actions);
+      const ol = el("ol", "cg-steps");
+      ["iPhone, iPad, Mac : touchez « Ouvrir dans mon agenda » puis « S'abonner ».",
+        "Google Agenda : Autres agendas › À partir de l'URL, collez le lien (Google actualise jusqu'à une fois par jour).",
+        "Outlook : Ajouter un calendrier › S'abonner à partir du web, collez le lien."].forEach((t) => ol.append(el("li", null, t)));
+      box.append(ol);
+    };
+    render();
   }
 
   // WhatsApp ne permet pas de créer un groupe depuis un site : un participant le crée dans l'app,
@@ -526,6 +713,8 @@
       $("ug-status").textContent = "Cet espace est réservé aux membres validés de The Hive.";
       return;
     }
+    // Fiches Key trials que ce membre peut lier à un retour (vide s'il n'a pas accès à l'outil)
+    try { const { data: tr } = await sb.from("key_trials").select("slug, acronym").order("acronym"); state.trials = tr || []; } catch (e) { /* facultatif */ }
     try { await load(); } catch (e) { $("ug-status").textContent = "Chargement impossible : " + e.message; return; }
     $("ug-status").hidden = true;
     $("cg-tool").hidden = false;
@@ -549,6 +738,10 @@
       if (!end.value || end.value < e.target.value) end.value = e.target.value;
     });
     $("cg-cancel").addEventListener("click", () => $("cg-dialog").close());
+    $("cg-subscribe").addEventListener("toggle", (ev) => {
+      const d = ev.currentTarget;
+      if (d.open && !d.dataset.ready) { d.dataset.ready = "1"; subscribeBody($("cg-subscribe-body")); }
+    });
     render();
     const id = +new URLSearchParams(location.search).get("e");
     if (id) reveal(id);
