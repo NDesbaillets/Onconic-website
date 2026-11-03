@@ -42,7 +42,8 @@ create table if not exists public.contacts (
   last_name text check (char_length(last_name) <= 100),
   first_name text check (char_length(first_name) <= 100),
   service text not null check (char_length(service) between 2 and 200),
-  detail text check (char_length(detail) <= 200),      -- fonction, plage horaire, précision (garde nuit/WE, cadre, CDC…)
+  detail text check (char_length(detail) <= 200),      -- fonction ou précision de la personne ou du service (cadre, ICUS, secrétaire…)
+  label text check (char_length(label) <= 100),        -- étiquette du numéro : jour, nuit/WE, fixe, mobile, plage horaire…
   scope text not null check (scope in ('interne', 'externe')),
   phone text check (char_length(phone) <= 40 and phone ~ '^\+?[\d\s().\/-]{3,40}$'),   -- numéro complet
   email text check (char_length(email) <= 200 and email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
@@ -54,6 +55,7 @@ create table if not exists public.contacts (
 );
 create unique index if not exists contacts_unique on public.contacts
   (lower(coalesce(last_name, '')), lower(coalesce(first_name, '')), lower(service), lower(coalesce(detail, '')), coalesce(phone, ''));
+alter table public.contacts add column if not exists label text check (char_length(label) <= 100);
 create index if not exists contacts_service on public.contacts (lower(service));
 
 create or replace function public.contacts_stamp()
@@ -93,14 +95,14 @@ begin
   end if;
   for r in
     select nullif(trim(x.first_name), '') as first_name, nullif(trim(x.last_name), '') as last_name, nullif(trim(x.service), '') as service,
-      nullif(trim(x.detail), '') as detail, lower(trim(x.scope)) as scope, nullif(trim(x.phone), '') as phone,
+      nullif(trim(x.detail), '') as detail, nullif(trim(x.label), '') as label, lower(trim(x.scope)) as scope, nullif(trim(x.phone), '') as phone,
       nullif(trim(x.email), '') as email, nullif(trim(x.notes), '') as notes
-    from jsonb_to_recordset(p_rows) as x(first_name text, last_name text, service text, detail text, scope text, phone text, email text, notes text)
+    from jsonb_to_recordset(p_rows) as x(first_name text, last_name text, service text, detail text, label text, scope text, phone text, email text, notes text)
   loop
-    insert into public.contacts (first_name, last_name, service, detail, scope, phone, email, notes)
-    values (r.first_name, r.last_name, r.service, r.detail, r.scope, r.phone, r.email, r.notes)
+    insert into public.contacts (first_name, last_name, service, detail, label, scope, phone, email, notes)
+    values (r.first_name, r.last_name, r.service, r.detail, r.label, r.scope, r.phone, r.email, r.notes)
     on conflict (lower(coalesce(last_name, '')), lower(coalesce(first_name, '')), lower(service), lower(coalesce(detail, '')), coalesce(phone, '')) do update set
-      scope = excluded.scope, email = coalesce(excluded.email, public.contacts.email), notes = coalesce(excluded.notes, public.contacts.notes)
+      scope = excluded.scope, label = coalesce(excluded.label, public.contacts.label), email = coalesce(excluded.email, public.contacts.email), notes = coalesce(excluded.notes, public.contacts.notes)
     returning (xmax = 0) into was_new;
     if was_new then n_new := n_new + 1; else n_upd := n_upd + 1; end if;
   end loop;

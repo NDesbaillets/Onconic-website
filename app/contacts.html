@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex">
-  <title>Annuaire des médecins · Onconic</title>
+  <title>Annuaire pour médecins · Onconic</title>
   <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
@@ -39,7 +39,7 @@
       <div class="container">
         <a class="hive-back" href="/fr/app/">← The Hive</a>
         <span class="eyebrow">Outil des médecins, des assistantes et des pharmaciens</span>
-        <h1>Annuaire des médecins</h1>
+        <h1>Annuaire pour médecins</h1>
         <p class="cg-sub">Numéros internes du CHUV et contacts externes</p>
         <hr class="rule">
         <p class="muted" id="ug-status">Chargement…</p>
@@ -83,7 +83,8 @@
               <label>Nom<input name="last_name" maxlength="100" autocomplete="off"></label>
               <label class="cg-wide">Service *<input name="service" required maxlength="200" list="an-services" autocomplete="off"></label>
               <datalist id="an-services"></datalist>
-              <label class="cg-wide">Fonction ou précision (garde nuit/WE, cadre, plage horaire…)<input name="detail" maxlength="200" autocomplete="off"></label>
+              <label class="cg-wide">Fonction ou précision (cadre, ICUS, secrétaire…)<input name="detail" maxlength="200" autocomplete="off"></label>
+              <label>Étiquette du numéro (jour, nuit/WE, fixe, mobile…)<input name="label" maxlength="100" autocomplete="off"></label>
               <label>Origine *<select name="scope" required>
                 <option value="">Choisir</option><option value="interne">Interne (CHUV)</option><option value="externe">Externe</option>
               </select></label>
