@@ -12,7 +12,7 @@ const STATUS_TEXT: Record<string, string> = { going: "Je participe", maybe: "Peu
 const TALK_TYPE: Record<string, string> = { oral: "Communication orale", poster: "Poster", "invité": "Orateur invité", "table ronde": "Table ronde" };
 
 // Valeur de texte iCal : échappement de \ ; , et des retours à la ligne
-export const esc = (s: unknown) => String(s ?? "").replace(/\\/g, "\\\\").replace(/;/g, "\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+export const esc = (s: unknown) => String(s ?? "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
 
 // Pliage des lignes à 75 octets (UTF-8), sans couper un caractère
 export function fold(line: string): string {
