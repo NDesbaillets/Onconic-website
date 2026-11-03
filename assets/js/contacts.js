@@ -11,7 +11,7 @@
   const PREFIX = { 4: "+412131", 6: "+417955" };
 
   const $ = (id) => document.getElementById(id);
-  const state = { rows: [], ents: [], entOf: new Map(), me: null, role: "", admin: false, q: "", scopes: new Set(), shown: PAGE, editing: null };
+  const state = { rows: [], ents: [], entOf: new Map(), favs: new Set(), showFavs: false, me: null, role: "", admin: false, q: "", scopes: new Set(), shown: PAGE, editing: null };
 
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9@.+]+/g, " ").trim();
   const digits = (s) => String(s || "").replace(/\D/g, "");
@@ -129,6 +129,8 @@
     state.ents = ents;
     state.entOf = new Map(out.map((r) => [r.id, groups.get(entityKey(r))]));
     const set = new Set(out.map((r) => r.service));
+    const { data: favs } = await sb.from("contact_favorites").select("contact_id");
+    state.favs = new Set((favs || []).map((f) => f.contact_id));
     $("an-services").replaceChildren(...[...set].sort((a, b) => a.localeCompare(b, "fr")).map((v) => { const o = el("option"); o.value = v; return o; }));
   }
 
@@ -153,6 +155,7 @@
   function render() {
     const list = state.ents.filter(matches);
     $("ug-count").textContent = `${list.length} contact${list.length > 1 ? "s" : ""}` + (list.length !== state.ents.length ? ` sur ${state.ents.length}` : "");
+    $("an-favcount").textContent = state.ents.filter(isFav).length ? `(${state.ents.filter(isFav).length})` : "";
     const box = $("an-list");
     box.replaceChildren();
     if (!list.length) {
@@ -162,12 +165,38 @@
       list.slice(0, state.shown).forEach((e) => box.append(card(e)));
       if (list.length > state.shown) box.append(button(`Afficher les ${Math.min(PAGE, list.length - state.shown)} suivants`, "btn btn-outline", () => { state.shown += PAGE; render(); }));
     }
+    renderFavs();
   }
 
-  function card(e) {
+  // ----- Favoris : une fiche est favorite si l'un de ses numéros l'est -----
+  const isFav = (e) => e.rows.some((r) => state.favs.has(r.id));
+  function renderFavs() {
+    $("an-favs").hidden = !state.showFavs;
+    $("an-fav-btn").setAttribute("aria-expanded", String(state.showFavs));
+    if (!state.showFavs) return;
+    const box = $("an-fav-list");
+    const favs = state.ents.filter(isFav);
+    box.replaceChildren();
+    if (!favs.length) { box.append(el("p", "muted", "Aucun favori : touchez l'étoile d'une fiche pour l'ajouter ici.")); return; }
+    favs.forEach((e) => box.append(card(e, "cf-")));
+  }
+  async function toggleFav(e) {
+    const on = isFav(e);
+    const ids = e.rows.map((r) => r.id);
+    const { error } = on
+      ? await sb.from("contact_favorites").delete().in("contact_id", ids)
+      : await sb.from("contact_favorites").insert({ contact_id: e.id });
+    if (error) return alert("Impossible de modifier les favoris : " + error.message);
+    if (on) ids.forEach((i) => state.favs.delete(i)); else state.favs.add(e.id);
+    const open = new Set([...document.querySelectorAll(".an-card[open]")].map((x) => x.id));
+    render();
+    document.querySelectorAll(".an-card").forEach((x) => { if (open.has(x.id)) x.open = true; });
+  }
+
+  function card(e, prefix) {
     const r0 = e.rows[0];
     const d = el("details", "ug-card an-card");
-    d.id = "ct-" + e.id;
+    d.id = (prefix || "ct-") + e.id;
     const s = el("summary");
     const head = el("div", "ug-head");
     const top = el("div", "an-top");
@@ -181,7 +210,13 @@
     head.append(meta);
     const nums = e.rows.filter((r) => r.phone);
     if (nums.length) { const box = el("div", "an-nums"); nums.forEach((r) => box.append(numberLine(r))); head.append(box); }
-    s.append(head);
+    const fav = isFav(e);
+    const star = el("button", "an-star", fav ? "★" : "☆");
+    star.type = "button";
+    star.setAttribute("aria-pressed", String(fav));
+    star.setAttribute("aria-label", (fav ? "Retirer des favoris : " : "Ajouter aux favoris : ") + e.title);
+    star.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleFav(e); });
+    s.append(head, star);
     d.append(s);
     d.addEventListener("toggle", () => { if (d.open && !d.dataset.ready) body(d, e); });
     return d;
@@ -424,6 +459,7 @@
     $("an-tool").hidden = false;
     chips($("an-f-scope"), SCOPES, state.scopes);
     $("q").addEventListener("input", (e) => { state.q = e.target.value; state.shown = PAGE; render(); });
+    $("an-fav-btn").addEventListener("click", () => { state.showFavs = !state.showFavs; renderFavs(); });
     $("an-new").addEventListener("click", () => openForm(null));
     $("an-form").addEventListener("submit", save);
     $("an-form").elements.first_name.addEventListener("input", similar);
