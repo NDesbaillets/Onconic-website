@@ -738,9 +738,16 @@
       if (!end.value || end.value < e.target.value) end.value = e.target.value;
     });
     $("cg-cancel").addEventListener("click", () => $("cg-dialog").close());
-    $("cg-subscribe").addEventListener("toggle", (ev) => {
-      const d = ev.currentTarget;
-      if (d.open && !d.dataset.ready) { d.dataset.ready = "1"; subscribeBody($("cg-subscribe-body")); }
+    // « S'abonner à l'agenda » : le panneau (lien, copie, instructions) n'apparaît qu'au clic sur le bouton
+    const subBtn = $("cg-sub-btn"), subBox = $("cg-subscribe");
+    const subToggle = (open) => {
+      subBox.hidden = !open;
+      subBtn.setAttribute("aria-expanded", String(open));
+      if (open && !subBox.dataset.ready) { subBox.dataset.ready = "1"; subscribeBody($("cg-subscribe-body")); }
+    };
+    subBtn.addEventListener("click", () => subToggle(subBox.hidden));
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && !subBox.hidden) { subToggle(false); subBtn.focus(); }
     });
     render();
     const id = +new URLSearchParams(location.search).get("e");
