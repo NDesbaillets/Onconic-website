@@ -15,11 +15,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261103b">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261103c">
   <script src="/assets/js/site.js?v=20261102i" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/congres.js?v=20261103b" defer></script>
+  <script src="/assets/js/congres.js?v=20261103c" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -65,19 +65,19 @@
               <button class="ug-chip" type="button" role="tab" id="v-cal" aria-pressed="true">Calendrier</button>
               <button class="ug-chip" type="button" role="tab" id="v-list" aria-pressed="false">Liste</button>
             </div>
-            <div class="cg-buttons">
-              <button class="btn btn-outline" id="cg-sub-btn" type="button" aria-expanded="false" aria-controls="cg-subscribe">S'abonner à l'agenda</button>
-              <button class="btn" id="cg-new" type="button">Ajouter un événement</button>
-            </div>
+            <button class="btn" id="cg-new" type="button">Ajouter un événement</button>
           </div>
-          <section class="cg-subscribe" id="cg-subscribe" aria-label="Abonnement à l'agenda" hidden>
-            <div class="cg-subscribe-body" id="cg-subscribe-body"></div>
-          </section>
           <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
           <p class="ug-note ug-attn" id="cg-privacy" hidden></p>
           <div id="cg-cal"></div>
           <div id="cg-detail" class="cg-detail"></div>
           <div id="cg-list" hidden></div>
+          <div class="cg-subscribe-wrap">
+            <button class="btn btn-outline" id="cg-sub-btn" type="button" aria-expanded="false" aria-controls="cg-subscribe">S'abonner à l'agenda</button>
+            <section class="cg-subscribe" id="cg-subscribe" aria-label="Abonnement à l'agenda" hidden>
+              <div class="cg-subscribe-body" id="cg-subscribe-body"></div>
+            </section>
+          </div>
           <p class="muted ug-source">Les événements sont proposés et mis à jour par les membres. Dates « à confirmer » : vérifiez sur le site officiel avant de réserver.</p>
         </div>
 

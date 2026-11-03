@@ -853,8 +853,8 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .cg-note p { margin: 0; max-width: none; }
 .cg-note-body { white-space: pre-wrap; overflow-wrap: anywhere; }
 .cg-note .btn { justify-self: start; }
-.cg-buttons { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-.cg-subscribe { margin: 0 0 var(--space-3); border: 1px solid var(--navy-100); border-top: 3px solid var(--amber-500); background: var(--white); }
+.cg-subscribe-wrap { margin-top: var(--space-4); display: grid; gap: var(--space-2); justify-items: start; }
+.cg-subscribe { margin: 0; width: 100%; border: 1px solid var(--navy-100); border-top: 3px solid var(--amber-500); background: var(--white); }
 .cg-subscribe[hidden] { display: none; }
 .cg-subscribe-body { display: grid; gap: var(--space-2); padding: var(--space-3); }
 .cg-subscribe-body p { margin: 0; max-width: 66ch; }
