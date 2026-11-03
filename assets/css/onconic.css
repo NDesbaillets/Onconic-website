@@ -860,3 +860,7 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .cg-subscribe-body p { margin: 0; max-width: 66ch; }
 .cg-subscribe-body .cg-wa-row input { flex: 1 1 260px; }
 .cg-steps { margin: 0; padding-left: 1.3em; display: grid; gap: 4px; font-size: .92rem; color: var(--ink-600); }
+
+/* Limitations LS : posologie selon l'indication */
+.ls-variant-note { margin: 0; font-weight: 500; color: var(--navy-800); }
+.ls-warn { color: var(--danger); font-weight: 500; }
