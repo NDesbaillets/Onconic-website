@@ -111,3 +111,19 @@ end;
 $$;
 revoke execute on function public.contacts_import(jsonb) from public, anon;
 grant execute on function public.contacts_import(jsonb) to authenticated;
+
+-- ===== Favoris (propres à chaque utilisateur) =====
+create table if not exists public.contact_favorites (
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  contact_id bigint not null references public.contacts (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, contact_id)
+);
+alter table public.contact_favorites enable row level security;
+do $$ begin
+  create policy "contact_favorites: own" on public.contact_favorites for all to authenticated
+    using (user_id = auth.uid()) with check (user_id = auth.uid() and (select public.has_tool('contacts')));
+exception when duplicate_object then null; end $$;
+revoke all on public.contact_favorites from anon;
+grant select, insert, delete on public.contact_favorites to authenticated;
+revoke truncate, references, trigger, update on public.contact_favorites from authenticated;

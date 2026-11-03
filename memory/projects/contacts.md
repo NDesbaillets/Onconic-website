@@ -13,10 +13,11 @@ Stockage en entier : raccourci CHUV à 5 chiffres commençant par 4 → `+412131
 ## Fonctions
 - Recherche texte libre : nom, prénom, service, précision, e-mail, remarques, numéro (raccourci ou complet). Filtre Origine.
 - Import Excel (admin et pharmacien, fonction `contacts_import()`), export Excel (avec raccourci CHUV et date de modification) et modèle à télécharger. Colonnes : Prénom, Nom, Service, Précision, Origine, Téléphone, E-mail, Remarques ; un numéro à 5 chiffres est converti. Clé : nom, prénom, service, précision, numéro.
+- Favoris : étoile sur chaque fiche, bouton « Favoris » qui affiche « Mes favoris » en haut de page (propres à chaque utilisateur, table `contact_favorites` ; une fiche regroupée est favorite si l'un de ses numéros l'est).
 - Tout utilisateur de l'outil crée et modifie ; suppression par l'auteur ou un admin ; avertissement si le même nom existe.
 
 ## Données
 Les ~99 lignes initiales (tableaux de contacts internes CHUV) ont été insérées par SQL le 03.11.2026 et ne sont **pas** dans le dépôt (public).
 
 ## Idées non faites
-Plusieurs numéros par fiche, favoris, liens vers l'annuaire des prestataires.
+Liens vers l'annuaire des prestataires.

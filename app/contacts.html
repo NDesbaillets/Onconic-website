@@ -52,9 +52,15 @@
           <div class="an-actions">
             <div class="an-toggles">
               <div class="ug-chips" id="an-f-scope" role="group" aria-label="Origine"></div>
+              <button class="btn btn-outline" id="an-fav-btn" type="button" aria-expanded="false" aria-controls="an-favs">★ Favoris <span id="an-favcount"></span></button>
             </div>
             <button class="btn" id="an-new" type="button">Nouveau contact</button>
           </div>
+
+          <section class="an-panel an-favs" id="an-favs" aria-label="Mes favoris" hidden>
+            <h2>Mes favoris</h2>
+            <div id="an-fav-list"></div>
+          </section>
 
           <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
           <div id="an-list"></div>
