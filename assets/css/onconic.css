@@ -897,6 +897,16 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .an-quick { margin: 4px 0 0; }
 .an-quick a { font-size: 1.1rem; font-weight: 500; text-decoration: none; }
 .an-quick a:hover { text-decoration: underline; }
+.an-nums { margin-top: 4px; display: grid; gap: 2px; }
+.an-num { margin: 0; }
+.an-phone { font-size: 1.05rem; text-decoration: none; white-space: nowrap; }
+.an-phone strong { font-weight: 700; }
+.an-phone:hover { text-decoration: underline; }
+.an-label { font-size: .9rem; }
+.an-lines { display: grid; gap: var(--space-2); }
+.an-lines .an-num { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--space-2); }
+.an-sub { margin: var(--space-3) 0 var(--space-2); font-weight: 600; }
+.an-mini { background: none; border: 0; padding: 2px 4px; font: inherit; font-size: .85rem; color: var(--link, inherit); text-decoration: underline; cursor: pointer; min-height: 32px; }
 .an-star { flex: none; min-width: 44px; min-height: 44px; border: 0; background: none; font-size: 1.5rem; line-height: 1; cursor: pointer; color: var(--amber-700); }
 .an-star[aria-pressed="true"] { color: var(--amber-600); }
 .an-star:focus-visible { outline: 3px solid var(--amber-500); outline-offset: 2px; }

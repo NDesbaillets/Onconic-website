@@ -11,7 +11,7 @@
   const PREFIX = { 4: "+412131", 6: "+417955" };
 
   const $ = (id) => document.getElementById(id);
-  const state = { rows: [], me: null, role: "", admin: false, q: "", scopes: new Set(), shown: PAGE, editing: null };
+  const state = { rows: [], ents: [], entOf: new Map(), me: null, role: "", admin: false, q: "", scopes: new Set(), shown: PAGE, editing: null };
 
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9@.+]+/g, " ").trim();
   const digits = (s) => String(s || "").replace(/\D/g, "");
@@ -57,7 +57,47 @@
   const telHref = (p) => "tel:" + String(p).replace(/[^\d+]/g, "");
 
   const personName = (r) => [r.first_name, r.last_name].filter(Boolean).join(" ");
-  const title = (r) => personName(r) || r.service;
+  const isPerson = (r) => !!(r.first_name || r.last_name);
+
+  // Regroupement : un numéro par ligne en base, une fiche par entité à l'écran
+  const TITLE_BY_DETAIL = new Set(["CCO", "UTI", "UTOH"]);   // la fonction fait le titre (une fiche par fonction)
+  const MERGE_ALL = new Set(["Personnel administratif"]);    // tous les numéros sous une seule fiche
+  function entityKey(r) {
+    const s = norm(r.service);
+    if (MERGE_ALL.has(r.service)) return "all|" + s;
+    if (isPerson(r)) return ["p", norm(r.last_name), norm(r.first_name), s, norm(r.detail)].join("|");
+    if (TITLE_BY_DETAIL.has(r.service)) return ["d", s, norm(r.detail)].join("|");
+    return "s|" + s;
+  }
+  function entityTitle(r) {
+    if (MERGE_ALL.has(r.service)) return r.service;
+    if (TITLE_BY_DETAIL.has(r.service)) return isPerson(r) ? personName(r) + (r.detail ? ` (${r.detail})` : "") : r.detail || r.service;
+    return isPerson(r) ? personName(r) : r.service;
+  }
+  // Étiquette affichée à côté d'un numéro (pour « Personnel administratif », la personne et sa fonction en font partie)
+  function lineLabel(r) {
+    const who = MERGE_ALL.has(r.service) && isPerson(r) ? personName(r) + (r.detail ? ` (${r.detail})` : "") : "";
+    return [who, r.label].filter(Boolean).join(", ");
+  }
+
+  // Numéro complet cliquable, 5 derniers chiffres en gras pour les numéros CHUV
+  function phoneLink(phone) {
+    const a = el("a", "an-phone");
+    a.href = telHref(phone);
+    const sh = shortOf(phone);
+    if (sh) { a.append((phone.startsWith("+412131") ? "+41 21 31 " : "+41 79 55 "), el("strong", null, spaced5(sh))); }
+    else a.textContent = prettyFull(phone);
+    return a;
+  }
+  function numberLine(r, tools) {
+    const p = el("p", "an-num");
+    if (r.phone) p.append(phoneLink(r.phone));
+    const lab = lineLabel(r);
+    if (lab) p.append(r.phone ? " " : "", el("span", "muted an-label", lab));
+    if (!r.phone) p.append(el("span", "muted", (lab ? " : " : "") + "numéro à renseigner"));
+    if (tools) p.append(" ", ...tools);
+    return p;
+  }
 
   // ----- Données -----
   async function load() {
@@ -68,24 +108,37 @@
       out.push(...data);
       if (data.length < 1000) break;
     }
+    const groups = new Map();
     for (const r of out) {
       const sh = shortOf(r.phone);
-      r._hay = norm([r.first_name, r.last_name, r.service, r.detail, r.email, r.notes, SCOPE_LABEL[r.scope]].join(" "));
+      r._hay = norm([r.first_name, r.last_name, r.service, r.detail, r.label, r.email, r.notes, SCOPE_LABEL[r.scope]].join(" "));
       r._digits = digits(r.phone) + " " + (sh || "");
+      const k = entityKey(r);
+      if (!groups.has(k)) groups.set(k, { key: k, rows: [], title: entityTitle(r) });
+      groups.get(k).rows.push(r);
     }
-    out.sort((a, b) => a.service.localeCompare(b.service, "fr") || (a.last_name || "").localeCompare(b.last_name || "", "fr") || a.id - b.id);
+    const ents = [...groups.values()];
+    for (const e of ents) {
+      e.hay = e.title ? norm(e.title) + " " + e.rows.map((r) => r._hay).join(" ") : "";
+      e.digits = e.rows.map((r) => r._digits).join(" ");
+      e.scopes = new Set(e.rows.map((r) => r.scope));
+      e.id = e.rows[0].id;
+    }
+    ents.sort((a, b) => a.title.localeCompare(b.title, "fr"));
     state.rows = out;
+    state.ents = ents;
+    state.entOf = new Map(out.map((r) => [r.id, groups.get(entityKey(r))]));
     const set = new Set(out.map((r) => r.service));
     $("an-services").replaceChildren(...[...set].sort((a, b) => a.localeCompare(b, "fr")).map((v) => { const o = el("option"); o.value = v; return o; }));
   }
 
   // ----- Filtres et recherche -----
-  function matches(r) {
-    if (state.scopes.size && !state.scopes.has(r.scope)) return false;
+  function matches(e) {
+    if (state.scopes.size && ![...e.scopes].some((x) => state.scopes.has(x))) return false;
     if (!state.q) return true;
     const terms = norm(state.q).split(" ").filter(Boolean);
     const d = digits(state.q);
-    return terms.every((t) => r._hay.includes(t)) || (d.length >= 3 && terms.every((t) => /^[\d+]+$/.test(t)) && r._digits.includes(d));
+    return terms.every((t) => e.hay.includes(t)) || (d.length >= 3 && terms.every((t) => /^[\d+]+$/.test(t)) && e.digits.includes(d));
   }
 
   function chips(box, list, set) {
@@ -98,85 +151,85 @@
 
   // ----- Affichage -----
   function render() {
-    const list = state.rows.filter(matches);
-    $("ug-count").textContent = `${list.length} contact${list.length > 1 ? "s" : ""}` + (list.length !== state.rows.length ? ` sur ${state.rows.length}` : "");
+    const list = state.ents.filter(matches);
+    $("ug-count").textContent = `${list.length} contact${list.length > 1 ? "s" : ""}` + (list.length !== state.ents.length ? ` sur ${state.ents.length}` : "");
     const box = $("an-list");
     box.replaceChildren();
     if (!list.length) {
       box.append(el("p", "muted", state.rows.length ? "Aucun contact ne correspond à cette recherche." : "L'annuaire est vide pour l'instant."),
         button("Ajouter un contact", "btn btn-outline", () => openForm(null)));
     } else {
-      list.slice(0, state.shown).forEach((r) => box.append(card(r)));
+      list.slice(0, state.shown).forEach((e) => box.append(card(e)));
       if (list.length > state.shown) box.append(button(`Afficher les ${Math.min(PAGE, list.length - state.shown)} suivants`, "btn btn-outline", () => { state.shown += PAGE; render(); }));
     }
   }
 
-  function card(r) {
+  function card(e) {
+    const r0 = e.rows[0];
     const d = el("details", "ug-card an-card");
-    d.id = "ct-" + r.id;
+    d.id = "ct-" + e.id;
     const s = el("summary");
     const head = el("div", "ug-head");
     const top = el("div", "an-top");
-    top.append(el("span", "ug-name", title(r)));
+    top.append(el("span", "ug-name", e.title));
     head.append(top);
     const meta = el("div", "ug-meta");
-    meta.append(badge(SCOPE_LABEL[r.scope].replace(" (CHUV)", ""), r.scope === "interne" ? "an-int" : ""));
-    if (personName(r)) meta.append(badge(r.service, "cg-clinic-badge"));
-    if (r.detail) meta.append(badge(r.detail, "cg-clinic-badge"));
+    meta.append(badge(SCOPE_LABEL[r0.scope].replace(" (CHUV)", ""), r0.scope === "interne" ? "an-int" : ""));
+    const titledByDetail = TITLE_BY_DETAIL.has(r0.service);
+    if ((isPerson(r0) || titledByDetail) && !MERGE_ALL.has(r0.service)) meta.append(badge(r0.service, "cg-clinic-badge"));
+    if (isPerson(r0) && !titledByDetail && !MERGE_ALL.has(r0.service) && r0.detail) meta.append(badge(r0.detail, "cg-clinic-badge"));
     head.append(meta);
-    if (r.phone) {
-      const sh = shortOf(r.phone);
-      const p = el("p", "an-quick");
-      const a = el("a", null, sh ? spaced5(sh) : prettyFull(r.phone));
-      a.href = telHref(r.phone);
-      p.append(a);
-      if (sh) p.append(" ", el("span", "muted", prettyFull(r.phone)));
-      head.append(p);
-    }
+    const nums = e.rows.filter((r) => r.phone);
+    if (nums.length) { const box = el("div", "an-nums"); nums.forEach((r) => box.append(numberLine(r))); head.append(box); }
     s.append(head);
     d.append(s);
-    d.addEventListener("toggle", () => { if (d.open && !d.dataset.ready) body(d, r); });
+    d.addEventListener("toggle", () => { if (d.open && !d.dataset.ready) body(d, e); });
     return d;
   }
 
-  function body(d, r) {
+  function body(d, e) {
     d.dataset.ready = "1";
+    const r0 = e.rows[0];
     const b = el("div", "ug-body an-body");
     const dl = el("dl", "ug-dl");
     const add = (k, v) => { if (v) { const dd = el("dd"); dd.append(v); dl.append(el("dt", null, k), dd); } };
     const text = (t) => document.createTextNode(t);
     const link = (t, href) => { const a = el("a", null, t); a.href = href; return a; };
-    if (personName(r)) add("Service", text(r.service));
-    add("Fonction", r.detail ? text(r.detail) : null);
-    if (r.phone) {
-      const sh = shortOf(r.phone);
-      add("Téléphone", link(sh ? `${spaced5(sh)} (${prettyFull(r.phone)})` : prettyFull(r.phone), telHref(r.phone)));
-    }
-    if (r.email) add("E-mail", link(r.email, "mailto:" + r.email));
-    if (r.notes) add("Remarques", text(r.notes));
+    if (isPerson(r0) && !MERGE_ALL.has(r0.service) && !TITLE_BY_DETAIL.has(r0.service)) { add("Service", text(r0.service)); add("Fonction", r0.detail ? text(r0.detail) : null); }
+    const mail = e.rows.find((r) => r.email);
+    if (mail) add("E-mail", link(mail.email, "mailto:" + mail.email));
+    const notes = [...new Set(e.rows.map((r) => r.notes).filter(Boolean))];
+    if (notes.length) add("Remarques", text(notes.join(" ")));
     b.append(dl);
+    const list = el("div", "an-lines");
+    for (const r of e.rows) {
+      const tools = [button("Modifier", "an-mini", () => openForm(r))];
+      if (state.admin || r.created_by === state.me.id) tools.push(button("Supprimer", "an-mini lt-danger", () => remove(r)));
+      list.append(numberLine(r, tools));
+    }
+    b.append(el("p", "an-sub", e.rows.length > 1 ? "Numéros" : "Numéro"), list);
     const tools = el("div", "btn-row an-tools");
-    tools.append(button("Modifier", "btn btn-outline ug-copy", () => openForm(r)));
-    if (state.admin || r.created_by === state.me.id) tools.append(button("Supprimer", "btn btn-outline ug-copy lt-danger", () => remove(r)));
+    tools.append(button("Ajouter un numéro", "btn btn-outline ug-copy", () => openForm(null, { first_name: r0.first_name, last_name: r0.last_name, service: r0.service, detail: r0.detail, scope: r0.scope })));
     b.append(tools);
-    b.append(el("p", "muted an-stamp", "Dernière modification : " + fmtDate(r.updated_at)));
+    b.append(el("p", "muted an-stamp", "Dernière modification : " + fmtDate(Math.max(...e.rows.map((r) => new Date(r.updated_at))))));
     d.append(b);
   }
 
   // ----- Fiche (création et modification) -----
-  const FIELDS = ["first_name", "last_name", "service", "detail", "scope", "phone", "email", "notes"];
+  const FIELDS = ["first_name", "last_name", "service", "detail", "label", "scope", "phone", "email", "notes"];
 
-  function openForm(r) {
+  function openForm(r, prefill) {
     state.editing = r || null;
     const f = $("an-form");
     f.reset();
     $("an-form-title").textContent = r ? "Modifier le contact" : "Nouveau contact";
     $("an-form-msg").textContent = ""; $("an-form-msg").className = "form-msg";
-    FIELDS.forEach((k) => { f.elements[k].value = (r && r[k]) || ""; });
+    const src = r || prefill || {};
+    FIELDS.forEach((k) => { f.elements[k].value = src[k] || ""; });
     if (r && r.phone) { const sh = shortOf(r.phone); if (sh) f.elements.phone.value = sh; }
     similar();
     $("an-dialog").showModal();
-    f.elements[r ? "service" : "first_name"].focus();
+    f.elements[r || prefill ? "label" : "first_name"].focus();
   }
 
   // Évite les doublons : propose les contacts de même nom
@@ -214,7 +267,7 @@
   }
 
   async function remove(r) {
-    if (!confirm(`Supprimer « ${title(r)}${r.detail ? " (" + r.detail + ")" : ""} » de l'annuaire pour tous les utilisateurs ?`)) return;
+    if (!confirm(`Supprimer ce numéro (${personName(r) || r.service}${lineLabel(r) ? ", " + lineLabel(r) : ""}) de l'annuaire pour tous les utilisateurs ?`)) return;
     const { error } = await sb.from("contacts").delete().eq("id", r.id);
     if (error) return alert("Suppression refusée : " + error.message);
     await refresh();
@@ -224,7 +277,8 @@
     await load();
     render();
     if (openId) {
-      const d = document.getElementById("ct-" + openId);
+      const ent = state.entOf.get(openId);
+      const d = ent && document.getElementById("ct-" + ent.id);
       if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "center" }); }
     }
   }
@@ -239,7 +293,7 @@
       document.head.append(s);
     });
   }
-  const COLS = [["Prénom", 16, "first_name"], ["Nom", 20, "last_name"], ["Service", 36, "service"], ["Précision", 30, "detail"],
+  const COLS = [["Prénom", 16, "first_name"], ["Nom", 20, "last_name"], ["Service", 36, "service"], ["Précision", 30, "detail"], ["Étiquette", 22, "label"],
     ["Origine", 12, "scope"], ["Téléphone", 18, "phone"], ["E-mail", 30, "email"], ["Remarques", 44, "notes"]];
   function download(buffer, name) {
     const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
@@ -262,13 +316,13 @@
     for (const r of state.rows) {
       ws.addRow(COLS.map(([, , k]) => (k === "scope" ? SCOPE_LABEL[r.scope].replace(" (CHUV)", "") : r[k] || "")).concat([shortOf(r.phone) || "", fmtDate(r.updated_at)]));
     }
-    ws.getColumn(6).numFmt = "@";
+    ws.getColumn(7).numFmt = "@";
     download(await wb.xlsx.writeBuffer(), `annuaire-medecins-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
   async function templateXlsx() {
     const { wb, ws } = await newSheet();
-    ws.addRow(["Anne", "Exemple", "Oncologie", "Cheffe de clinique", "Interne", "62234", "anne.exemple@chuv.ch", "Joignable le matin"]);
-    ws.addRow(["", "", "Cardiologie", "Garde nuit/WE", "Interne", "+41 21 314 44 24", "", ""]);
+    ws.addRow(["Anne", "Exemple", "Oncologie", "Cheffe de clinique", "Mobile", "Interne", "62234", "anne.exemple@chuv.ch", "Joignable le matin"]);
+    ws.addRow(["", "", "Cardiologie", "", "Garde nuit/WE", "Interne", "+41 21 314 44 24", "", ""]);
     download(await wb.xlsx.writeBuffer(), "modele-annuaire-medecins.xlsx");
   }
 
@@ -277,7 +331,7 @@
     if (v && typeof v === "object") v = v.richText ? v.richText.map((t) => t.text).join("") : v.text != null ? v.text : v.result != null ? v.result : "";
     return v == null ? "" : String(v).trim();
   };
-  const HEADERS = [["first_name", /^prenom/], ["last_name", /^nom$|^nom de famille/], ["service", /service|departement/], ["detail", /precision|fonction/],
+  const HEADERS = [["first_name", /^prenom/], ["last_name", /^nom$|^nom de famille/], ["service", /service|departement/], ["detail", /precision|fonction/], ["label", /etiquette|libelle/],
     ["scope", /origine|interne|externe/], ["phone", /tel|numero/], ["email", /mail|courriel/], ["notes", /remarque|note|commentaire/]];
   const parseScope = (v) => { const n = norm(v); return /^int/.test(n) ? "interne" : /^ext/.test(n) ? "externe" : ""; };
 
@@ -378,6 +432,6 @@
     if (state.role === "admin" || state.role === "pharmacist") setupAdmin();
     render();
     const id = +new URLSearchParams(location.search).get("c");
-    if (id) { const d = document.getElementById("ct-" + id); if (d) { d.open = true; d.scrollIntoView({ block: "center" }); } }
+    if (id) { const ent = state.entOf.get(id); const d = ent && document.getElementById("ct-" + ent.id); if (d) { d.open = true; d.scrollIntoView({ block: "center" }); } }
   })();
 })();
