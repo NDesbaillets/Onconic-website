@@ -17,7 +17,11 @@
   const SVGNS = "http://www.w3.org/2000/svg";
 
   const $ = (id) => document.getElementById(id);
-  const state = { rows: [], admin: false, clinic: "", line: "", me: "" };
+  const CLINICS = BLOCS.flatMap(([, list]) => list);
+  const state = { rows: [], admin: false, cdc: [], flags: [], clinic: "", line: "", me: "", meId: "" };
+  // Droit de modifier une fiche : admin, ou CDC / Cadre de sa clinique (contrôlé aussi en base)
+  const canEdit = (clinic) => state.admin || (!!clinic && state.cdc.includes(clinic));
+  const editableClinics = () => (state.admin ? CLINICS : CLINICS.filter((c) => state.cdc.includes(c)));
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9+<>≥≤%]+/g, " ").trim();
   const SYN = [["cbnpc", "nsclc", "cpnpc"], ["cppc", "sclc"], ["her2", "erbb2"], ["epidermoide", "squameux", "squamous"]];
   // Synonymes par mot entier (« nsclc » ne doit pas déclencher « sclc »)
@@ -83,7 +87,8 @@
     name.append(el("strong", "kt-acro", r.acronym), " ", r.title);
     head.append(name);
     const meta = el("div", "ug-meta");
-    if (r.status === "draft") meta.append(badge("Brouillon à relire", "ug-warn"));
+    if (r.status === "draft") meta.append(badge("Brouillon", "ug-warn"));
+    if (r.clinic) meta.append(badge(r.clinic, "kt-clinic"));
     (r.lines || []).forEach((l) => meta.append(badge(LINE_LABEL[l] || l)));
     if (r.diagnosis) meta.append(badge(r.diagnosis));
     (r.markers || "").split(";").map((m) => m.trim()).filter(Boolean).forEach((m) => meta.append(badge(m, "lt-marker")));
@@ -109,7 +114,7 @@
   function body(d, r) {
     d.dataset.ready = "1";
     const b = el("div", "ug-body kt-body");
-    if (r.status === "draft") b.append(el("p", "ug-note ug-attn", "Brouillon généré à partir des résumés publiés : à relire avant publication."));
+    if (r.status === "draft") b.append(el("p", "ug-note ug-attn kt-draft", "Brouillon : cette fiche n'a pas encore été relue ni validée par un médecin cadre. Les données peuvent contenir des erreurs : vérifiez-les dans la publication d'origine avant toute décision clinique."));
     if (r.summary) b.append(el("p", "kt-summary", r.summary));
 
     // Design : schéma de l'étude en tête, puis les faits clés
@@ -170,7 +175,8 @@
     b.append(section("Références", ul));
     b.append(el("p", "muted kt-stamp", [r.reviewed_by ? `Relu par ${r.reviewed_by} le ${fmtDate(r.reviewed_at)}` : "Pas encore relu", `mis à jour le ${new Date(r.updated_at).toLocaleDateString("fr-CH")}`].join(" · ")));
 
-    if (state.admin) b.append(adminBar(r));
+    b.append(flagBar(r));
+    if (canEdit(r.clinic)) b.append(adminBar(r));
     d.append(b);
   }
 
@@ -565,17 +571,101 @@
 
   function adminBar(r) {
     const bar = el("div", "btn-row kt-admin");
+    // Clinique / spécialité de la fiche
+    const lab = el("label", "kt-clinic-sel", "Clinique ");
+    const sel = el("select");
+    const options = editableClinics().includes(r.clinic) || !r.clinic ? editableClinics() : [r.clinic, ...editableClinics()];
+    if (!r.clinic) { const o = el("option", null, "Non classée"); o.value = ""; sel.append(o); }
+    options.forEach((c) => { const o = el("option", null, c); o.value = c; sel.append(o); });
+    sel.value = r.clinic || "";
+    sel.addEventListener("change", () => {
+      if (!sel.value) { sel.value = r.clinic || ""; return; }
+      patch(r, { clinic: sel.value });
+    });
+    lab.append(sel);
+    bar.append(lab);
     bar.append(button("Modifier", "btn btn-outline ug-copy", () => edit(r)));
-    bar.append(button(r.status === "draft" ? "Publier" : "Repasser en brouillon", "btn ug-copy", () => patch(r, { status: r.status === "draft" ? "published" : "draft" })));
-    bar.append(button("Marquer comme relu par moi", "btn btn-outline ug-copy", () => patch(r, { reviewed_by: state.me, reviewed_at: new Date().toISOString().slice(0, 10) })));
+    if (r.status === "draft") bar.append(button("Valider la fiche", "btn ug-copy", () => patch(r, { status: "published", reviewed_by: state.me, reviewed_at: new Date().toISOString().slice(0, 10) })));
+    else bar.append(button("Repasser en brouillon", "btn btn-outline ug-copy", () => patch(r, { status: "draft" })));
     bar.append(button("Dupliquer", "btn btn-outline ug-copy", () => edit(null, Object.assign(pick(r), { slug: r.slug + "-copie" }))));
-    bar.append(button("Supprimer", "btn btn-outline ug-copy lt-danger", async () => {
+    if (state.admin) bar.append(button("Supprimer", "btn btn-outline ug-copy lt-danger", async () => {
       if (!confirm(`Supprimer la fiche ${r.acronym} ?`)) return;
       const { error } = await sb.from("key_trials").delete().eq("id", r.id);
       if (error) return alert("Suppression refusée : " + error.message);
       await refresh();
     }));
     return bar;
+  }
+
+  // ----- Signalement « à réviser » -----
+  const openFlags = (r) => state.flags.filter((f) => f.trial_id === r.id && !f.resolved_at);
+  function flagBar(r) {
+    const box = el("div", "kt-flags");
+    const flags = openFlags(r);
+    const editor = canEdit(r.clinic);
+    if (editor && flags.length) {
+      box.append(el("p", "kt-flags-title", "À réviser : " + (flags.length > 1 ? flags.length + " signalements" : "1 signalement")));
+      flags.forEach((f) => box.append(flagItem(f, true)));
+    } else if (flags.some((f) => f.user_id === state.meId)) {
+      box.append(el("p", "muted", "Vous avez signalé cette fiche : elle est en attente de révision."));
+    }
+    box.append(button("Signaler : à réviser", "btn btn-outline ug-copy", () => openFlagDialog(r)));
+    return box;
+  }
+  function flagItem(f, withResolve) {
+    const it = el("div", "kt-flag");
+    it.append(el("p", "kt-flag-text", f.comment));
+    it.append(el("p", "muted kt-flag-meta", `${f.author_name || "Membre"} · ${new Date(f.created_at).toLocaleDateString("fr-CH")}`));
+    if (withResolve) it.append(button("Marquer comme traité", "btn btn-outline ug-copy", async () => {
+      const { error } = await sb.from("trial_flags").update({ resolved_at: new Date().toISOString() }).eq("id", f.id);
+      if (error) return alert("Refusé : " + error.message);
+      await refresh();
+    }));
+    return it;
+  }
+  function openFlagDialog(r) {
+    state.flagging = r;
+    $("kt-flag-title").textContent = `Signaler ${r.acronym} : à réviser`;
+    $("kt-flag-text").value = "";
+    $("kt-flag-msg").textContent = "";
+    $("kt-flag-dialog").showModal();
+    $("kt-flag-text").focus();
+  }
+  async function saveFlag(e) {
+    e.preventDefault();
+    const out = $("kt-flag-msg");
+    const text = $("kt-flag-text").value.trim();
+    if (text.length < 5) { out.className = "form-msg error"; out.textContent = "Expliquez en quelques mots pourquoi la fiche est à réviser."; return; }
+    out.className = "form-msg"; out.textContent = "Envoi…";
+    const { error } = await sb.from("trial_flags").insert({ trial_id: state.flagging.id, comment: text });
+    if (error) { out.className = "form-msg error"; out.textContent = "Refusé : " + error.message; return; }
+    $("kt-flag-dialog").close();
+    await refresh(state.flagging.slug);
+  }
+  async function loadFlags() {
+    const { data, error } = await sb.from("trial_flags").select("*").is("resolved_at", null).order("created_at");
+    state.flags = error ? [] : data || [];
+  }
+  // Section « À réviser » en bas de page : admins et CDC / Cadre, pour leurs cliniques
+  function renderReview() {
+    const sec = $("kt-review");
+    const items = state.rows.filter((r) => canEdit(r.clinic) && openFlags(r).length);
+    sec.hidden = !(state.admin || state.cdc.length);
+    $("kt-review-count").textContent = items.length ? `(${items.length})` : "";
+    const box = $("kt-review-list");
+    box.replaceChildren();
+    if (!items.length) { box.append(el("p", "muted", "Aucune fiche signalée pour le moment.")); return; }
+    items.forEach((r) => {
+      const c = el("article", "kt-review-item");
+      const head = el("p", "kt-review-head");
+      const a = el("a", null, `${r.acronym} : ${r.title}`);
+      a.href = "#trial-" + r.slug;
+      a.addEventListener("click", (ev) => { ev.preventDefault(); const d = document.getElementById("trial-" + r.slug); if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); } });
+      head.append(a, " ", badge(r.clinic || "Non classée", "kt-clinic"));
+      c.append(head);
+      openFlags(r).forEach((f) => c.append(flagItem(f, true)));
+      box.append(c);
+    });
   }
 
   const pick = (r) => Object.fromEntries(EDITABLE.map((k) => [k, r[k] == null ? (k === "lines" ? [] : null) : r[k]]));
@@ -589,7 +679,9 @@
   function edit(r, preset) {
     state.editing = r;
     $("kt-form-title").textContent = r ? `Modifier ${r.acronym}` : "Nouvelle fiche";
-    $("kt-json").value = JSON.stringify(r ? pick(r) : (preset || TEMPLATE), null, 2);
+    const base = r ? pick(r) : Object.assign({}, preset || TEMPLATE);
+    if (!r && !editableClinics().includes(base.clinic)) base.clinic = editableClinics()[0] || base.clinic;
+    $("kt-json").value = JSON.stringify(base, null, 2);
     $("kt-form-msg").textContent = "";
     $("kt-dialog").showModal();
   }
@@ -605,6 +697,8 @@
     if (!rec.acronym || !rec.title) return err("acronym et title sont obligatoires.");
     if (rec.lines && !rec.lines.every((l) => LINE_LABEL[l])) return err("lines : valeurs autorisées neoadj, adj, 1L, 2L, 3L.");
     if (rec.practice && !PRACTICE[rec.practice]) return err("practice : oui, partiel ou non.");
+    if (!rec.clinic || !CLINICS.includes(rec.clinic)) return err("clinic : une des cliniques proposées (" + CLINICS.join(", ") + ").");
+    if (!canEdit(rec.clinic)) return err("Vous ne pouvez pas modifier les fiches de la clinique « " + rec.clinic + " ».");
     if (rec.km != null && !(Array.isArray(rec.km) && rec.km.every((k) => Array.isArray(k.arms) && k.arms.every((a) => Array.isArray(a.points) && a.points.every((p) => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite) && p[1] >= 0 && p[1] <= 100)))))
       return err("km : liste de courbes { ep, label, source, arms: [{ arm, points: [[mois, %], …] }] }, % entre 0 et 100.");
     if (rec.km == null) rec.km = [];
@@ -621,8 +715,10 @@
 
   async function refresh(openSlug) {
     await load();
+    await loadFlags();
     setupFilters();
     search();
+    renderReview();
     if (openSlug) {
       const d = document.getElementById("trial-" + openSlug);
       if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
@@ -659,26 +755,32 @@
     const { data } = await sb.auth.getSession();
     if (!data.session) return (location.href = "/fr/the-hive.html");
     $("logout").addEventListener("click", async () => { await sb.auth.signOut(); location.href = "/fr/"; });
-    const { data: profile } = await sb.from("profiles").select("role, full_name, first_name, last_name").eq("id", data.session.user.id).single();
+    const { data: profile } = await sb.from("profiles").select("role, full_name, first_name, last_name, cdc_clinics").eq("id", data.session.user.id).single();
     const role = profile ? profile.role : "member";
     const { data: canUse } = await sb.rpc("has_tool", { p_tool: "trials" });
     if (role !== "admin" && canUse !== true) return ($("ug-status").textContent = "Cet outil ne fait pas partie de vos accès. Contactez l'administrateur si besoin.");
     state.admin = role === "admin";
+    state.cdc = role === "cdc" ? profile.cdc_clinics || [] : [];
+    state.meId = data.session.user.id;
     state.me = [profile.first_name, profile.last_name].filter(Boolean).join(" ") || profile.full_name || data.session.user.email;
     try { await load(); } catch (e) { return ($("ug-status").textContent = "Chargement impossible : " + e.message); }
+    await loadFlags();
     if (!state.rows.length && !state.admin) return ($("ug-status").textContent = "Les premières fiches sont en cours de relecture.");
     $("ug-status").hidden = true;
     $("ug-tool").hidden = false;
-    if (state.admin) {
+    if (state.admin || state.cdc.length) {
       $("kt-new").hidden = false;
       $("kt-new").addEventListener("click", () => edit(null));
       $("kt-form").addEventListener("submit", save);
       $("kt-cancel").addEventListener("click", () => $("kt-dialog").close());
     }
+    $("kt-flag-form").addEventListener("submit", saveFlag);
+    $("kt-flag-cancel").addEventListener("click", () => $("kt-flag-dialog").close());
     for (const id of ["q", "f-dx", "f-mk"]) $(id).addEventListener("input", search);
     $("f-clinic").addEventListener("change", (e) => { state.clinic = e.target.value; search(); });
     setupFilters();
     search();
+    renderReview();
     const slug = new URLSearchParams(location.search).get("t");
     if (slug) { const d = document.getElementById("trial-" + slug); if (d) { d.open = true; d.scrollIntoView(); } }
   })();

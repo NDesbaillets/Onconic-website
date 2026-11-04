@@ -15,11 +15,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261103f">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261104a">
   <script src="/assets/js/site.js?v=20261102i" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/trials.js?v=20261102h" defer></script>
+  <script src="/assets/js/trials.js?v=20261104a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -64,8 +64,26 @@
             <button class="btn" id="kt-new" type="button" hidden>Nouvelle fiche</button>
           </div>
           <div id="ug-results"></div>
+          <section class="kt-review" id="kt-review" aria-labelledby="kt-review-title" hidden>
+            <h2 id="kt-review-title">À réviser <span id="kt-review-count"></span></h2>
+            <p class="muted">Fiches signalées par les utilisateurs, pour les cliniques que vous gérez.</p>
+            <div id="kt-review-list"></div>
+          </section>
           <p class="muted ug-source">Synthèses destinées à la formation. Les chiffres proviennent des publications citées ; vérifiez toujours la source originale avant une décision clinique.</p>
         </div>
+
+        <dialog class="cg-dialog" id="kt-flag-dialog" aria-labelledby="kt-flag-title">
+          <form class="cg-form" id="kt-flag-form" method="dialog" novalidate>
+            <h2 id="kt-flag-title">Signaler : à réviser</h2>
+            <label class="cg-wide">Pourquoi cette fiche est-elle à réviser ? *<textarea id="kt-flag-text" rows="4" maxlength="1000" placeholder="ex. HR de la PFS différent de la publication, schéma de doses à vérifier"></textarea></label>
+            <p class="muted">Votre message sera lu par les administrateurs et les médecins cadres de la clinique concernée.</p>
+            <p class="form-msg" id="kt-flag-msg" role="status" aria-live="polite"></p>
+            <div class="btn-row">
+              <button class="btn" type="submit">Envoyer</button>
+              <button class="btn btn-outline" type="button" id="kt-flag-cancel">Annuler</button>
+            </div>
+          </form>
+        </dialog>
 
         <dialog class="cg-dialog kt-dialog" id="kt-dialog" aria-labelledby="kt-form-title">
           <form class="cg-form" id="kt-form" method="dialog" novalidate>
