@@ -18,5 +18,8 @@ Texte intégral. À l'enregistrement, l'application extrait le texte (HTML : une
 ## Produire un recueil
 Partir de `assets/formation/deck-template.html` (diapositives en `<section class="slide" data-title="…">`, navigation clavier et tactile, plein écran, impression PDF). Le demander à Claude à partir d'un contenu ou d'articles.
 
+## Convertir un PowerPoint en recueil HTML
+`tools/formation/pptx2html.py` (python-pptx) reproduit chaque diapositive du PPTX à l'identique (formes, tableaux, images, graphiques en colonnes, schémas) dans une scène 960×540 mise à l'échelle ; le texte reste sélectionnable et indexé. Les notes du présentateur ne sont pas reprises. Premier recueil converti le 04.11.2026 : « Gliomes de grade 3 et 4 » (28 diapositives, 4,3 Mo).
+
 ## Idées non faites
 Liens vers les fiches Key trials, recherche par diapositive isolée, hors ligne (PWA), accès par CDC de la clinique, circuit de validation et signalement « à réviser ».
