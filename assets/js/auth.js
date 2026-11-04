@@ -141,12 +141,13 @@
       const { data: profile } = await sb.from("profiles")
         .select("full_name, role, med_plus").eq("id", data.session.user.id).single();
       const role = profile ? profile.role : "member";
+      const eff = role === "cdc" ? "clinician" : role; // CDC / Cadre : droits d'un médecin pour l'affichage
       // Accès réels par outil (rôle + exceptions posées par l'admin) ; repli sur le rôle si la fonction manque
       const { data: tools, error: toolsError } = await sb.rpc("my_tools");
       const myTools = toolsError ? null : tools || [];
       const plus = myTools ? myTools.includes("medletters") : role === "admin";
       // Le pharmacien cumule les droits du médecin et de l'assistante : leurs deux espaces sont les siens
-      const has = (list) => role === "admin" || list.includes(role) || (role === "pharmacist" && (list.includes("clinician") || list.includes("assistant")));
+      const has = (list) => role === "admin" || list.includes(eff) || (role === "pharmacist" && (list.includes("clinician") || list.includes("assistant")));
       document.getElementById("user-name").textContent = (profile && profile.full_name) || data.session.user.email;
 
       // Alvéoles groupées par public : l'espace collaboratif toujours en premier ; l'espace de l'autre métier reste visible,
@@ -154,7 +155,7 @@
       const LOCKED = lang === "fr"
         ? { clinician: "Réservé aux médecins", assistant: "Réservé à l'admin" }
         : { clinician: "Physicians only", assistant: "Admin only" };
-      const active = (role === "clinician" || role === "assistant") ? role : null; // pharmacien : aucun espace grisé
+      const active = (eff === "clinician" || eff === "assistant") ? eff : null; // pharmacien : aucun espace grisé
       app.querySelectorAll(".hive-group").forEach((group) => {
         const gid = group.dataset.group;
         const other = active && gid !== "common" && gid !== active;

@@ -916,3 +916,18 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .an-note { margin: 0; font-size: .9rem; }
 .an-body dd { overflow-wrap: anywhere; }
 .an-toggles .btn { gap: 6px; }
+
+/* Key trials : brouillon, clinique, signalements « à réviser » */
+.kt-draft { font-weight: 500; }
+.kt-clinic-sel { display: inline-flex; align-items: center; gap: var(--space-2); }
+.kt-clinic-sel select { min-height: 40px; }
+.kt-flags { margin-top: var(--space-3); display: grid; gap: var(--space-2); justify-items: start; }
+.kt-flags-title { margin: 0; font-weight: 600; }
+.kt-flag { background: var(--mist); border-left: 3px solid var(--amber-500); padding: var(--space-2) var(--space-3); width: 100%; box-sizing: border-box; }
+.kt-flag p { margin: 0 0 var(--space-1); }
+.kt-flag-meta { font-size: .85rem; }
+.kt-review { margin-top: var(--space-5, 48px); background: var(--mist); border-top: 3px solid var(--amber-500); padding: var(--space-3); display: grid; gap: var(--space-3); }
+.kt-review h2 { margin: 0; font-size: 1.25rem; font-weight: 500; }
+.kt-review[hidden] { display: none; }
+.kt-review-item { display: grid; gap: var(--space-2); padding-bottom: var(--space-3); border-bottom: 1px solid rgba(0, 0, 0, .1); }
+.kt-review-head { margin: 0; font-weight: 500; }
