@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; frame-src 'self' blob:; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Formation · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <meta name="apple-mobile-web-app-title" content="Onconic">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261104b">
+  <script src="/assets/js/site.js?v=20261102i" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/formation.js?v=20261104a" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug fm">
+      <div class="container">
+        <a class="hive-back" href="/fr/app/">← The Hive</a>
+        <span class="eyebrow">Outil des médecins, des assistantes et des pharmaciens</span>
+        <h1>Formation</h1>
+        <p class="cg-sub">Recueils de présentations par clinique et par pathologie</p>
+        <hr class="rule">
+        <p class="muted" id="ug-status">Chargement…</p>
+
+        <div id="fm-list-view" hidden>
+          <label class="ug-search">
+            <span class="visually-hidden">Rechercher dans les recueils (titre, pathologie, mot-clé, texte des diapositives)</span>
+            <input id="q" type="search" autocomplete="off" placeholder="Pathologie, médicament, étude, mot du texte">
+          </label>
+          <div class="an-actions">
+            <label class="fm-clinic">Clinique <select id="fm-clinic"></select></label>
+            <button class="btn" id="fm-new" type="button" hidden>Déposer un recueil</button>
+          </div>
+          <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
+          <div id="fm-tree"></div>
+          <p class="muted ug-source">Supports de formation internes. Vérifiez les données dans les publications citées avant toute décision clinique.</p>
+        </div>
+
+        <section class="fm-reader" id="fm-reader" aria-label="Lecture du recueil" hidden>
+          <div class="fm-reader-bar">
+            <button class="btn btn-outline" id="fm-back" type="button">← Retour aux recueils</button>
+            <h2 id="fm-reader-title"></h2>
+            <div class="fm-reader-tools">
+              <button class="btn btn-outline" id="fm-full" type="button">Plein écran</button>
+              <a class="btn btn-outline" id="fm-open" target="_blank" rel="noopener" hidden>Ouvrir dans un onglet</a>
+              <a class="btn btn-outline" id="fm-source" hidden>Fichier source</a>
+            </div>
+          </div>
+          <p class="form-msg" id="fm-reader-msg" role="status"></p>
+          <iframe class="fm-frame" id="fm-frame" title="Recueil" allow="fullscreen" allowfullscreen></iframe>
+        </section>
+
+        <dialog class="cg-dialog" id="fm-dialog" aria-labelledby="fm-form-title">
+          <form class="cg-form" id="fm-form" method="dialog" novalidate>
+            <h2 id="fm-form-title">Déposer un recueil</h2>
+            <div class="cg-grid">
+              <label class="cg-wide">Titre *<input name="title" required maxlength="200" autocomplete="off"></label>
+              <label>Clinique *<select name="clinic" required id="fm-f-clinic"></select></label>
+              <label>Pathologie *<input name="pathology" required maxlength="120" list="fm-paths" autocomplete="off" placeholder="ex. Glioblastome"></label>
+              <datalist id="fm-paths"></datalist>
+              <label class="cg-wide">Mots-clés (séparés par des virgules)<input name="tags" maxlength="300" autocomplete="off" placeholder="ex. témozolomide, CATNON, IDH"></label>
+              <label>Niveau<select name="level"><option value="tous">Tous</option><option value="residents">Résidents</option><option value="cadres">Cadres</option></select></label>
+              <label>Auteur<input name="author" maxlength="200" autocomplete="off"></label>
+              <label class="cg-wide">Résumé (une ou deux phrases)<textarea name="summary" maxlength="1000" rows="2"></textarea></label>
+              <label class="cg-wide">Fichier (HTML ou PDF) <span id="fm-file-hint" class="muted"></span><input type="file" name="file" id="fm-file" accept=".html,.htm,.pdf"></label>
+              <label class="cg-wide">Fichier source modifiable, facultatif (PowerPoint)<input type="file" name="source" accept=".pptx"></label>
+              <label class="cg-wide">Texte pour la recherche (extrait automatiquement, modifiable)<textarea name="text" rows="3" id="fm-text"></textarea></label>
+              <label class="cg-check cg-wide"><input type="checkbox" name="published"><span>Publié (visible des membres). Sinon : brouillon, visible de vous seul.</span></label>
+              <label class="cg-check cg-wide"><input type="checkbox" name="nopatient"><span>Ce document ne contient aucune donnée de patient identifiable.</span></label>
+            </div>
+            <p class="form-msg" id="fm-form-msg" role="status" aria-live="polite"></p>
+            <div class="btn-row">
+              <button class="btn" type="submit" value="save">Enregistrer</button>
+              <button class="btn btn-outline" type="button" id="fm-cancel">Annuler</button>
+            </div>
+          </form>
+        </dialog>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>

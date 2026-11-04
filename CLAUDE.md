@@ -42,6 +42,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Congrès plus** | Détail de présentation, retours de congrès, abonnement agenda (voir memory/projects/congres-plus.md) ; SQL et fonction à déployer avant fusion |
 | **Annuaire prestataires** | Nouvel outil (médecins, assistantes, pharmaciens) : fiches, recherche, filtres, favoris, import/export Excel (voir memory/projects/annuaire.md) |
 | **Annuaire pour médecins** | Nouvel outil (médecins, pharmaciens) : contacts internes CHUV (numéros complets, raccourcis à 5 chiffres) et externes, recherche libre (voir memory/projects/contacts.md) ; données hors dépôt |
+| **Formation** | Recueils de présentations HTML ou PDF par clinique et pathologie, recherche en texte intégral ; dépôt réservé à l'admin ; premier contenu neuro-oncologie à venir (voir memory/projects/formation.md) |
 → Détails : memory/projects/
 
 ## Règles de sécurité (ne jamais enfreindre)

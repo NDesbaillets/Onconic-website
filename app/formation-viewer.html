@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Page chargée dans un cadre isolé (sandbox sans allow-same-origin) par app/formation.html : origine opaque, aucun accès réseau.
+       Le recueil HTML y est affiché dans un sous-cadre : son code ne peut ni lire la session ni appeler l'extérieur. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; frame-src about:">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Visionneuse</title>
+  <style>html, body { margin: 0; height: 100%; background: #00123A; } iframe { border: 0; width: 100%; height: 100%; display: block; background: #fff; }</style>
+</head>
+<body>
+  <iframe id="deck" title="Présentation" allowfullscreen></iframe>
+  <script>
+    (function () {
+      var deck = document.getElementById("deck");
+      window.addEventListener("message", function (e) {
+        if (e.source !== window.parent) return;
+        var m = e.data || {};
+        if (m.type === "load" && typeof m.html === "string") {
+          deck.onload = function () { if (m.slide) deck.contentWindow.postMessage({ type: "goto", n: m.slide }, "*"); };
+          deck.srcdoc = m.html;
+        } else if (m.type === "goto" && deck.contentWindow) {
+          deck.contentWindow.postMessage(m, "*");
+        }
+      });
+      window.parent.postMessage({ type: "ready" }, "*");
+    })();
+  </script>
+</body>
+</html>
