@@ -50,12 +50,21 @@
     return e;
   }
 
+  // Abréviations de recherche : KN pour KEYNOTE, CM pour CheckMate (« kn 189 », « kn-189 », « kn189 »), et acronyme sans séparateur
+  function aliases(acronym) {
+    const a = norm(acronym);
+    const out = [a.replace(/ /g, "")];
+    const m = a.match(/^(keynote|checkmate)\s*(.*)$/);
+    if (m && m[2]) { const ab = m[1] === "keynote" ? "kn" : "cm"; out.push(ab + " " + m[2], ab + m[2].replace(/ /g, "")); }
+    return out.join(" ");
+  }
+
   // ----- Données -----
   async function load() {
     const { data, error } = await sb.from("key_trials").select("*").order("acronym").range(0, 999);
     if (error) throw error;
     state.rows = (data || []).map((r) => Object.assign(r, {
-      _hay: expand([r.acronym, r.title, r.drugs, r.diagnosis, r.markers, r.phase, r.summary].join(" ")),
+      _hay: expand([r.acronym, aliases(r.acronym), r.title, r.drugs, r.diagnosis, r.markers, r.phase, r.summary].join(" ")),
       _dx: expand([r.diagnosis, r.title].join(" ")),
       _mk: (r.markers || "").split(";").map(expand)
     }));
