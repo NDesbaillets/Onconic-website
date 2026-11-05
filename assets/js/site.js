@@ -40,7 +40,7 @@ window.plur = (n, one, many) => n + " " + (n > 1 ? many : one);
 (function () {
   const items = document.querySelectorAll("[data-reveal]");
   if (!items.length) return;
-  if (!("IntersectionObserver" in window)) return items.forEach((el) => el.classList.add("revealed"));
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || !("IntersectionObserver" in window)) return items.forEach((el) => el.classList.add("revealed"));
   // Le masquage initial n'existe que si ce script tourne : sans lui, tout reste visible
   document.documentElement.classList.add("reveal-on");
   setTimeout(() => items.forEach((el) => el.classList.add("revealed")), 3000);

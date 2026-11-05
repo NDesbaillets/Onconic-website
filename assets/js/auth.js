@@ -51,13 +51,41 @@
     el.className = "form-msg" + (kind ? " " + kind : "");
   }
 
+  // État d'attente commun : conserve les libellés et restaure les contrôles même en cas d'échec réseau.
+  function onSubmit(form, handler) {
+    const out = form.querySelector(".form-msg");
+    if (out) { out.setAttribute("role", "status"); out.setAttribute("aria-live", "polite"); }
+    let pending = false;
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (pending) return;
+      pending = true;
+      const buttons = Array.from(form.querySelectorAll('button[type="submit"], button:not([type]), input[type="submit"]'));
+      const previous = buttons.map((button) => ({ disabled: button.disabled, busy: button.getAttribute("aria-busy") }));
+      const busy = form.getAttribute("aria-busy");
+      form.setAttribute("aria-busy", "true");
+      buttons.forEach((button) => { button.disabled = true; button.setAttribute("aria-busy", "true"); });
+      msg(out, lang === "fr" ? "Envoi en cours…" : "Submitting…", "");
+      try { await handler(event); }
+      catch (error) { msg(out, T.error, "error"); }
+      finally {
+        if (busy === null) form.removeAttribute("aria-busy"); else form.setAttribute("aria-busy", busy);
+        buttons.forEach((button, i) => {
+          button.disabled = previous[i].disabled;
+          if (previous[i].busy === null) button.removeAttribute("aria-busy"); else button.setAttribute("aria-busy", previous[i].busy);
+        });
+        pending = false;
+      }
+    });
+  }
+
   // Formulaire de connexion
   const login = document.getElementById("login-form");
   if (login) {
     const out = login.querySelector(".form-msg");
     if (sb) sb.auth.getSession().then(({ data }) => { if (data.session) homeFor(data.session.user.id).then((u) => { location.href = u; }); });
 
-    login.addEventListener("submit", async (e) => {
+    onSubmit(login, async (e) => {
       e.preventDefault();
       if (!sb) return msg(out, T.notConfigured, "error");
       const { data: signed, error } = await sb.auth.signInWithPassword({
@@ -86,7 +114,7 @@
   if (reset) {
     const out = reset.querySelector(".form-msg");
     if (/error_code=/.test(location.hash)) msg(out, T.linkExpired, "error");
-    reset.addEventListener("submit", async (e) => {
+    onSubmit(reset, async (e) => {
       e.preventDefault();
       if (!sb) return msg(out, T.notConfigured, "error");
       const pw = reset.password.value;
@@ -106,7 +134,7 @@
     const kind = new URLSearchParams(location.search).get("type");
     if (kind && contact.kind.querySelector(`option[value="${kind}"]`)) contact.kind.value = kind;
 
-    contact.addEventListener("submit", async (e) => {
+    onSubmit(contact, async (e) => {
       e.preventDefault();
       if (contact.website.value) return; // robot
       if (!sb) return msg(out, T.error + " [client]", "error");

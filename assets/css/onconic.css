@@ -952,3 +952,42 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .fm-reader[hidden] { display: none; }
 .fm-frame { width: 100%; height: 80vh; min-height: 420px; border: 1px solid var(--navy-100); background: #fff; }
 @media (max-width: 700px) { .fm-frame { height: 68vh; } }
+
+/* Composants communs : retours discrets, sans modifier la géométrie ni la palette. */
+.btn { position: relative; gap: 8px; transition: background-color var(--transition), color var(--transition), border-color var(--transition); }
+.btn:active:not(:disabled):not([aria-disabled="true"]) { border-color: currentColor; }
+.btn:disabled, .btn[aria-disabled="true"] { cursor: not-allowed; opacity: .7; }
+.btn[aria-busy="true"] { cursor: progress; }
+.btn[aria-busy="true"]::after {
+  content: ""; position: absolute; right: 8px; width: 12px; height: 12px;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: control-spin .8s linear infinite;
+}
+@keyframes control-spin { to { transform: rotate(360deg); } }
+:is(input, textarea, select) { transition: border-color var(--transition), background-color var(--transition); }
+:is(input, textarea, select):not(:disabled):hover { border-color: var(--navy-700); }
+:is(input, textarea, select):focus-visible { border-color: var(--navy-800); }
+:is(input, textarea, select)[aria-invalid="true"] { border-color: var(--danger); }
+:is(input, textarea, select):disabled { cursor: not-allowed; background-color: var(--mist); }
+/* Les cartes statiques restent statiques ; seuls les éléments utilisables réagissent. */
+.ug-card { transition: border-color var(--transition); }
+.ug-card:focus-within { border-color: var(--navy-800); border-top-color: var(--amber-500); }
+.card { min-width: 0; overflow-wrap: anywhere; }
+.card a:not(.btn) { text-underline-offset: .2em; }
+/* Navy sur fond clair, ambre sur fond sombre : focus contrasté avec les tokens existants. */
+:is(a, button, input, textarea, select, summary):focus-visible { outline: 3px solid var(--navy-800); outline-offset: 2px; }
+:is(.hero, .hive-hero, .site-footer) :focus-visible { outline-color: var(--amber-500); }
+/* Les alvéoles gardent leur inversion ambre/navy, visible malgré le clip-path. */
+.hex-link:focus-visible { outline: none; }
+/* Un élément révélé doit rester visible dès qu'il reçoit le focus clavier. */
+.reveal-on [data-reveal]:focus-within { opacity: 1; }
+@media (max-width: 760px), (pointer: coarse) {
+  .an-mini, .fm-title, .ls-copy { min-height: 44px; }
+  /* Évite le zoom automatique iOS dans les champs compacts. */
+  input:not([type="checkbox"]):not([type="radio"]), textarea, select { font-size: max(16px, 1em); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .reveal-on [data-reveal] { opacity: 1; transform: none; }
+  .hex:hover, .hex-link:focus-visible, .reveal-on .comb .hex.revealed:hover { transform: none; }
+}
