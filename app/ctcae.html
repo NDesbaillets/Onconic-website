@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>CTCAE v5 et v6 · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <meta name="apple-mobile-web-app-title" content="Onconic">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261105b">
+  <script src="/assets/js/site.js?v=20261105a" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/ctcae.js?v=20261105a" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug ct">
+      <div class="container">
+        <a class="hive-back" href="/fr/app/">← The Hive</a>
+        <span class="eyebrow">Outil des médecins</span>
+        <h1>CTCAE v5 et v6</h1>
+        <p class="cg-sub">Grading des événements indésirables : symptômes et anomalies biologiques, en anglais et en français</p>
+        <hr class="rule">
+        <p class="muted" id="ct-status">Chargement…</p>
+
+        <div id="ct-tool" hidden>
+          <label class="ug-search">
+            <span class="visually-hidden">Rechercher un symptôme ou une anomalie biologique</span>
+            <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Symptôme ou anomalie biologique : diarrhée, ALAT, neutropénie fébrile, CRS…">
+          </label>
+
+          <div class="ct-controls">
+            <div class="ct-ctl">
+              <span class="ct-ctl-label" id="ct-l-ver">Version</span>
+              <div class="ct-seg" id="ct-ver" role="group" aria-labelledby="ct-l-ver"></div>
+            </div>
+            <div class="ct-ctl">
+              <span class="ct-ctl-label" id="ct-l-lang">Langue</span>
+              <div class="ct-seg" id="ct-lang" role="group" aria-labelledby="ct-l-lang"></div>
+            </div>
+            <label class="ct-ctl ct-soc">
+              <span class="ct-ctl-label">Catégorie (SOC)</span>
+              <select id="ct-soc"></select>
+            </label>
+          </div>
+
+          <p class="muted" id="ct-count" role="status" aria-live="polite"></p>
+          <div id="ct-browse" hidden></div>
+          <div id="ct-list"></div>
+          <div class="btn-row ct-more" id="ct-more" hidden><button class="btn btn-outline" id="ct-more-btn" type="button">Afficher plus</button></div>
+
+          <details class="ct-legend">
+            <summary>Abréviations et sources</summary>
+            <dl class="ug-dl">
+              <dt>AIVQ</dt><dd>Activités instrumentales de la vie quotidienne : préparer les repas, faire les courses, téléphoner, gérer l'argent.</dd>
+              <dt>AVQ</dt><dd>Soins personnels de base : se laver, s'habiller, manger, aller aux toilettes, prendre ses médicaments, ne pas être alité.</dd>
+              <dt>LSN, LIN</dt><dd>Limite supérieure, limite inférieure de la normale du laboratoire (ULN, LLN).</dd>
+              <dt>NPT</dt><dd>Nutrition parentérale totale.</dd>
+              <dt>PNN</dt><dd>Polynucléaires neutrophiles (ANC).</dd>
+            </dl>
+            <p class="muted ug-source" id="ct-src"></p>
+          </details>
+          <p class="muted ug-source">La version anglaise de l'NCI fait foi. La traduction française a été produite pour Onconic et reste à relire ; signalez toute erreur à l'administrateur. Les définitions des termes (texte NCI) restent en anglais. Aucune donnée de patient dans cet outil.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>
