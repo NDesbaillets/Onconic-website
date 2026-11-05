@@ -9,7 +9,7 @@
   const ALLOWED = new Set(["admin", "clinician", "cdc", "pharmacist"]);
 
   const $ = (id) => document.getElementById(id);
-  const state = { data: null, terms: [], q: "", ver: "all", lang: "both", soc: -1, shown: PAGE };
+  const state = { data: null, terms: [], q: "", ver: "5", lang: "fr", soc: -1, shown: PAGE };
 
   // ----- Texte -----
   // Minuscules sans accents, lettres et chiffres séparés par des espaces
@@ -428,14 +428,14 @@
   function segment(box, options, key, onPick) {
     box.replaceChildren();
     for (const [val, label] of options) {
-      const b = button(label, "ug-chip", () => { state[key] = val; store.set("ctcae." + key, val); onPick(); });
+      const b = button(label, "ug-chip", () => { state[key] = val; store.set("ctcae2." + key, val); onPick(); });
       b.setAttribute("aria-pressed", String(state[key] === val));
       box.append(b);
     }
   }
   function controls() {
-    segment($("ct-ver"), [["all", "v5.0 et v6.0"], ["5", "v5.0"], ["6", "v6.0"]], "ver", () => { state.shown = PAGE; controls(); sync(); render(); });
-    segment($("ct-lang"), [["both", "Français et anglais"], ["fr", "Français"], ["en", "Anglais"]], "lang", () => { controls(); fillSoc(); sync(); render(); });
+    segment($("ct-ver"), [["5", "v5.0"], ["6", "v6.0"], ["all", "v5.0 et v6.0"]], "ver", () => { state.shown = PAGE; controls(); sync(); render(); });
+    segment($("ct-lang"), [["fr", "Français"], ["both", "Français et anglais"], ["en", "Anglais"]], "lang", () => { controls(); fillSoc(); sync(); render(); });
   }
   function fillSoc() {
     const sel = $("ct-soc");
@@ -448,8 +448,8 @@
   function sync() {
     const p = new URLSearchParams();
     if (state.q.trim()) p.set("q", state.q.trim());
-    if (state.ver !== "all") p.set("v", state.ver);
-    if (state.lang !== "both") p.set("l", state.lang);
+    if (state.ver !== "5") p.set("v", state.ver);
+    if (state.lang !== "fr") p.set("l", state.lang);
     if (state.soc >= 0) p.set("c", String(state.soc));
     const s = p.toString();
     try { history.replaceState(null, "", location.pathname + (s ? "?" + s : "")); } catch (e) { /* ignoré */ }
@@ -474,9 +474,9 @@
     } catch (e) { $("ct-status").textContent = "Chargement impossible : " + e.message; return; }
 
     const p = new URLSearchParams(location.search);
-    const sv = store.get("ctcae.ver"), sl = store.get("ctcae.lang");
-    state.ver = ["all", "5", "6"].includes(p.get("v")) ? p.get("v") : ["all", "5", "6"].includes(sv) ? sv : "all";
-    state.lang = ["both", "fr", "en"].includes(p.get("l")) ? p.get("l") : ["both", "fr", "en"].includes(sl) ? sl : "both";
+    const sv = store.get("ctcae2.ver"), sl = store.get("ctcae2.lang");
+    state.ver = ["all", "5", "6"].includes(p.get("v")) ? p.get("v") : ["all", "5", "6"].includes(sv) ? sv : "5";
+    state.lang = ["both", "fr", "en"].includes(p.get("l")) ? p.get("l") : ["both", "fr", "en"].includes(sl) ? sl : "fr";
     const c = parseInt(p.get("c"), 10);
     state.soc = c >= 0 && c < state.data.soc.length ? c : -1;
     state.q = p.get("q") || "";

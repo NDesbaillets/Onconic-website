@@ -12,6 +12,7 @@ Outil de recherche du grading CTCAE (symptôme ou anomalie biologique), versions
 - Pour régénérer : `python3 -I tools/ctcae/build_ctcae.py v5.xls v6.xls assets/data/ctcae.json` (pandas, xlrd). Le script échoue et liste les libellés sans traduction si le NCI publie une nouvelle version.
 
 ## Fonctions
+Par défaut : v5.0 et français (décision du 05.11.2026) ; les autres choix sont mémorisés par utilisateur.
 Recherche libre tolérante aux accents et aux fautes (1 à 2 lettres), sur noms EN et FR, catégorie et texte des grades ; dictionnaire d'abréviations (ALAT, ASAT, PNN, CRS, QTc, HFS, FEVG…) ; filtre de version (v5.0, v6.0 ou les deux côte à côte avec les grades modifiés surlignés) ; filtre de langue ; filtre de catégorie ; adresse partageable (`?q=&v=&l=&c=`) ; bouton « Copier » par version ; parcours par catégorie quand la recherche est vide.
 
 ## Idées non faites
