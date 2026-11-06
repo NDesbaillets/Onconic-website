@@ -25,6 +25,20 @@ window.plur = (n, one, many) => n + " " + (n > 1 ? many : one);
   });
 })();
 
+// Retour à The Hive toujours accessible : sur les pages d'outils (membres et admin), un lien persistant s'ajoute dans l'en-tête
+// collant, à côté du logo, donc visible en haut de page, après défilement et sur mobile sans ouvrir le menu.
+(function () {
+  const back = document.querySelector("a.hive-back");
+  const brand = document.querySelector(".site-header .brand");
+  if (!back || !brand || document.querySelector(".hive-home")) return;
+  const a = document.createElement("a");
+  a.className = "hive-home";
+  a.href = back.getAttribute("href");
+  a.textContent = back.textContent.trim() || "← The Hive";
+  brand.after(a);
+  document.body.classList.add("has-hive-home");
+})();
+
 // Liens reçus par e-mail : Supabase peut renvoyer vers n'importe quelle page autorisée.
 // Invitation → page de bienvenue (mot de passe + profil) ; mot de passe oublié → « nouveau mot de passe ».
 (function () {
