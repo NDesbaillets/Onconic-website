@@ -1151,3 +1151,36 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .aa-max input { font: inherit; width: 72px; min-height: 44px; padding: 8px; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); }
 .aa-cadres { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; }
 .aa-cadres legend { font-weight: 500; font-size: .85rem; color: var(--navy-800); padding-bottom: 6px; }
+
+/* Absences : ligne d'agenda commun (fériés, vacances scolaires, événements) */
+.ab-grid tr.ab-cal .ab-name { background: var(--mist); }
+.ab-grid td.ab-cal-c { height: 32px; font-size: .7rem; font-weight: 600; }
+.ab-key.ab-cal-ferie, .ab-grid td.ab-cal-ferie { background: #5A6478; color: var(--white); }
+.ab-key.ab-cal-vacances_scolaires, .ab-grid td.ab-cal-vacances_scolaires { background: #C3CBD9; color: var(--navy-800); }
+.ab-key.ab-cal-evenement, .ab-grid td.ab-cal-evenement { background: var(--amber-50); color: var(--amber-700); outline: 2px solid var(--amber-700); outline-offset: -2px; }
+.ab-grid td.ab-cal-c[data-cal] { cursor: pointer; }
+.ab-grid td.ab-cal-c[data-cal]:focus-visible { outline: 3px solid var(--amber-500); outline-offset: -3px; }
+.ab-detail p .ug-badge { margin-right: 6px; }
+
+/* Administration : agenda commun */
+.aa-cal { margin-top: var(--space-5); display: grid; gap: var(--space-3); }
+.aa-cal h2 { margin: 0; font-size: 1.6rem; }
+.aa-cal-form { display: grid; grid-template-columns: minmax(150px, 190px) minmax(0, 1fr) minmax(140px, 170px) minmax(140px, 170px) auto; gap: var(--space-3); align-items: end; padding: var(--space-3) var(--space-4); }
+.aa-cal-form label { display: grid; gap: 4px; font-weight: 500; font-size: .9rem; color: var(--navy-800); min-width: 0; }
+.aa-cal-form input, .aa-cal-form select { font: inherit; font-weight: 400; min-height: 44px; padding: 8px 12px; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); color: var(--ink-900); min-width: 0; width: 100%; }
+.aa-cal-list { display: grid; gap: var(--space-2); }
+.aa-cal-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--navy-100); background: var(--white); }
+.aa-cal-item .aa-cal-when { font-weight: 500; min-width: 190px; }
+.aa-cal-item .aa-cal-label { flex: 1 1 240px; }
+.aa-cal-item .btn { min-height: 44px; }
+@media (max-width: 900px) { .aa-cal-form { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px) { .aa-cal-form { grid-template-columns: 1fr; } }
+
+/* Congrès : proposition de demande d'absence */
+.cg-dialog.cg-abs { width: min(560px, calc(100vw - 32px)); }
+.cg-abs form { display: grid; gap: var(--space-3); padding: var(--space-4); }
+.cg-abs h2 { margin: 0; font-size: 1.5rem; }
+.cg-abs p { margin: 0; max-width: none; }
+.cg-abs .cg-grid label { display: grid; gap: 4px; font-weight: 500; font-size: .9rem; color: var(--navy-800); }
+.cg-abs input { font: inherit; font-weight: 400; min-height: 44px; padding: 8px 12px; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); min-width: 0; width: 100%; }
+.cg-abs #cg-abs-warn:empty, .cg-abs .form-msg:empty { display: none; }

@@ -6,7 +6,7 @@
 
 ## Rôles et cliniques
 - Rôle `cdc` = chef de clinique (médecin ; son rôle Key trials ne change pas). Nouveau rôle `cadre` : valide les absences des cliniques où l'admin le désigne ; accès par défaut limité à l'outil Absences.
-- Seuls les médecins (`clinician`, `cdc`) ont des cliniques (`profiles.clinics`, choisies par l'admin dans Membres et accès). Cadre, assistante, pharmacien et admin relèvent de la clinique **Administration** (ajoutée aux 11 cliniques, `absence_clinic_settings`).
+- Seuls les médecins (`clinician`, `cdc`) ont des cliniques (`profiles.clinics`, choisies par l'admin dans Membres et accès). Cadre, assistante, pharmacien et admin relèvent de la clinique **Administration**. Cliniques de l'outil (`absence_clinic_settings`) : les 11 de Key trials, plus **Plateforme** (médecins, ajoutée le 06.11.2026) et Administration ; Key trials et Congrès gardent leur propre liste de 11.
 - Valideurs : `absence_validators(clinic, user_id)`, réglés par l'admin dans `/admin/absences.html` (un seul valideur suffit). Sans valideur désigné, les demandes vont aux admins, qui valident tout. Nul ne valide ses propres absences (sauf l'admin).
 
 ## Fonctionnement
@@ -16,8 +16,15 @@
 - Export Word (`docx` 9.5.1 via jsdelivr) : résumé des absences validées et des demandes en attente ou refusées, par année ; les valideurs l'exportent pour les membres de leurs cliniques.
 - Notifications : Web Push (fonction `notify-absence`, abonnements de `push_subscriptions`, case de Mon compte) aux valideurs à chaque demande ou demande de changement, au demandeur à chaque décision ; compteur « n à valider » sur la tuile.
 
+## Agenda commun (première ligne du planning)
+- Jours fériés vaudois calculés par la page (Nouvel An, 2 janvier, Vendredi saint, Lundi de Pâques, Ascension, Lundi de Pentecôte, 1er août, Lundi du Jeûne fédéral, Noël) ; ils sont déduits des jours ouvrables.
+- Vacances scolaires vaudoises et événements importants : table `absence_calendar`, saisie par l'admin dans `/admin/absences.html` (section Agenda commun). Vacances 2026-2027 préremplies d'après des sources tierces, à confirmer sur vd.ch/vacances ; années suivantes à ajouter.
+
+## Depuis la page Congrès
+- Quand un membre passe à « J'y vais » ou « Je présente » (nouvelle participation ferme, événement non passé), un dialogue propose la demande d'absence (motif congrès, dates de l'événement modifiables, précision = titre). Rien n'est proposé sans accès à l'outil Absences ; si une absence couvre déjà ces dates, le dialogue le dit sans créer de doublon.
+
 ## Limites
-- Jours fériés non gérés (jours ouvrables = lundi à vendredi). Pas de soldes de vacances. Pas d'e-mail : seul le push (à activer par appareil) prévient en dehors de The Hive.
+- Pas de soldes de vacances. Pas d'e-mail : seul le push (à activer par appareil) prévient en dehors de The Hive.
 
 ## Mise en service (ordre)
 1. Exécuter `supabase/absences.sql`.

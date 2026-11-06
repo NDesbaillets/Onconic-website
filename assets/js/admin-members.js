@@ -10,6 +10,7 @@
   const TOOLS = [["congres", "Congrès"], ["trials", "Key trials"], ["lettres", "Lettres d'assurance"],
     ["limitations", "Limitations LS"], ["duree", "Durée de traitement"], ["absences", "Absences"], ["medletters", "Lettres médicales"]];
   const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome", "Lower GI", "Upper GI", "ORL", "Sarcomes", "Radiologie interventionnelle"];
+  const ABS_CLINICS = CLINICS.concat(["Plateforme"]); // cliniques de rattachement pour les absences (Key trials garde CLINICS)
   const state = { rows: [], me: null };
 
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -100,7 +101,7 @@
       const fs = el("fieldset", "am-tools am-clinics");
       fs.append(el("legend", null, "Cliniques de rattachement (planning et validation des absences)"));
       const mine = new Set(r.clinics || []);
-      for (const cl of CLINICS) {
+      for (const cl of ABS_CLINICS) {
         const lab = el("label", "cg-check am-tool");
         const cb = el("input");
         cb.type = "checkbox"; cb.checked = mine.has(cl);

@@ -74,6 +74,46 @@
     return root;
   }
 
+  // ----- Agenda commun : vacances scolaires et événements importants -----
+  const CAL_KIND = { vacances_scolaires: "Vacances scolaires", evenement: "Événement" };
+  const fmtCH = (d) => String(d).slice(0, 10).split("-").reverse().join(".");
+  function calSay(text, kind) { const m = $("aa-cal-msg"); m.className = "form-msg" + (kind ? " " + kind : ""); m.textContent = text; }
+  async function loadCal() {
+    const { data, error } = await sb.rpc("absence_calendar", { p_from: "2000-01-01", p_to: "2100-12-31" });
+    if (error) return calSay("Chargement impossible : " + error.message, "error");
+    const list = $("aa-cal-list");
+    list.replaceChildren();
+    if (!(data || []).length) list.append(el("p", "muted", "Aucune entrée."));
+    for (const c of data || []) {
+      const row = el("div", "aa-cal-item");
+      const a = fmtCH(c.start_date), b = fmtCH(c.end_date);
+      row.append(el("span", "aa-cal-when", a === b ? a : `${a} – ${b}`), el("span", "ug-badge", CAL_KIND[c.kind]), el("span", "aa-cal-label", c.label));
+      const del = el("button", "btn btn-outline lt-danger", "Supprimer");
+      del.type = "button";
+      del.addEventListener("click", async () => {
+        if (!confirm(`Supprimer « ${c.label} » ?`)) return;
+        const { error: e2 } = await sb.rpc("admin_calendar_delete", { p_id: c.id });
+        if (e2) return calSay("Refusé : " + e2.message, "error");
+        calSay("Entrée supprimée.", "ok");
+        await loadCal();
+      });
+      row.append(del);
+      list.append(row);
+    }
+  }
+  function initCal() {
+    $("aa-cal-start").addEventListener("change", () => { if (!$("aa-cal-end").value || $("aa-cal-end").value < $("aa-cal-start").value) $("aa-cal-end").value = $("aa-cal-start").value; });
+    $("aa-cal-form").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const { error } = await sb.rpc("admin_calendar_save", { p_id: null, p_kind: $("aa-cal-kind").value, p_label: $("aa-cal-label").value, p_start: $("aa-cal-start").value || null, p_end: $("aa-cal-end").value || null });
+      if (error) return calSay("Refusé : " + error.message, "error");
+      calSay("Entrée ajoutée.", "ok");
+      $("aa-cal-label").value = "";
+      await loadCal();
+    });
+    return loadCal();
+  }
+
   (async () => {
     if (!sb) return ($("ug-status").textContent = "Service indisponible.");
     const { data } = await sb.auth.getSession();
@@ -85,5 +125,6 @@
     $("ug-status").hidden = true;
     $("aa-tool").hidden = false;
     $("aa-list").replaceChildren(...state.clinics.map(card));
+    await initCal();
   })();
 })();

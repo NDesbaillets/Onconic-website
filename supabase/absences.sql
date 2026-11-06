@@ -17,7 +17,7 @@ alter table public.profiles add column if not exists clinics text[] not null def
 -- Reprise des cliniques déjà attribuées aux CDC pour Key trials (une seule fois : seulement si clinics est vide)
 update public.profiles set clinics = cdc_clinics where role = 'cdc' and clinics = '{}' and cdc_clinics <> '{}';
 
--- Cliniques de l'outil Absences (la dernière, Administration, regroupe les non-médecins) et seuil d'avertissement
+-- Cliniques de l'outil Absences (Plateforme et Administration en dernier ; Administration regroupe les non-médecins) et seuil d'avertissement
 create table if not exists public.absence_clinic_settings (
   clinic text primary key,
   pos int not null,
@@ -25,8 +25,10 @@ create table if not exists public.absence_clinic_settings (
 );
 insert into public.absence_clinic_settings (clinic, pos) values
   ('Sénologie', 1), ('Gynécologie', 2), ('Urologie', 3), ('Thoracique', 4), ('Neuro-oncologie', 5), ('Mélanome', 6),
-  ('Lower GI', 7), ('Upper GI', 8), ('ORL', 9), ('Sarcomes', 10), ('Radiologie interventionnelle', 11), ('Administration', 12)
+  ('Lower GI', 7), ('Upper GI', 8), ('ORL', 9), ('Sarcomes', 10), ('Radiologie interventionnelle', 11), ('Plateforme', 12), ('Administration', 13)
 on conflict (clinic) do nothing;
+-- Base déjà installée avant l'ajout de Plateforme : Administration redevient la dernière
+update public.absence_clinic_settings set pos = 13 where clinic = 'Administration' and pos = 12;
 
 -- Cadres qui valident les absences d'une clinique (désignés par l'admin)
 create table if not exists public.absence_validators (
@@ -559,3 +561,75 @@ begin
 end $$;
 -- Le service (Edge Function de notification) lit les valideurs d'un membre
 grant execute on function public.absence_validator_ids(uuid), public.member_name(uuid) to service_role;
+
+-- ===== 7. Agenda commun : vacances scolaires et événements importants (affichés dans le planning) =====
+-- Les jours fériés vaudois sont calculés par la page (Pâques, etc.) ; ici, seulement ce qui se saisit à la main.
+create table if not exists public.absence_calendar (
+  id bigint generated always as identity primary key,
+  kind text not null check (kind in ('vacances_scolaires', 'evenement')),
+  label text not null check (char_length(label) between 2 and 120),
+  start_date date not null,
+  end_date date not null,
+  created_at timestamptz not null default now(),
+  check (end_date >= start_date),
+  check (end_date - start_date <= 120)
+);
+create index if not exists absence_calendar_dates on public.absence_calendar (start_date, end_date);
+alter table public.absence_calendar enable row level security;
+revoke all on public.absence_calendar from anon, authenticated;
+
+-- Vacances scolaires vaudoises 2026-2027 (sources tierces : à confirmer sur vd.ch/vacances). Graine posée une seule fois, table vide.
+insert into public.absence_calendar (kind, label, start_date, end_date)
+select 'vacances_scolaires', v.label, v.s::date, v.e::date from (values
+  ('Vacances scolaires VD : Noël', '2026-12-24', '2027-01-10'),
+  ('Vacances scolaires VD : relâches', '2027-02-06', '2027-02-14'),
+  ('Vacances scolaires VD : Pâques', '2027-03-26', '2027-04-11'),
+  ('Vacances scolaires VD : été', '2027-07-03', '2027-08-22')) v (label, s, e)
+where not exists (select 1 from public.absence_calendar);
+
+create or replace function public.absence_calendar(p_from date, p_to date)
+returns table (id bigint, kind text, label text, start_date date, end_date date)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.absence_guard();
+  return query select c.id, c.kind, c.label, c.start_date, c.end_date from public.absence_calendar c
+    where c.start_date <= p_to and c.end_date >= p_from order by c.start_date, c.label;
+end;
+$$;
+
+create or replace function public.admin_calendar_save(p_id bigint, p_kind text, p_label text, p_start date, p_end date) returns bigint
+language plpgsql security definer set search_path = public as $$
+declare new_id bigint; l text := trim(coalesce(p_label, ''));
+begin
+  if public.current_role_name() is distinct from 'admin' then raise exception 'admin only' using errcode = '42501'; end if;
+  if p_kind not in ('vacances_scolaires', 'evenement') then raise exception 'Type inconnu.'; end if;
+  if char_length(l) < 2 or char_length(l) > 120 then raise exception 'Intitulé de 2 à 120 caractères.'; end if;
+  if p_start is null or p_end is null or p_end < p_start then raise exception 'Vérifiez les dates.'; end if;
+  if p_end - p_start > 120 then raise exception 'Période trop longue (120 jours au plus).'; end if;
+  if p_id is null then
+    insert into public.absence_calendar (kind, label, start_date, end_date) values (p_kind, l, p_start, p_end) returning id into new_id;
+  else
+    update public.absence_calendar set kind = p_kind, label = l, start_date = p_start, end_date = p_end where id = p_id returning id into new_id;
+    if new_id is null then raise exception 'Entrée introuvable.'; end if;
+  end if;
+  return new_id;
+end;
+$$;
+
+create or replace function public.admin_calendar_delete(p_id bigint) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if public.current_role_name() is distinct from 'admin' then raise exception 'admin only' using errcode = '42501'; end if;
+  delete from public.absence_calendar where id = p_id;
+end;
+$$;
+
+do $$
+declare f text;
+begin
+  foreach f in array array['absence_calendar(date, date)', 'admin_calendar_save(bigint, text, text, date, date)', 'admin_calendar_delete(bigint)']
+  loop
+    execute format('revoke execute on function public.%s from public, anon', f);
+    execute format('grant execute on function public.%s to authenticated', f);
+  end loop;
+end $$;

@@ -43,13 +43,36 @@
   const period = (a, b) => (a === b ? fmtCH(a) : `${fmtCH(a)} – ${fmtCH(b)}`);
   const monthStart = (y, m) => iso(new Date(Date.UTC(y, m, 1)));
   const monthEnd = (y, m) => iso(new Date(Date.UTC(y, m + 1, 0)));
-  // Jours ouvrables (lundi à vendredi) d'une période, éventuellement limitée à [from, to]
+  // Jours fériés vaudois d'une année (calculés, Pâques par l'algorithme de Meeus) : date ISO -> nom
+  const holCache = new Map();
+  function easter(y) {
+    const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(Date.UTC(y, month - 1, day));
+  }
+  function holidays(y) {
+    if (holCache.has(y)) return holCache.get(y);
+    const map = new Map();
+    const at = (m, d) => new Date(Date.UTC(y, m, d));
+    const off = (n) => { const d = easter(y); d.setUTCDate(d.getUTCDate() + n); return d; };
+    const sep1 = at(8, 1).getUTCDay(); // 0 = dimanche
+    const firstSunday = 1 + ((7 - sep1) % 7);
+    [[at(0, 1), "Nouvel An"], [at(0, 2), "2 janvier"], [off(-2), "Vendredi saint"], [off(1), "Lundi de Pâques"], [off(39), "Ascension"],
+      [off(50), "Lundi de Pentecôte"], [at(7, 1), "Fête nationale"], [at(8, firstSunday + 15), "Lundi du Jeûne fédéral"], [at(11, 25), "Noël"]]
+      .forEach(([d, l]) => map.set(iso(d), l));
+    holCache.set(y, map);
+    return map;
+  }
+  const holidayOf = (day) => holidays(Number(day.slice(0, 4))).get(day);
+  // Jours ouvrables (lundi à vendredi, jours fériés vaudois déduits) d'une période, éventuellement limitée à [from, to]
   function workdays(a, b, from, to) {
     let s = pd(a), e = pd(b);
     if (from && s < pd(from)) s = pd(from);
     if (to && e > pd(to)) e = pd(to);
     let n = 0;
-    for (const d = new Date(s); d <= e; d.setUTCDate(d.getUTCDate() + 1)) { const w = d.getUTCDay(); if (w !== 0 && w !== 6) n++; }
+    for (const d = new Date(s); d <= e; d.setUTCDate(d.getUTCDate() + 1)) { const w = d.getUTCDay(); if (w !== 0 && w !== 6 && !holidayOf(iso(d))) n++; }
     return n;
   }
 
@@ -92,16 +115,21 @@
     const { y, m } = state.month;
     const key = `${y}-${m}`;
     if (state.cache.has(key)) return state.cache.get(key);
-    const { data, error } = await sb.rpc("absence_grid", { p_from: monthStart(y, m), p_to: monthEnd(y, m) });
+    const [{ data, error }, calRes] = await Promise.all([
+      sb.rpc("absence_grid", { p_from: monthStart(y, m), p_to: monthEnd(y, m) }),
+      sb.rpc("absence_calendar", { p_from: monthStart(y, m), p_to: monthEnd(y, m) })
+    ]);
     if (error) throw error;
+    const cal = (calRes.data || []).map((c) => Object.assign(c, { start_date: String(c.start_date).slice(0, 10), end_date: String(c.end_date).slice(0, 10) }));
     const byUser = new Map();
     for (const a of data || []) {
       a.start_date = String(a.start_date).slice(0, 10); a.end_date = String(a.end_date).slice(0, 10);
       if (!byUser.has(a.user_id)) byUser.set(a.user_id, []);
       byUser.get(a.user_id).push(a);
     }
-    state.cache.set(key, byUser);
-    return byUser;
+    const out = { byUser, cal };
+    state.cache.set(key, out);
+    return out;
   }
   async function refreshPending() {
     const { data } = await sb.rpc("absence_pending_count");
@@ -141,8 +169,8 @@
   async function renderGrid() {
     const { y, m } = state.month;
     $("ab-title").textContent = `${MONTHS[m][0].toUpperCase()}${MONTHS[m].slice(1)} ${y}`;
-    let byUser;
-    try { byUser = await loadMonth(); } catch (e) {
+    let byUser, cal;
+    try { ({ byUser, cal } = await loadMonth()); } catch (e) {
       $("ug-status").hidden = false;
       return say($("ug-status"), "Chargement du planning impossible : " + e.message, "error");
     }
@@ -164,7 +192,7 @@
     for (let d = 1; d <= n; d++) {
       const day = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const w = pd(day).getUTCDay();
-      const th = el("th", "ab-d" + (w === 0 || w === 6 ? " ab-we" : "") + (day === today ? " ab-today" : ""));
+      const th = el("th", "ab-d" + (w === 0 || w === 6 || holidayOf(day) ? " ab-we" : "") + (day === today ? " ab-today" : ""));
       th.scope = "col";
       th.append(el("span", "ab-dow", DOW[w]), document.createTextNode(String(d)));
       head.append(th);
@@ -173,6 +201,7 @@
     thead.append(head);
     table.append(thead);
     const body = el("tbody");
+    body.append(calendarRow(y, m, n, today, cal));
     for (const p of people) {
       const tr = el("tr", p.is_me ? "ab-me" : "");
       const th = el("th", "ab-name");
@@ -184,7 +213,7 @@
       for (let d = 1; d <= n; d++) {
         const day = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
         const w = pd(day).getUTCDay();
-        const td = el("td", "ab-c" + (w === 0 || w === 6 ? " ab-we" : "") + (day === today ? " ab-today" : ""));
+        const td = el("td", "ab-c" + (w === 0 || w === 6 || holidayOf(day) ? " ab-we" : "") + (day === today ? " ab-today" : ""));
         const a = list.find((x) => x.start_date <= day && day <= x.end_date);
         if (a) {
           td.className += ` ab-k-${a.kind} ab-s-${a.status}` + (a.change_type ? " ab-chg" : "");
@@ -207,9 +236,57 @@
     $("ab-detail").hidden = true;
   }
 
+  // Entrées de l'agenda commun pour un jour : férié vaudois (calculé), événements et vacances scolaires (saisis par l'admin)
+  const CAL_LETTER = { ferie: "F", evenement: "É", vacances_scolaires: "S" };
+  function calEntries(day, cal) {
+    const out = [];
+    const h = holidayOf(day);
+    if (h) out.push({ kind: "ferie", label: h + " (férié vaudois)", start: day, end: day });
+    cal.filter((c) => c.kind === "evenement" && c.start_date <= day && day <= c.end_date).forEach((c) => out.push({ kind: "evenement", label: c.label, start: c.start_date, end: c.end_date }));
+    cal.filter((c) => c.kind === "vacances_scolaires" && c.start_date <= day && day <= c.end_date).forEach((c) => out.push({ kind: "vacances_scolaires", label: c.label, start: c.start_date, end: c.end_date }));
+    return out;
+  }
+  function calendarRow(y, m, n, today, cal) {
+    const tr = el("tr", "ab-cal");
+    const th = el("th", "ab-name");
+    th.scope = "row";
+    th.append(el("span", "ab-pname", "Fériés et événements"), el("span", "ab-pclinic muted", "Vacances scolaires VD, agenda commun"));
+    tr.append(th);
+    for (let d = 1; d <= n; d++) {
+      const day = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const w = pd(day).getUTCDay();
+      const td = el("td", "ab-c ab-cal-c" + (w === 0 || w === 6 ? " ab-we" : "") + (day === today ? " ab-today" : ""));
+      const list = calEntries(day, cal);
+      if (list.length) {
+        const top = list[0];
+        td.className += ` ab-cal-${top.kind}`;
+        td.textContent = CAL_LETTER[top.kind];
+        td.dataset.cal = day;
+        const label = list.map((x) => x.label).join(" ; ");
+        td.title = label;
+        const prev = d > 1 ? `${y}-${String(m + 1).padStart(2, "0")}-${String(d - 1).padStart(2, "0")}` : null;
+        if (!prev || calEntries(prev, cal).map((x) => x.label).join() !== list.map((x) => x.label).join()) { td.tabIndex = 0; td.setAttribute("role", "button"); td.setAttribute("aria-label", `${fmtCH(day)} : ${label}`); }
+      }
+      tr.append(td);
+    }
+    return tr;
+  }
+  function showCalDetail(day) {
+    const { cal } = state.cache.get(`${state.month.y}-${state.month.m}`);
+    const box = $("ab-detail");
+    box.replaceChildren();
+    box.append(el("strong", null, fmtCH(day)));
+    calEntries(day, cal).forEach((x) => {
+      const row = el("p");
+      row.append(el("span", "ug-badge", { ferie: "Férié", evenement: "Événement", vacances_scolaires: "Vacances scolaires" }[x.kind]), document.createTextNode(" " + x.label + (x.kind === "ferie" ? "" : ` · ${period(x.start, x.end)}`)));
+      box.append(row);
+    });
+    box.hidden = false;
+  }
+
   function showDetail(userId, id) {
     const people = new Map(state.people.map((p) => [p.id, p]));
-    const a = (state.cache.get(`${state.month.y}-${state.month.m}`).get(userId) || []).find((x) => String(x.id) === String(id));
+    const a = (state.cache.get(`${state.month.y}-${state.month.m}`).byUser.get(userId) || []).find((x) => String(x.id) === String(id));
     if (!a) return;
     const p = people.get(userId);
     const box = $("ab-detail");
@@ -254,7 +331,7 @@
   // ----- Demande d'absence -----
   function updateDays() {
     const a = $("ab-start").value, b = $("ab-end").value;
-    $("ab-days").textContent = a && b && b >= a ? `${plur(workdays(a, b), "jour ouvrable", "jours ouvrables")} (lundi à vendredi), ${plur((pd(b) - pd(a)) / 864e5 + 1, "jour calendaire", "jours calendaires")}` : "";
+    $("ab-days").textContent = a && b && b >= a ? `${plur(workdays(a, b), "jour ouvrable", "jours ouvrables")} (hors week-ends et fériés vaudois), ${plur((pd(b) - pd(a)) / 864e5 + 1, "jour calendaire", "jours calendaires")}` : "";
     $("ab-note-hint").textContent = $("ab-kind").value === "autre" ? "(obligatoire)" : "(facultatif)";
   }
   async function submitRequest(ev) {
@@ -536,7 +613,7 @@
         p(`Total : ${plur(total, "jour ouvrable", "jours ouvrables")} (vacances ${byKind.vacances}, congrès ${byKind.congres}, autre ${byKind.autre}).`, { bold: true }),
         h("Demandes en attente et refusées"),
         others.length ? table(others, true) : p("Aucune demande en attente ou refusée sur la période.", { italics: true }),
-        new Paragraph({ spacing: { before: 360 }, children: [new TextRun({ text: "Jours ouvrables : lundi à vendredi, jours fériés non déduits. Les absences validées avec une demande de changement en cours figurent aux dates actuellement validées.", italics: true, size: 17, color: "5A6478" })] })
+        new Paragraph({ spacing: { before: 360 }, children: [new TextRun({ text: "Jours ouvrables : lundi à vendredi, jours fériés vaudois déduits. Les absences validées avec une demande de changement en cours figurent aux dates actuellement validées.", italics: true, size: 17, color: "5A6478" })] })
       ];
       const doc = new Document({
         styles: { default: { document: { run: { font: "Arial", size: 21 } } } },
@@ -622,11 +699,12 @@
       setCustom([...ids]); renderPicker();
     });
     $("ab-pick-none").addEventListener("click", () => { setCustom([]); renderPicker(); });
-    $("ab-scroll").addEventListener("click", (e) => { const td = e.target.closest("td[data-id]"); if (td) showDetail(td.dataset.user, td.dataset.id); });
+    const open = (td) => { if (td.dataset.cal) showCalDetail(td.dataset.cal); else if (td.dataset.id) showDetail(td.dataset.user, td.dataset.id); };
+    $("ab-scroll").addEventListener("click", (e) => { const td = e.target.closest("td[data-id], td[data-cal]"); if (td) open(td); });
     $("ab-scroll").addEventListener("keydown", (e) => {
       if (e.key !== "Enter" && e.key !== " ") return;
-      const td = e.target.closest("td[data-id]");
-      if (td) { e.preventDefault(); showDetail(td.dataset.user, td.dataset.id); }
+      const td = e.target.closest("td[data-id], td[data-cal]");
+      if (td) { e.preventDefault(); open(td); }
     });
 
     // Onglets, export, valideurs

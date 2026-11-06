@@ -15,11 +15,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261106a">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261106c">
   <script src="/assets/js/site.js?v=20261105a" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/admin-absences.js?v=20261106a" defer></script>
+  <script src="/assets/js/admin-absences.js?v=20261106b" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -48,6 +48,25 @@
           <p class="muted">Le seuil d'absents simultanés déclenche un avertissement, non bloquant, pour le demandeur et pour le valideur : il est atteint quand le nombre de membres de la clinique absents le même jour (demandes en attente comprises) dépasse le maximum indiqué.</p>
           <p class="form-msg" id="aa-msg" role="status" aria-live="polite"></p>
           <div id="aa-list" class="aa-grid"></div>
+
+          <section class="aa-cal" aria-labelledby="aa-cal-title">
+            <h2 id="aa-cal-title">Agenda commun</h2>
+            <p class="muted">S'affiche en première ligne du planning des absences, pour tous. Les jours fériés vaudois sont calculés automatiquement. Les vacances scolaires vaudoises 2026-2027 sont préremplies d'après des sources tierces : à confirmer sur <a href="https://www.vd.ch/vacances" rel="noopener">vd.ch/vacances</a>. Ajoutez les années suivantes et les événements importants (retraite de service, fermeture, congrès de la clinique).</p>
+            <form class="card aa-cal-form" id="aa-cal-form" novalidate>
+              <label>Type
+                <select id="aa-cal-kind">
+                  <option value="evenement">Événement important</option>
+                  <option value="vacances_scolaires">Vacances scolaires</option>
+                </select>
+              </label>
+              <label>Intitulé <input id="aa-cal-label" type="text" maxlength="120" required autocomplete="off" placeholder="ex. Retraite du service"></label>
+              <label>Du <input id="aa-cal-start" type="date" required></label>
+              <label>Au (inclus) <input id="aa-cal-end" type="date" required></label>
+              <button class="btn" type="submit">Ajouter</button>
+            </form>
+            <p class="form-msg" id="aa-cal-msg" role="status" aria-live="polite"></p>
+            <div class="aa-cal-list" id="aa-cal-list"></div>
+          </section>
         </div>
       </div>
     </section>
