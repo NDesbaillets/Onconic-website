@@ -538,6 +538,18 @@
     return box;
   }
   const approvalCount = (rows) => rows.filter((r) => r.decision === "approved").length;
+  const fmtDT = (ts) => new Date(ts).toLocaleString("fr-CH", { dateStyle: "short", timeStyle: "short" });
+
+  // Renvoyer l'e-mail de validation (rappel) aux validateurs qui n'ont pas encore décidé
+  async function resend(ids) {
+    const out = $("ab-mine-msg");
+    say(out, "Envoi du rappel…");
+    const { data, error } = await sb.rpc("absence_resend", { p_ids: ids });
+    if (error) return say(out, error.message, "error");
+    mailer();
+    say(out, `Rappel envoyé à ${data.recipients.join(", ")} pour ${plur(data.count, "demande", "demandes")}. Sans réponse, vérifiez le dossier de courrier indésirable de la personne : elle peut aussi ouvrir directement « Absences », onglet « À valider », dans The Hive.`, "ok");
+    await loadMine();
+  }
 
   function absenceCard(a, own) {
     const card = el("article", `card ab-item ab-item-${a.status}`);
@@ -568,6 +580,9 @@
       const gone = new Date(new Date(a.decided_at).getTime() + 14 * 864e5);
       card.append(el("p", "muted ab-item-meta", `Cette demande refusée disparaîtra d'elle-même le ${fmtCH(iso(gone))}. Vous pouvez la supprimer dès maintenant.`));
     }
+    if (own && (a.status === "requested" || (a.status === "approved" && a.change_type)) && (a.submitted_at || a.resent_at)) {
+      card.append(el("p", "muted ab-item-meta", `${a.submitted_at ? "Envoyée aux validateurs le " + fmtDT(a.change_requested_at && a.status === "approved" ? a.change_requested_at : a.submitted_at) : ""}${a.resent_at ? (a.submitted_at ? " · " : "") + "dernier rappel le " + fmtDT(a.resent_at) : ""}`));
+    }
     if (a.status === "draft") card.append(el("p", "muted ab-item-meta", "Brouillon : les validateurs ne sont pas encore prévenus. Envoyez-le pour lancer la validation."));
     if (!own && a.status === "rejected" && state.who) {
       const del = el("div", "btn-row ab-actions");
@@ -595,6 +610,7 @@
         }));
     } else if (a.status === "requested") {
       actions.append(
+        button("Renvoyer l'e-mail aux validateurs", "btn btn-outline", () => resend([a.id])),
         button("Modifier (repasse en brouillon)", "btn btn-outline", () => swap(editForm(a, "update"))),
         button("Annuler la demande", "btn btn-outline lt-danger", async () => {
           if (!confirm(`Annuler cette demande en cours (${period(a.start_date, a.end_date)}) ? Les validations déjà données seront perdues.`)) return;
@@ -625,7 +641,7 @@
           await afterChange();
         }));
     } else if (a.status === "approved" && a.change_type) {
-      actions.append(button("Annuler ma demande de changement", "btn btn-outline", async () => {
+      actions.append(button("Renvoyer l'e-mail aux validateurs", "btn btn-outline", () => resend([a.id])), button("Annuler ma demande de changement", "btn btn-outline", async () => {
         const { error } = await sb.rpc("absence_cancel_change", { p_id: a.id });
         if (error) return say($("ab-mine-msg"), error.message, "error");
         say($("ab-mine-msg"), "Demande de changement annulée.", "ok");
@@ -646,6 +662,13 @@
     const current = live.filter((a) => a.end_date >= today || a.status === "draft" || a.status === "requested" || a.change_type).sort((a, b) => a.start_date.localeCompare(b.start_date));
     const past = live.filter((a) => !current.includes(a));
     const cancelled = state.mine.filter((a) => a.status === "cancelled");
+    const waiting = live.filter((a) => a.status === "requested" || (a.status === "approved" && a.change_type));
+    if (own && waiting.length) {
+      const bar = el("div", "ab-resend-bar");
+      bar.append(el("p", null, "Un validateur n'a pas reçu votre demande ? Renvoyez l'e-mail : seuls ceux qui n'ont pas encore décidé sont relancés (un rappel toutes les 10 minutes au plus)."),
+        button(`Renvoyer pour ${plur(waiting.length, "demande en cours", "demandes en cours")}`, "btn btn-outline", () => resend(null)));
+      list.append(bar);
+    }
     if (!current.length) list.append(el("p", "muted", own ? "Aucune absence à venir. Utilisez le formulaire ci-dessus pour en demander une." : "Aucune absence à venir."));
     current.forEach((a) => list.append(absenceCard(a, own)));
     const fold = (title, items) => {

@@ -1234,3 +1234,5 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .has-hive-home .nav a[href="/app/"], .has-hive-home .nav a[href="/fr/app/"] { display: none; }
 /* Étroit : le mot-symbole cède la place au lien, le logo reste */
 @media (max-width: 520px) { .has-hive-home .brand .wordmark { display: none; } .hive-home { padding: 0 12px; } }
+.ab-resend-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); padding: var(--space-3); border: 1px solid var(--navy-100); background: var(--mist); }
+.ab-resend-bar p { margin: 0; max-width: none; font-size: .92rem; flex: 1 1 320px; }
