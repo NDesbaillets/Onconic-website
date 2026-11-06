@@ -20,7 +20,7 @@
   const $ = (id) => document.getElementById(id);
   const CLINICS = BLOCS.flatMap(([, list]) => list);
   const state = { rows: [], admin: false, cdc: [], flags: [], clinic: "", line: "", me: "", meId: "" };
-  // Droit de modifier une fiche : admin, ou CDC de sa clinique (contrôlé aussi en base)
+  // Droit de modifier une fiche : admin, ou CDC / cadre de sa clinique (contrôlé aussi en base)
   const canEdit = (clinic) => state.admin || (!!clinic && state.cdc.includes(clinic));
   const editableClinics = () => (state.admin ? CLINICS : CLINICS.filter((c) => state.cdc.includes(c)));
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9+<>≥≤%]+/g, " ").trim();
@@ -656,7 +656,7 @@
     const { data, error } = await sb.from("trial_flags").select("*").is("resolved_at", null).order("created_at");
     state.flags = error ? [] : data || [];
   }
-  // Section « À réviser » en bas de page : admins et CDC, pour leurs cliniques
+  // Section « À réviser » en bas de page : admins, CDC et cadres, pour leurs cliniques
   function renderReview() {
     const sec = $("kt-review");
     const items = state.rows.filter((r) => canEdit(r.clinic) && openFlags(r).length);
@@ -770,7 +770,7 @@
     const { data: canUse } = await sb.rpc("has_tool", { p_tool: "trials" });
     if (role !== "admin" && canUse !== true) return ($("ug-status").textContent = "Cet outil ne fait pas partie de vos accès. Contactez l'administrateur si besoin.");
     state.admin = role === "admin";
-    state.cdc = role === "cdc" ? profile.cdc_clinics || [] : [];
+    state.cdc = role === "cdc" || role === "cadre" ? profile.cdc_clinics || [] : [];
     state.meId = data.session.user.id;
     state.me = [profile.first_name, profile.last_name].filter(Boolean).join(" ") || profile.full_name || data.session.user.email;
     try { await load(); } catch (e) { return ($("ug-status").textContent = "Chargement impossible : " + e.message); }

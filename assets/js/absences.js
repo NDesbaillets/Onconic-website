@@ -671,7 +671,7 @@
     ["ab-start", "ab-end", "ab-kind"].forEach((id) => $(id).addEventListener("change", updateDays));
     $("ab-start").addEventListener("change", () => { if (!$("ab-end").value || $("ab-end").value < $("ab-start").value) $("ab-end").value = $("ab-start").value; updateDays(); });
     if (!ctx.clinics.length && ctx.role !== "admin") {
-      say($("ab-msg"), ctx.role === "clinician" || ctx.role === "cdc"
+      say($("ab-msg"), ["clinician", "cdc", "cadre"].includes(ctx.role)
         ? "Aucune clinique de rattachement n'est enregistrée pour vous : seul l'administrateur validera vos demandes. Demandez-lui de renseigner vos cliniques."
         : "", "");
     }

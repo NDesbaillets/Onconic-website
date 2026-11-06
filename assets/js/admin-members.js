@@ -4,7 +4,7 @@
   const sb = window.supabase && cfg.supabaseUrl ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
   const $ = (id) => document.getElementById(id);
 
-  const ROLES = [["member", "En attente de validation"], ["clinician", "Médecin"], ["cdc", "CDC (chef·fe de clinique)"], ["cadre", "Cadre"], ["assistant", "Assistante médicale"],
+  const ROLES = [["member", "En attente de validation"], ["clinician", "Médecin"], ["cdc", "CDC (chef·fe de clinique)"], ["cadre", "Cadre (médecin validateur)"], ["assistant", "Assistante médicale"],
     ["pharmacist", "Pharmacien·ne"], ["admin", "Administrateur"]];
   const ROLE_LABEL = Object.fromEntries(ROLES);
   const TOOLS = [["congres", "Congrès"], ["trials", "Key trials"], ["lettres", "Lettres d'assurance"],
@@ -83,7 +83,7 @@
       const lab = el("label", "cg-check am-tool" + (st.custom ? " am-custom" : ""));
       const cb = el("input");
       cb.type = "checkbox"; cb.checked = !!st.allowed;
-      const medOk = t !== "medletters" || ["clinician", "cdc", "pharmacist"].includes(r.role);
+      const medOk = t !== "medletters" || ["clinician", "cdc", "cadre", "pharmacist"].includes(r.role);
       cb.disabled = fixed || !medOk;
       cb.addEventListener("change", async () => {
         cb.disabled = true;
@@ -97,7 +97,7 @@
       tools.append(lab);
     }
     c.append(tools);
-    if (r.role === "clinician" || r.role === "cdc") {
+    if (r.role === "clinician" || r.role === "cdc" || r.role === "cadre") {
       const fs = el("fieldset", "am-tools am-clinics");
       fs.append(el("legend", null, "Cliniques de rattachement (planning et validation des absences)"));
       const mine = new Set(r.clinics || []);
@@ -120,9 +120,9 @@
       c.append(fs);
       if (!mine.size) c.append(el("p", "muted am-note", "Aucune clinique de rattachement : ce médecin ne voit pas de collègues par défaut dans le planning des absences et ses demandes iront à l'administrateur."));
     }
-    if (r.role === "cdc") {
+    if (r.role === "cdc" || r.role === "cadre") {
       const fs = el("fieldset", "am-tools am-clinics");
-      fs.append(el("legend", null, "Cliniques dont le ou la CDC modifie et valide les fiches Key trials"));
+      fs.append(el("legend", null, "Cliniques dont le ou la CDC / cadre modifie et valide les fiches Key trials"));
       const mine = new Set(r.cdc_clinics || []);
       for (const cl of CLINICS) {
         const lab = el("label", "cg-check am-tool");
@@ -147,8 +147,8 @@
     if (r.role === "admin") notes.push("Administrateur : accès à tout.");
     if (r.role === "member") notes.push("Compte en attente : choisissez un rôle pour ouvrir les accès.");
     if (r.role === "cdc") notes.push("CDC (chef·fe de clinique) : droits d'un médecin, plus modification et validation des fiches Key trials des cliniques cochées.");
-    if (r.role === "cadre") notes.push("Cadre : valide les absences des cliniques pour lesquelles il ou elle est désigné·e (page « Absences : valideurs par clinique »). Rattaché·e à la clinique Administration ; accès limité à l'outil Absences, à ouvrir au cas par cas pour le reste.");
-    if (["assistant", "pharmacist", "admin"].includes(r.role)) notes.push("Rattaché·e à la clinique Administration pour les absences (seuls les médecins ont des cliniques).");
+    if (r.role === "cadre") notes.push("Cadre (médecin) : exactement les droits d'un·e CDC, plus la validation des absences des cliniques pour lesquelles il ou elle est désigné·e (page « Absences : valideurs par clinique »).");
+    if (["assistant", "pharmacist", "admin"].includes(r.role)) notes.push("Rattaché·e à la clinique Administration pour les absences (seuls les médecins, CDC et cadres ont des cliniques).");
     if (r.role === "pharmacist") notes.push("Pharmacien·ne : administre aussi les Lettres d'assurance, Limitations LS et Durée de traitement auxquelles il ou elle a accès.");
     if (notes.length) c.append(el("p", "muted am-note", notes.join(" ")));
     if (Object.values(r.tools || {}).some((x) => x.custom)) {

@@ -1,12 +1,12 @@
 // CTCAE v5.0 et v6.0 : recherche libre d'un symptôme ou d'une anomalie biologique, grading par version, anglais et français.
 // Données : /assets/data/ctcae.json (construit par tools/ctcae/build_ctcae.py à partir des fichiers NCIt du NCI, domaine public).
-// Accès : médecins (dont CDC), pharmaciens, admins. Aucune donnée de patient.
+// Accès : médecins (dont CDC et cadres), pharmaciens, admins. Aucune donnée de patient.
 (function () {
   const cfg = window.ONCONIC_CONFIG || {};
   const sb = window.supabase && cfg.supabaseUrl ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
   const PAGE = 30;
   const DATA_URL = "/assets/data/ctcae.json?v=20261105a";
-  const ALLOWED = new Set(["admin", "clinician", "cdc", "pharmacist"]);
+  const ALLOWED = new Set(["admin", "clinician", "cdc", "cadre", "pharmacist"]);
 
   const $ = (id) => document.getElementById(id);
   const state = { data: null, terms: [], q: "", ver: "5", lang: "fr", soc: -1, shown: PAGE };
