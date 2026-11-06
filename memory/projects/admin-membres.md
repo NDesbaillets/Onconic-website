@@ -14,3 +14,4 @@ Rôle `cdc` (ex « CDC / Cadre », renommé le 06.11.2026 ; « Cadre » est deve
 
 ## Rôle cadre (médecin cadre, 06.11.2026)
 Exactement les droits d'un CDC (tous les outils, Key trials par `cdc_clinics`, cliniques de rattachement), plus la validation des absences s'il est désigné valideur d'une clinique. Voir absences.md et `supabase/cadre_medecin.sql`.
+Case « Validateur des absences » (cadre seulement, 06.11.2026) : `admin_set_absence_validator`, colonne `profiles.absence_validator` ; seuls les cadres cochés sont proposés dans `/admin/absences.html`.
