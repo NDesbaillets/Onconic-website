@@ -8,7 +8,7 @@ export type Abs = {
   change_start: string | null; change_end: string | null;
 };
 export type Ctx = {
-  lang: Lang; kind: Kind; owner: string; by?: string | null; comment?: string | null;
+  lang: Lang; kind: Kind; owner: string; by?: string | null; comment?: string | null; reminder?: boolean;
   absences: Abs[]; validators: string[]; approvers: string[];
 };
 
@@ -39,6 +39,8 @@ const T = {
     open: "Ouvrir Absences",
     delHint: "Vous pouvez supprimer cette demande ou la modifier puis la renvoyer ; elle disparaît d'elle-même 14 jours après le refus.",
     sent: "Message automatique de The Hive Onconic.",
+    remind: "Rappel",
+    remindText: "Ce message est un rappel : votre décision est toujours attendue.",
     note: "Précision",
     wasChange: "devient",
     deletion: "suppression demandée",
@@ -59,6 +61,8 @@ const T = {
     open: "Open Absences",
     delHint: "You can delete this request, or change it and send it again; it disappears by itself 14 days after the refusal.",
     sent: "Automatic message from The Hive Onconic.",
+    remind: "Reminder",
+    remindText: "This is a reminder: your decision is still pending.",
     note: "Note",
     wasChange: "becomes",
     deletion: "deletion requested",
@@ -95,6 +99,7 @@ export function buildEmail(c: Ctx) {
     case "change_approved": subject = t.changeApproved; extra.push(t.approvedBy(c.approvers)); break;
     case "change_rejected": subject = t.changeRejected; extra.push(t.rejectedBy(c.by ?? "—")); if (c.comment) extra.push(t.comment(c.comment)); extra.push(t.stays); break;
   }
+  if (c.reminder && toValidator) { subject = `${t.remind}${lang === "fr" ? " : " : ": "}${subject}`; extra.unshift(t.remindText); }
   intro = subject + ".";
   const text = [intro, "", ...lines.map((l) => `• ${l}`), "", ...extra, "", `${t.open} : ${url}`, "", t.sent].join("\n");
   const html = `<div style="font-family:Helvetica,Arial,sans-serif;color:#1A2A4A;font-size:15px;line-height:1.5;max-width:560px">

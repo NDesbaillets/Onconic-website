@@ -38,7 +38,7 @@ async function vapidKeys() {
   return row!;
 }
 
-type Row = { id: number; kind: Kind; recipient: string; absence_ids: number[]; payload: { owner?: string; by?: string; comment?: string } };
+type Row = { id: number; kind: Kind; recipient: string; absence_ids: number[]; payload: { owner?: string; by?: string; comment?: string; reminder?: boolean } };
 
 async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createTransport> | null): Promise<string | null> {
   const { data: absences } = await admin.from("absences")
@@ -56,7 +56,7 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
   const approvers = await names((appr ?? []).filter((a) => a.decision === "approved").map((a) => a.validator_id));
 
   const msg = buildEmail({
-    lang, kind: row.kind, owner: row.payload.owner ?? (ownerName as string) ?? "Un membre", by: row.payload.by, comment: row.payload.comment,
+    lang, kind: row.kind, owner: row.payload.owner ?? (ownerName as string) ?? "Un membre", by: row.payload.by, comment: row.payload.comment, reminder: row.payload.reminder,
     absences: absences as unknown as Abs[], validators, approvers,
   });
 
