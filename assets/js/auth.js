@@ -169,7 +169,7 @@
       const { data: profile } = await sb.from("profiles")
         .select("full_name, role, med_plus").eq("id", data.session.user.id).single();
       const role = profile ? profile.role : "member";
-      const eff = role === "cdc" ? "clinician" : role; // CDC / Cadre : droits d'un médecin pour l'affichage
+      const eff = role === "cdc" ? "clinician" : role; // CDC (chef de clinique) : droits d'un médecin pour l'affichage
       // Accès réels par outil (rôle + exceptions posées par l'admin) ; repli sur le rôle si la fonction manque
       const { data: tools, error: toolsError } = await sb.rpc("my_tools");
       const myTools = toolsError ? null : tools || [];
@@ -208,6 +208,14 @@
         group.hidden = ![...group.querySelectorAll(".hex")].some((el) => !el.hidden);
       });
       app.hidden = false;
+
+      // Cadres valideurs : nombre de demandes d'absence en attente, sur la tuile Absences
+      if (myTools && myTools.includes("absences")) {
+        sb.rpc("absence_pending_count").then(({ data: n }) => {
+          const tag = app.querySelector('[data-tool="absences"] .hex-tag');
+          if (tag && Number(n) > 0) tag.textContent = lang === "fr" ? `${n} à valider →` : `${n} to review →`;
+        });
+      }
 
       document.getElementById("logout").addEventListener("click", async () => {
         await sb.auth.signOut();

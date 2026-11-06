@@ -9,5 +9,5 @@
 - The Hive : tuiles `data-tool`, visibilité via `my_tools()`.
 
 
-## Rôle CDC / Cadre
-Rôle `cdc` : droits d'un médecin, plus gestion des fiches Key trials des cliniques cochées sur la fiche du membre (`admin_set_cdc_clinics`). Le changement de rôle efface les cliniques.
+## Rôle CDC (chef de clinique)
+Rôle `cdc` (ex « CDC / Cadre », renommé le 06.11.2026 ; « Cadre » est devenu un rôle distinct, voir absences.md) : droits d'un médecin, plus gestion des fiches Key trials des cliniques cochées sur la fiche du membre (`admin_set_cdc_clinics`). Le changement de rôle efface les cliniques.

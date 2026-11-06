@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Absences · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <meta name="apple-mobile-web-app-title" content="Onconic">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261106a">
+  <script src="/assets/js/site.js?v=20261105a" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/absences.js?v=20261106a" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug ab">
+      <div class="container">
+        <a class="hive-back" href="/fr/app/">← The Hive</a>
+        <span class="eyebrow">Pour toute la communauté The Hive</span>
+        <h1>Absences</h1>
+        <p class="cg-sub">Vacances, congrès et autres absences de l'équipe</p>
+        <hr class="rule">
+        <p class="form-msg" id="ug-status" role="status">Chargement…</p>
+
+        <div id="ab-tool" hidden>
+          <form class="card ab-new" id="ab-form" novalidate>
+            <h2>Demander une absence</h2>
+            <div class="ab-fields">
+              <label>Motif
+                <select id="ab-kind" required>
+                  <option value="vacances">Vacances</option>
+                  <option value="congres">Congrès</option>
+                  <option value="autre">Autre</option>
+                </select>
+              </label>
+              <label class="ab-note"><span>Précision <span class="muted" id="ab-note-hint">(facultatif)</span></span>
+                <input id="ab-note" type="text" maxlength="200" autocomplete="off" placeholder="Visible de vous et de vos valideurs seulement">
+              </label>
+              <label>Du <input id="ab-start" type="date" required></label>
+              <label>Au (inclus) <input id="ab-end" type="date" required></label>
+              <button class="btn" type="submit" id="ab-send">Envoyer la demande</button>
+            </div>
+            <p class="muted ab-days" id="ab-days" aria-live="polite"></p>
+            <div id="ab-warn" role="alert"></div>
+            <p class="form-msg" id="ab-msg" role="status" aria-live="polite"></p>
+          </form>
+
+          <div class="ab-tabs" role="tablist" aria-label="Sections">
+            <button class="ab-tab" id="ab-t-plan" role="tab" aria-selected="true" aria-controls="ab-p-plan" type="button">Planning</button>
+            <button class="ab-tab" id="ab-t-mine" role="tab" aria-selected="false" aria-controls="ab-p-mine" type="button">Mes absences</button>
+            <button class="ab-tab" id="ab-t-todo" role="tab" aria-selected="false" aria-controls="ab-p-todo" type="button" hidden>À valider <span class="ab-count" id="ab-todo-n"></span></button>
+          </div>
+
+          <section id="ab-p-plan" role="tabpanel" aria-labelledby="ab-t-plan">
+            <div class="ab-toolbar">
+              <div class="ab-month">
+                <button class="btn btn-outline" id="ab-prev" type="button" aria-label="Mois précédent">‹</button>
+                <strong id="ab-title" aria-live="polite"></strong>
+                <button class="btn btn-outline" id="ab-next" type="button" aria-label="Mois suivant">›</button>
+                <button class="btn btn-outline" id="ab-today" type="button">Aujourd'hui</button>
+              </div>
+              <label>Collaborateurs
+                <select id="ab-scope"></select>
+              </label>
+              <label>Lignes affichées
+                <select id="ab-rows">
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="15">15</option>
+                  <option value="20">20</option>
+                  <option value="30">30</option>
+                  <option value="50">50</option>
+                  <option value="0">Toutes</option>
+                </select>
+              </label>
+              <button class="btn btn-outline" id="ab-pick-toggle" type="button" aria-expanded="false" aria-controls="ab-pick">Choisir les personnes</button>
+            </div>
+
+            <div class="card ab-pick" id="ab-pick" hidden>
+              <label class="ab-pick-search">Rechercher
+                <input id="ab-pick-q" type="search" autocomplete="off" placeholder="Nom ou clinique">
+              </label>
+              <div class="ab-pick-actions">
+                <button class="btn btn-outline" id="ab-pick-all" type="button">Cocher les personnes affichées</button>
+                <button class="btn btn-outline" id="ab-pick-none" type="button">Tout décocher</button>
+              </div>
+              <div class="ab-pick-list" id="ab-pick-list"></div>
+            </div>
+
+            <ul class="ab-legend" aria-label="Légende">
+              <li><span class="ab-key ab-k-vacances ab-s-approved">V</span> Vacances validées</li>
+              <li><span class="ab-key ab-k-congres ab-s-approved">C</span> Congrès validé</li>
+              <li><span class="ab-key ab-k-autre ab-s-approved">A</span> Autre validée</li>
+              <li><span class="ab-key ab-k-vacances ab-s-requested">V</span> Demande en attente (hachuré)</li>
+              <li><span class="ab-key ab-k-vacances ab-s-approved ab-chg">V</span> Validée, changement demandé</li>
+            </ul>
+            <p class="muted ab-count-line" id="ab-shown" aria-live="polite"></p>
+            <div class="ab-scroll" id="ab-scroll" tabindex="0" role="region" aria-label="Planning mensuel des absences"></div>
+            <div class="card ab-detail" id="ab-detail" hidden aria-live="polite"></div>
+            <p class="muted ab-note-line">Week-ends en gris. Les jours fériés ne sont pas marqués : le décompte des jours ouvrables exclut seulement les week-ends.</p>
+          </section>
+
+          <section id="ab-p-mine" role="tabpanel" aria-labelledby="ab-t-mine" hidden>
+            <div class="ab-bar">
+              <h2>Mes absences</h2>
+              <div class="ab-export">
+                <label id="ab-who-wrap" hidden>Résumé de
+                  <select id="ab-who"></select>
+                </label>
+                <label>Année
+                  <select id="ab-year"></select>
+                </label>
+                <button class="btn btn-outline" id="ab-docx" type="button">Exporter en Word</button>
+              </div>
+            </div>
+            <p class="form-msg" id="ab-mine-msg" role="status" aria-live="polite"></p>
+            <div id="ab-mine-list" class="ab-list"></div>
+          </section>
+
+          <section id="ab-p-todo" role="tabpanel" aria-labelledby="ab-t-todo" hidden>
+            <h2>À valider</h2>
+            <p class="muted">Demandes d'absence et demandes de modification ou de suppression des collaborateurs dont vous validez les absences.</p>
+            <p class="form-msg" id="ab-todo-msg" role="status" aria-live="polite"></p>
+            <div id="ab-todo-list" class="ab-list"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>

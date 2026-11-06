@@ -19,7 +19,7 @@
   const $ = (id) => document.getElementById(id);
   const CLINICS = BLOCS.flatMap(([, list]) => list);
   const state = { rows: [], admin: false, cdc: [], flags: [], clinic: "", line: "", me: "", meId: "" };
-  // Droit de modifier une fiche : admin, ou CDC / Cadre de sa clinique (contrôlé aussi en base)
+  // Droit de modifier une fiche : admin, ou CDC de sa clinique (contrôlé aussi en base)
   const canEdit = (clinic) => state.admin || (!!clinic && state.cdc.includes(clinic));
   const editableClinics = () => (state.admin ? CLINICS : CLINICS.filter((c) => state.cdc.includes(c)));
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9+<>≥≤%]+/g, " ").trim();
@@ -655,7 +655,7 @@
     const { data, error } = await sb.from("trial_flags").select("*").is("resolved_at", null).order("created_at");
     state.flags = error ? [] : data || [];
   }
-  // Section « À réviser » en bas de page : admins et CDC / Cadre, pour leurs cliniques
+  // Section « À réviser » en bas de page : admins et CDC, pour leurs cliniques
   function renderReview() {
     const sec = $("kt-review");
     const items = state.rows.filter((r) => canEdit(r.clinic) && openFlags(r).length);

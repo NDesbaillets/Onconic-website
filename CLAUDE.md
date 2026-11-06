@@ -23,18 +23,19 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Congrès** | App « Qui d'autre butine au congrès ? » |
 | **LS** | Liste des spécialités de l'OFSP (limitations, codes d'indication) |
 | **médecin plus** | Drapeau caché `profiles.med_plus` donnant accès aux Lettres médicales |
-| **rôles** | admin, clinician, cdc (CDC / Cadre : médecin + gestion des fiches Key trials de ses cliniques), assistant, pharmacist ; « member » = en attente de validation |
+| **rôles** | admin, clinician, cdc (CDC = chef de clinique : médecin + gestion des fiches Key trials de ses cliniques), cadre (valide les absences des cliniques où l'admin le désigne), assistant, pharmacist ; « member » = en attente de validation |
 | **pharmacist** | Droits médecin + assistante réunis, et administration de Lettres d'assurance, Limitations LS et Durée (`is_app_admin()`) |
 → Glossaire complet : memory/glossary.md
 
 ## Projets actifs
 | Nom | État |
 |-----|------|
-| **Key trials** | Fiches toutes visibles, brouillons à relire ; rôle CDC / Cadre par clinique ; signalement « à réviser » ; préparation de 10 fiches/jour (voir memory/projects/key-trials.md) |
+| **Key trials** | Fiches toutes visibles, brouillons à relire ; rôle CDC par clinique ; signalement « à réviser » ; préparation de 10 fiches/jour (voir memory/projects/key-trials.md) |
 | **Lettres d'assurance** | 31 lettres importées (thoracique) ; 2 Word à corriger |
 | **Congrès** | En ligne ; veille mensuelle programmée sur 18 mois (connecteur Supabase à attacher) |
 | **Lettres médicales** | Accès « médecin plus » caché, Haiku via Edge Function ; mise en service à finaliser |
 | **Limitations LS** | Recherche des limitations et codes d'indication, ordonnances per os ; LS à importer, 48 textes à valider |
+| **Absences** | Espace collaboratif : demandes (vacances, congrès, autre), planning mensuel, validation par les cadres désignés par clinique, avertissement de chevauchement, export Word (voir memory/projects/absences.md) ; SQL et fonction à déployer avant fusion |
 | **Administration** | `/admin/membres.html` : membres, rôles, accès par outil (`has_tool`, exceptions `tool_access`) |
 | **Page d'accueil** | Ton médical, abeilles discrètes (PR #25-26) |
 | **PWA** | Manifeste, service worker, page hors ligne, astuce iPhone (branche en relecture) |
