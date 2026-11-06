@@ -73,7 +73,7 @@ Paragraphe 5, commençant par le marqueur §S : suivi (bilan biologique et clini
 
 Quand une lettre type est fournie, reprends-en fidèlement le schéma, les doses, les modalités, l'étude citée, les effets secondaires et le suivi, en les adaptant au cas ; n'en recopie aucune donnée propre à un autre patient. Sans lettre type, rédige les paragraphes §T, §E et §S d'après l'étude de référence et le schéma indiqués par le médecin, dans le style de l'exemple s'il y en a un, et signale toute dose non fournie par [dose à vérifier].`;
 
-const INDEX_SYSTEM = `Extrais les métadonnées d'une lettre type d'oncologie. Réponds uniquement en JSON conforme au schéma. title : intitulé court du traitement et de l'indication. clinic : une valeur parmi Sénologie, Gynécologie, Urologie, Thoracique, Neuro-oncologie, Mélanome, Lower GI, Upper GI, ORL, Sarcomes, Radiologie interventionnelle, ou "" si incertain. treatment : schéma en clair. drugs : DCI en minuscules, sans nom commercial. trial : étude de référence ou "".`;
+const INDEX_SYSTEM = `Extrais les métadonnées d'une lettre type d'oncologie. Réponds uniquement en JSON conforme au schéma. title : intitulé court du traitement et de l'indication. clinic : une valeur parmi Sénologie, Gynécologie, Urologie, Thoracique, Neuro-oncologie, Mélanome, Lower GI, Upper GI, ORL, Sarcomes, Rad-Inter, ou "" si incertain. treatment : schéma en clair. drugs : DCI en minuscules, sans nom commercial. trial : étude de référence ou "".`;
 
 const INDEX_SCHEMA = {
   type: "object",

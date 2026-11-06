@@ -26,7 +26,7 @@
       ["Thyroïde", /thyroid/], ["Glandes salivaires", /salivaire/]],
     "Sarcomes": [["Sarcome des tissus mous", /sarcome|liposarcome|leiomyosarcome/], ["GIST", /stromal|gist/], ["Ostéosarcome", /osteosarcome/],
       ["Tumeur desmoïde", /desmoide/]],
-    "Radiologie interventionnelle": [["Carcinome hépatocellulaire", /hepatocellulaire|chc\b/]]
+    "Rad-Inter": [["Carcinome hépatocellulaire", /hepatocellulaire|chc\b/]]
   };
   const CLINICS = Object.keys(CANCERS);
   const GUARANTEE = /garantie|accord prealable|autorisation prealable|consultation prealable du medecin[- ]conseil/;

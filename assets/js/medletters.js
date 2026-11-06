@@ -8,7 +8,7 @@
   const DOCX = "https://cdn.jsdelivr.net/npm/docx@9.5.1/dist/index.iife.js";
   const FN = (cfg.supabaseUrl || "") + "/functions/v1/medical-letter";
   const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome",
-    "Lower GI", "Upper GI", "ORL", "Sarcomes", "Radiologie interventionnelle"];
+    "Lower GI", "Upper GI", "ORL", "Sarcomes", "Rad-Inter"];
   const FIELDS = ["clinic", "sex", "age", "ecog", "histo", "markers", "tnm", "stage", "comorbid", "circumstances", "current",
     "family", "habits", "social", "attitude", "trial", "details"];
 

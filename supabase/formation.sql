@@ -39,7 +39,7 @@ create table if not exists public.trainings (
   id bigint generated always as identity primary key,
   title text not null check (char_length(title) between 3 and 200),
   clinic text not null check (clinic in ('Sénologie', 'Gynécologie', 'Urologie', 'Thoracique', 'Neuro-oncologie', 'Mélanome',
-                                         'Lower GI', 'Upper GI', 'ORL', 'Sarcomes', 'Radiologie interventionnelle')),
+                                         'Lower GI', 'Upper GI', 'ORL', 'Sarcomes', 'Rad-Inter', 'ION', 'UTOH')),
   pathology text not null check (char_length(pathology) between 2 and 120),
   tags text[] not null default '{}',
   level text not null default 'tous' check (level in ('residents', 'cadres', 'tous')),
