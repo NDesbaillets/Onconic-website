@@ -35,7 +35,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Congrès** | En ligne ; veille mensuelle programmée sur 18 mois (connecteur Supabase à attacher) |
 | **Lettres médicales** | Accès « médecin plus » caché, Haiku via Edge Function ; mise en service à finaliser |
 | **Limitations LS** | Recherche des limitations et codes d'indication, ordonnances per os ; LS à importer, 48 textes à valider |
-| **Absences** | Espace collaboratif : demandes (vacances, congrès, autre), planning mensuel, validation par les cadres désignés par clinique, avertissement de chevauchement, export Word (voir memory/projects/absences.md) ; SQL et fonction à déployer avant fusion |
+| **Absences** | En ligne (PR #63, 06.11.2026) : demandes (vacances, congrès, autre), planning mensuel avec agenda commun (fériés vaudois, vacances scolaires, événements), validation par les cadres désignés par clinique (dont Plateforme et Administration), avertissement de chevauchement, export Word, proposition depuis Congrès (voir memory/projects/absences.md) ; SQL et fonction `notify-absence` déjà déployés ; à régler dans l'admin : rôles Cadre, cliniques des médecins, valideurs, vacances scolaires à confirmer |
 | **Administration** | `/admin/membres.html` : membres, rôles, accès par outil (`has_tool`, exceptions `tool_access`) |
 | **Page d'accueil** | Ton médical, abeilles discrètes (PR #25-26) |
 | **PWA** | Manifeste, service worker, page hors ligne, astuce iPhone (branche en relecture) |
