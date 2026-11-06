@@ -143,11 +143,36 @@
       c.append(fs);
       if (!mine.size) c.append(el("p", "muted am-note", "Aucune clinique choisie : ce membre n'a pas encore le droit de modifier de fiche."));
     }
+    if (r.role === "cadre") {
+      // Tous les médecins cadres ne valident pas les absences : la case ouvre ce droit, les cliniques se choisissent ensuite
+      const fs = el("fieldset", "am-tools am-validator");
+      fs.append(el("legend", null, "Validation des absences"));
+      const lab = el("label", "cg-check am-tool");
+      const cb = el("input");
+      cb.type = "checkbox"; cb.checked = !!r.absence_validator;
+      cb.addEventListener("change", async () => {
+        if (!cb.checked && (r.validates || []).length && !confirm(`Décocher retire ${nameOf(r)} de la validation des absences (${r.validates.join(", ")}). Continuer ?`)) { cb.checked = true; return; }
+        cb.disabled = true;
+        const { error } = await sb.rpc("admin_set_absence_validator", { p_user: r.id, p_on: cb.checked });
+        if (error) { cb.checked = !cb.checked; cb.disabled = false; return say("Refusé : " + error.message, "error"); }
+        say(cb.checked ? `${nameOf(r)} est validateur des absences : choisissez ses cliniques dans « Absences : valideurs par clinique ».` : `${nameOf(r)} ne valide plus d'absences.`, "ok");
+        await refresh();
+      });
+      lab.append(cb, el("span", null, "Validateur des absences"));
+      fs.append(lab);
+      c.append(fs);
+      const info = el("p", "muted am-note");
+      if (!r.absence_validator) info.textContent = "Ne valide aucune absence : cochez la case pour pouvoir le ou la désigner par clinique.";
+      else if ((r.validates || []).length) info.textContent = "Valide les absences de : " + r.validates.join(", ") + ". ";
+      else info.textContent = "Aucune clinique désignée pour l'instant : ";
+      if (r.absence_validator) { const a = el("a", null, "choisir les cliniques"); a.href = "/admin/absences.html"; info.append(a, document.createTextNode(".")); }
+      c.append(info);
+    }
     const notes = [];
     if (r.role === "admin") notes.push("Administrateur : accès à tout.");
     if (r.role === "member") notes.push("Compte en attente : choisissez un rôle pour ouvrir les accès.");
     if (r.role === "cdc") notes.push("CDC (chef·fe de clinique) : droits d'un médecin assistant, plus modification et validation des fiches Key trials des cliniques cochées.");
-    if (r.role === "cadre") notes.push("Médecin cadre : exactement les droits d'un·e CDC, plus la validation des absences des cliniques pour lesquelles il ou elle est désigné·e (page « Absences : valideurs par clinique »).");
+    if (r.role === "cadre") notes.push("Médecin cadre : exactement les droits d'un·e CDC, plus, si la case « Validateur des absences » est cochée, la validation des absences des cliniques où il ou elle est désigné·e (page « Absences : valideurs par clinique »).");
     if (["assistant", "pharmacist", "admin"].includes(r.role)) notes.push("Rattaché·e à la clinique Administration pour les absences (seuls les médecins, CDC et cadres ont des cliniques).");
     if (r.role === "pharmacist") notes.push("Pharmacien·ne : administre aussi les Lettres d'assurance, Limitations LS et Durée de traitement auxquelles il ou elle a accès.");
     if (notes.length) c.append(el("p", "muted am-note", notes.join(" ")));

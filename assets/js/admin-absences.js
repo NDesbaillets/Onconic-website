@@ -3,7 +3,7 @@
   const cfg = window.ONCONIC_CONFIG || {};
   const sb = window.supabase && cfg.supabaseUrl ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
   const $ = (id) => document.getElementById(id);
-  const state = { clinics: [], cadres: [] };
+  const state = { clinics: [], cadres: [], sans: 0 };
 
   function el(tag, cls, txt) {
     const e = document.createElement(tag);
@@ -19,6 +19,7 @@
     if (error) throw error;
     state.clinics = data.clinics || [];
     state.cadres = data.cadres || [];
+    state.sans = Number(data.cadres_sans_validation) || 0;
   }
 
   function card(c) {
@@ -46,7 +47,9 @@
     fs.append(el("legend", null, "Cadres qui valident les absences de cette clinique"));
     const chosen = new Set(c.validators || []);
     if (!state.cadres.length) {
-      fs.append(el("p", "muted", "Aucun membre n'a encore le rôle Cadre. Attribuez-le dans « Membres et accès »."));
+      fs.append(el("p", "muted", state.sans
+        ? "Aucun médecin cadre n'est validateur des absences. Cochez « Validateur des absences » sur sa fiche dans « Membres et accès »."
+        : "Aucun membre n'a encore le rôle Médecin cadre. Attribuez-le dans « Membres et accès »."));
     }
     for (const cadre of state.cadres) {
       const lab = el("label", "cg-check am-tool");

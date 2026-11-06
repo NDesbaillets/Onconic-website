@@ -19,7 +19,7 @@
   <script src="/assets/js/site.js?v=20261105a" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/admin-absences.js?v=20261106b" defer></script>
+  <script src="/assets/js/admin-absences.js?v=20261106f" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -44,7 +44,7 @@
         <p class="form-msg" id="ug-status" role="status">Chargement…</p>
 
         <div id="aa-tool" hidden>
-          <p class="muted">Pour chaque clinique, choisissez les cadres (médecins) qui valident les absences de ses membres. Un seul valideur suffit à décider. Sans valideur désigné, les demandes vont aux administrateurs, qui peuvent de toute façon tout valider. Seuls les médecins, CDC et cadres sont rattachés à une clinique (page <a href="/admin/membres.html">Membres et accès</a>) ; les autres rôles relèvent de la clinique « Administration ».</p>
+          <p class="muted">Pour chaque clinique, choisissez les médecins cadres qui valident les absences de ses membres. Seuls les médecins cadres cochés « Validateur des absences » dans <a href="/admin/membres.html">Membres et accès</a> apparaissent ici (tous les cadres ne valident pas). Un seul valideur suffit à décider. Sans valideur désigné, les demandes vont aux administrateurs, qui peuvent de toute façon tout valider. Seuls les médecins, CDC et cadres sont rattachés à une clinique (page <a href="/admin/membres.html">Membres et accès</a>) ; les autres rôles relèvent de la clinique « Administration ».</p>
           <p class="muted">Le seuil d'absents simultanés déclenche un avertissement, non bloquant, pour le demandeur et pour le valideur : il est atteint quand le nombre de membres de la clinique absents le même jour (demandes en attente comprises) dépasse le maximum indiqué.</p>
           <p class="form-msg" id="aa-msg" role="status" aria-live="polite"></p>
           <div id="aa-list" class="aa-grid"></div>
