@@ -15,11 +15,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261106c">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261106g">
   <script src="/assets/js/site.js?v=20261105a" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/absences.js?v=20261106d" defer></script>
+  <script src="/assets/js/absences.js?v=20261106g" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -47,6 +47,7 @@
         <div id="ab-tool" hidden>
           <form class="card ab-new" id="ab-form" novalidate>
             <h2>Demander une absence</h2>
+            <p class="muted ab-flow">Un popup vous indique qui sera prévenu et vous laisse ajouter d'autres demandes ; rien n'est envoyé aux validateurs avant votre confirmation.</p>
             <div class="ab-fields">
               <label>Motif
                 <select id="ab-kind" required>
@@ -60,12 +61,17 @@
               </label>
               <label>Du <input id="ab-start" type="date" required></label>
               <label>Au (inclus) <input id="ab-end" type="date" required></label>
-              <button class="btn" type="submit" id="ab-send">Envoyer la demande</button>
+              <button class="btn" type="submit" id="ab-send">Demander l'absence</button>
             </div>
             <p class="muted ab-days" id="ab-days" aria-live="polite"></p>
             <div id="ab-warn" role="alert"></div>
             <p class="form-msg" id="ab-msg" role="status" aria-live="polite"></p>
           </form>
+
+          <div class="card ab-banner" id="ab-drafts" hidden>
+            <p id="ab-drafts-text"></p>
+            <button class="btn" type="button" id="ab-drafts-open">Ouvrir et envoyer</button>
+          </div>
 
           <div class="ab-tabs" role="tablist" aria-label="Sections">
             <button class="ab-tab" id="ab-t-plan" role="tab" aria-selected="true" aria-controls="ab-p-plan" type="button">Planning</button>
@@ -138,6 +144,10 @@
                 <button class="btn btn-outline" id="ab-docx" type="button">Exporter en Word</button>
               </div>
             </div>
+            <div class="ab-bar-sub">
+              <button class="btn btn-outline" id="ab-sub-btn" type="button" aria-expanded="false" aria-controls="ab-sub">S'abonner à mon agenda des absences</button>
+            </div>
+            <div class="card ab-sub" id="ab-sub" hidden></div>
             <p class="form-msg" id="ab-mine-msg" role="status" aria-live="polite"></p>
             <div id="ab-mine-list" class="ab-list"></div>
           </section>
@@ -147,11 +157,60 @@
             <p class="muted">Demandes d'absence et demandes de modification ou de suppression des collaborateurs dont vous validez les absences.</p>
             <p class="form-msg" id="ab-todo-msg" role="status" aria-live="polite"></p>
             <div id="ab-todo-list" class="ab-list"></div>
+            <div id="ab-rej-wrap" hidden>
+              <h3 class="ab-sub-title">Demandes refusées</h3>
+              <p class="muted">Vous pouvez les supprimer ; elles disparaissent d'elles-mêmes 14 jours après le refus.</p>
+              <div id="ab-rej-list" class="ab-list"></div>
+            </div>
           </section>
         </div>
       </div>
     </section>
   </main>
+
+  <dialog class="cg-dialog ab-dlg" id="sd" aria-labelledby="sd-title">
+    <div id="sd-main">
+      <h2 id="sd-title">Envoyer une demande de validation</h2>
+      <p id="sd-to"></p>
+      <p class="muted" id="sd-rule"></p>
+      <ul class="ab-draft-list" id="sd-list" aria-label="Demandes à envoyer"></ul>
+      <details class="ab-add" id="sd-add">
+        <summary>Ajouter une autre absence avant d'envoyer</summary>
+        <form id="sd-add-form" novalidate>
+          <div class="ab-fields">
+            <label>Motif
+              <select id="sd-kind"><option value="vacances">Vacances</option><option value="congres">Congrès</option><option value="autre">Autre</option></select>
+            </label>
+            <label class="ab-note">Précision <input id="sd-note" type="text" maxlength="200" autocomplete="off"></label>
+            <label>Du <input id="sd-start" type="date" required></label>
+            <label>Au (inclus) <input id="sd-end" type="date" required></label>
+            <button class="btn btn-outline" type="submit">Ajouter à l'envoi</button>
+          </div>
+          <p class="form-msg" id="sd-addmsg" role="status" aria-live="polite"></p>
+        </form>
+      </details>
+      <div id="sd-warn" role="alert"></div>
+      <p class="form-msg" id="sd-msg" role="status" aria-live="polite"></p>
+      <div class="btn-row">
+        <button class="btn" type="button" id="sd-go">Envoyer…</button>
+        <button class="btn btn-outline" type="button" id="sd-close">Plus tard (garder en brouillon)</button>
+      </div>
+    </div>
+    <div id="sd-confirm" hidden>
+      <h2>Confirmer l'envoi</h2>
+      <p id="sd-confirm-text"></p>
+      <p class="form-msg" id="sd-confirm-msg" role="status" aria-live="polite"></p>
+      <div class="btn-row">
+        <button class="btn" type="button" id="sd-yes">Confirmer et envoyer l'e-mail</button>
+        <button class="btn btn-outline" type="button" id="sd-back">Retour</button>
+      </div>
+    </div>
+    <div id="sd-done" hidden>
+      <h2>Demande envoyée</h2>
+      <p id="sd-done-text"></p>
+      <div class="btn-row"><button class="btn" type="button" id="sd-done-close">Fermer</button></div>
+    </div>
+  </dialog>
 
   <footer class="site-footer">
     <div class="container">

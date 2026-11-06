@@ -510,16 +510,20 @@
   async function proposeAbsence(e) {
     const start = e.start_date, end = e.end_date || e.start_date;
     if (end < todayIso()) return;
-    let existing = [];
+    let existing = [], drafts = [], validators = { validators: [], fallback: false };
     try {
       const ctx = await sb.rpc("absence_context");
       if (ctx.error || !ctx.data) return; // pas d'accès à l'outil Absences : rien à proposer
       const res = await sb.rpc("absence_list", { p_user: null });
       if (res.error) return;
-      existing = (res.data || []).filter((a) => (a.status === "requested" || a.status === "approved")
+      const mine = res.data || [];
+      existing = mine.filter((a) => (a.status === "draft" || a.status === "requested" || a.status === "approved")
         && String(a.start_date).slice(0, 10) <= end && String(a.end_date).slice(0, 10) >= start);
+      drafts = mine.filter((a) => a.status === "draft");
+      const v = await sb.rpc("absence_my_validators");
+      if (v.data) validators = v.data;
     } catch (err) { return; }
-    absState.event = e; absState.done = false;
+    absState.event = e; absState.done = false; absState.validators = validators;
     $("cg-abs-warn").replaceChildren();
     $("cg-abs-msg").textContent = ""; $("cg-abs-msg").className = "form-msg";
     $("cg-abs-fields").hidden = false;
@@ -529,8 +533,8 @@
     $("cg-abs-title").textContent = "Demander une absence ?";
     $("cg-abs-start").value = start; $("cg-abs-end").value = end; $("cg-abs-note").value = e.title.slice(0, 200);
     $("cg-abs-hint").textContent = e.to_confirm
-      ? "Les dates de cet événement sont à confirmer : vérifiez-les avant d'envoyer. La demande suit la validation habituelle par les cadres de votre clinique."
-      : "Vous pouvez élargir les dates (voyage, récupération). La demande suit la validation habituelle par les cadres de votre clinique.";
+      ? "Les dates de cet événement sont à confirmer : vérifiez-les avant d'envoyer. Chaque validateur concerné doit valider ; vous êtes prévenu·e par e-mail."
+      : "Vous pouvez élargir les dates (voyage, récupération). Chaque validateur concerné doit valider ; vous êtes prévenu·e par e-mail.";
     if (existing.length) {
       // Déjà couvert : on le dit, sans proposer de doublon
       $("cg-abs-title").textContent = "Absence déjà déclarée";
@@ -538,7 +542,11 @@
       $("cg-abs-fields").hidden = true; $("cg-abs-send").hidden = true;
       $("cg-abs-link").hidden = false; $("cg-abs-close").textContent = "Fermer";
     } else {
-      $("cg-abs-intro").textContent = `Vous participez à « ${e.title} » (${periodCH(start, end)}). Voulez-vous demander l'absence correspondante, avec le motif « congrès » ?`;
+      const vnames = (validators.validators || []).map((x) => x.name).join(", ");
+      $("cg-abs-intro").textContent = `Vous participez à « ${e.title} » (${periodCH(start, end)}). Voulez-vous demander l'absence correspondante, avec le motif « congrès » ? `
+        + (vnames ? (validators.fallback ? `Aucun validateur n'est désigné pour vos cliniques : la demande sera envoyée par e-mail à l'administration (${vnames}).` : `Une demande de validation sera envoyée par e-mail à : ${vnames}. Chaque validateur doit valider.`) : "Une demande de validation sera envoyée par e-mail à l'administration.")
+        + (drafts.length ? ` Vos ${drafts.length} autre${drafts.length > 1 ? "s" : ""} demande${drafts.length > 1 ? "s" : ""} en brouillon (${drafts.map((a) => periodCH(String(a.start_date).slice(0, 10), String(a.end_date).slice(0, 10))).join(" ; ")}) partira${drafts.length > 1 ? "ont" : ""} en même temps.` : "");
+      $("cg-abs-send").textContent = "Envoyer la demande de validation";
     }
     $("cg-abs").showModal();
   }
@@ -553,10 +561,14 @@
     try {
       const { data, error } = await sb.rpc("absence_request", { p_kind: "congres", p_note: $("cg-abs-note").value.trim(), p_start: start, p_end: end });
       if (error) { msg.className = "form-msg error"; msg.textContent = error.message; return; }
+      // Cliquer sur « Envoyer » vaut confirmation : les validateurs nommés dans le popup reçoivent un e-mail
+      const sent = await sb.rpc("absence_submit");
+      if (sent.error) { msg.className = "form-msg error"; msg.textContent = "Brouillon enregistré, mais l'envoi a échoué : " + sent.error.message + " Ouvrez Absences pour l'envoyer."; $("cg-abs-fields").hidden = true; btn.hidden = true; $("cg-abs-link").hidden = false; $("cg-abs-close").textContent = "Fermer"; return; }
       absState.done = true;
-      try { sb.functions.invoke("notify-absence", { body: { absence_id: data.id, event: "request" } }).catch(() => {}); } catch (err) { /* facultatif */ }
+      try { sb.functions.invoke("notify-absence", { body: {} }).catch(() => {}); } catch (err) { /* facultatif */ }
+      const who = ((sent.data && sent.data.validators) || []).map((x) => x.name).join(", ") || "l'administration";
       $("cg-abs-title").textContent = "Demande envoyée";
-      $("cg-abs-intro").textContent = `Absence « congrès » demandée du ${periodCH(start, end)}. Elle apparaît en hachuré dans le planning jusqu'à sa validation.`;
+      $("cg-abs-intro").textContent = `Absence « congrès » demandée du ${periodCH(start, end)}. ${who} ${(((sent.data && sent.data.validators) || []).length > 1) ? "ont été prévenus" : "a été prévenu·e"} par e-mail ; vous serez prévenu·e dès que tout est validé, ou dès qu'un validateur refuse. Elle apparaît en hachuré dans le planning jusqu'à sa validation.`;
       $("cg-abs-fields").hidden = true; btn.hidden = true;
       msg.textContent = ""; msg.className = "form-msg";
       const warn = $("cg-abs-warn");

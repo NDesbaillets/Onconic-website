@@ -9,13 +9,13 @@
   const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
   const DOW = ["D", "L", "M", "M", "J", "V", "S"];
   const KINDS = { vacances: ["Vacances", "V"], congres: ["Congrès", "C"], autre: ["Autre", "A"] };
-  const STATUS = { requested: "Demande en attente", approved: "Validée", rejected: "Refusée", cancelled: "Annulée" };
+  const STATUS = { draft: "Brouillon (non envoyé)", requested: "En cours de validation", approved: "Validée", rejected: "Refusée", cancelled: "Annulée" };
   const DECISION = { approved: "Validée", rejected: "Refusée", change_approved: "Changement accepté", change_rejected: "Changement refusé" };
 
   const $ = (id) => document.getElementById(id);
   const state = {
     ctx: null, people: [], clinics: [], month: null, cache: new Map(), prefs: { scope: "mine", ids: [], rows: 20 },
-    mine: [], mineWarn: null, todo: [], who: ""
+    mine: [], mineWarn: null, todo: [], rejected: [], who: "", drafts: [], approvals: new Map(), whoApprovals: new Map()
   };
 
   // ----- Utilitaires -----
@@ -106,8 +106,9 @@
   }
 
   // ----- Notifications push (fonction notify-absence) : sans effet visible si elles échouent -----
-  function notify(id, event) {
-    try { sb.functions.invoke("notify-absence", { body: { absence_id: id, event } }).catch(() => {}); } catch (e) { /* facultatif */ }
+  // La base dépose les messages (e-mail et push) dans une boîte d'envoi ; cette fonction les expédie (sans effet visible si elle échoue)
+  function mailer() {
+    try { sb.functions.invoke("notify-absence", { body: {} }).catch(() => {}); } catch (e) { /* facultatif */ }
   }
 
   // ----- Données -----
@@ -296,6 +297,10 @@
     box.append(head);
     box.append(el("p", null, `${period(a.start_date, a.end_date)} · ${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}`));
     if (a.note) box.append(el("p", "muted", "Précision : " + a.note));
+    if (p && p.is_me && (a.status === "requested" || a.change_type)) {
+      const rows = state.approvals.get(String(a.id)) || [];
+      box.append(el("p", "muted", rows.length ? `Validation : ${approvalCount(rows)} sur ${rows.length}` : "Validation par l'administration"), approvalsBlock(rows));
+    }
     if (a.change_type === "delete") box.append(el("p", "muted", "Suppression demandée, en attente de décision."));
     if (a.change_type === "modify") box.append(el("p", "muted", `Modification demandée : ${period(String(a.change_start).slice(0, 10), String(a.change_end).slice(0, 10))}, en attente de décision.`));
     if (p && p.is_me) box.append(button("Gérer dans « Mes absences »", "btn btn-outline", () => setTab("mine")));
@@ -334,6 +339,7 @@
     $("ab-days").textContent = a && b && b >= a ? `${plur(workdays(a, b), "jour ouvrable", "jours ouvrables")} (hors week-ends et fériés vaudois), ${plur((pd(b) - pd(a)) / 864e5 + 1, "jour calendaire", "jours calendaires")}` : "";
     $("ab-note-hint").textContent = $("ab-kind").value === "autre" ? "(obligatoire)" : "(facultatif)";
   }
+  // Le formulaire crée un brouillon, puis ouvre le popup : validateurs prévenus, ajout d'autres demandes, confirmation, envoi groupé
   async function submitRequest(ev) {
     ev.preventDefault();
     const msg = $("ab-msg"), warn = $("ab-warn");
@@ -344,21 +350,114 @@
     if (kind === "autre" && note.length < 2) return say(msg, "Pour le motif « autre », indiquez une précision.", "error");
     const btn = $("ab-send");
     btn.disabled = true;
-    say(msg, "Envoi en cours…");
+    say(msg, "Préparation…");
     try {
       const { data, error } = await sb.rpc("absence_request", { p_kind: kind, p_note: note, p_start: start, p_end: end });
       if (error) return say(msg, error.message, "error");
-      say(msg, `Demande envoyée (${KINDS[kind][0]}, ${period(start, end)}). Elle apparaît en hachuré dans le planning jusqu'à sa validation.`, "ok");
-      const w = warnBox(data.conflicts, "Attention : votre demande dépasse le nombre d'absents prévu");
-      if (w) { w.append(el("p", "muted", "La demande est quand même transmise ; le valideur voit le même avertissement.")); warn.append(w); }
+      say(msg, "");
       $("ab-note").value = "";
-      notify(data.id, "request");
-      await afterChange();
+      await loadDrafts();
+      await openSend(data.conflicts);
     } finally { btn.disabled = false; }
   }
   async function afterChange() {
     state.cache.clear();
-    await Promise.all([renderGrid(), loadMine(), refreshPending(), state.ctx.validates.length ? loadTodo() : null]);
+    await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending(), state.ctx.validates.length ? Promise.all([loadTodo(), loadRejected()]) : null]);
+  }
+
+  // ----- Brouillons et popup d'envoi -----
+  const sd = { info: { validators: [], fallback: false }, conflicts: [] };
+  const names = (list) => list.map((v) => v.name).join(", ");
+  async function loadDrafts() {
+    const [list, appr] = await Promise.all([sb.rpc("absence_list", { p_user: null }), sb.rpc("absence_approvals_all", { p_user: null })]);
+    state.drafts = (list.data || []).filter((a) => a.status === "draft").map((a) => Object.assign(a, { start_date: String(a.start_date).slice(0, 10), end_date: String(a.end_date).slice(0, 10) }));
+    state.approvals = groupApprovals(appr.data);
+    const n = state.drafts.length;
+    $("ab-drafts").hidden = !n || $("sd").open;
+    $("ab-drafts-text").textContent = n ? `${plur(n, "demande", "demandes")} en brouillon, pas encore envoyée${n > 1 ? "s" : ""} aux validateurs.` : "";
+    if (!state.who) renderMine(); // l'avancement des validations vient d'arriver
+  }
+  function groupApprovals(rows) {
+    const m = new Map();
+    for (const r of rows || []) { const k = String(r.absence_id); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }
+    return m;
+  }
+  async function openSend(conflicts) {
+    sd.conflicts = conflicts || [];
+    $("sd-main").hidden = false; $("sd-confirm").hidden = true; $("sd-done").hidden = true;
+    say($("sd-msg"), ""); say($("sd-addmsg"), "");
+    $("sd-add").open = false;
+    const { data } = await sb.rpc("absence_my_validators");
+    sd.info = data || { validators: [], fallback: false };
+    renderSend();
+    if (!$("sd").open) $("sd").showModal();
+    $("ab-drafts").hidden = true;
+  }
+  function recipients() {
+    const v = sd.info.validators || [];
+    return v.length ? names(v) : "l'administration";
+  }
+  function renderSend() {
+    const v = sd.info.validators || [];
+    $("sd-to").textContent = !v.length ? "Aucun validateur n'est disponible pour l'instant : la demande sera adressée à l'administration."
+      : sd.info.fallback ? `Aucun validateur n'est désigné pour vos cliniques : votre demande sera envoyée à l'administration (${names(v)}).`
+      : `Vous allez envoyer une demande de validation à : ${names(v)}.`;
+    $("sd-rule").textContent = v.length > 1 && !sd.info.fallback
+      ? "Chaque absence doit être validée par tous ces validateurs. Ils reçoivent un seul e-mail pour l'ensemble de vos demandes ; vous êtes prévenu·e dès que tout est validé, ou dès qu'un validateur refuse."
+      : "Le validateur reçoit un seul e-mail pour l'ensemble de vos demandes ; vous êtes prévenu·e de sa décision.";
+    const list = $("sd-list");
+    list.replaceChildren();
+    for (const a of state.drafts) {
+      const li = el("li");
+      li.append(el("span", "ab-draft-when", period(a.start_date, a.end_date)), el("span", "ug-badge", KINDS[a.kind][0]),
+        el("span", "muted", `${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}${a.note ? " · " + a.note : ""}`));
+      li.append(button("Retirer", "btn btn-outline ab-mini", async () => {
+        const { error } = await sb.rpc("absence_withdraw", { p_id: a.id });
+        if (error) return say($("sd-msg"), error.message, "error");
+        await loadDrafts(); renderSend();
+      }));
+      list.append(li);
+    }
+    if (!state.drafts.length) list.append(el("li", "muted", "Aucune demande en brouillon : ajoutez-en une ci-dessous."));
+    $("sd-go").disabled = !state.drafts.length;
+    const warn = $("sd-warn");
+    warn.replaceChildren();
+    const w = warnBox(sd.conflicts, "Attention : trop d'absences en même temps");
+    if (w) { w.append(el("p", "muted", "La demande peut quand même être envoyée ; les validateurs voient le même avertissement.")); warn.append(w); }
+  }
+  async function addToSend(ev) {
+    ev.preventDefault();
+    const out = $("sd-addmsg");
+    const kind = $("sd-kind").value, note = $("sd-note").value.trim(), start = $("sd-start").value, end = $("sd-end").value;
+    if (!start || !end || end < start) return say(out, "Vérifiez les dates.", "error");
+    if (kind === "autre" && note.length < 2) return say(out, "Pour le motif « autre », indiquez une précision.", "error");
+    const { data, error } = await sb.rpc("absence_request", { p_kind: kind, p_note: note, p_start: start, p_end: end });
+    if (error) return say(out, error.message, "error");
+    sd.conflicts = (data.conflicts || []).concat(sd.conflicts);
+    $("sd-note").value = ""; $("sd-start").value = ""; $("sd-end").value = "";
+    say(out, "Ajoutée à l'envoi.", "ok");
+    await loadDrafts(); renderSend();
+  }
+  function askConfirm() {
+    const n = state.drafts.length;
+    if (!n) return;
+    $("sd-confirm-text").textContent = `Vous allez envoyer par e-mail ${n > 1 ? `${n} demandes d'absence` : "1 demande d'absence"} (${state.drafts.map((a) => period(a.start_date, a.end_date)).join(" ; ")}) à : ${recipients()}. Chaque absence devra être validée par tous les validateurs concernés. Confirmer l'envoi ?`;
+    $("sd-main").hidden = true; $("sd-confirm").hidden = false;
+  }
+  async function doSend() {
+    const btn = $("sd-yes");
+    btn.disabled = true;
+    say($("sd-confirm-msg"), "Envoi en cours…");
+    try {
+      const { data, error } = await sb.rpc("absence_submit");
+      if (error) return say($("sd-confirm-msg"), error.message, "error");
+      mailer();
+      $("sd-confirm").hidden = true; $("sd-done").hidden = false;
+      const who = (data.validators || []).length ? names(data.validators) : "l'administration";
+      $("sd-done-text").textContent = `${plur(data.count, "demande envoyée", "demandes envoyées")}. ${who} ${(data.validators || []).length > 1 ? "sont prévenus" : "est prévenu·e"} par e-mail. Vous serez prévenu·e par e-mail dès que tout est validé, ou dès qu'un validateur refuse.`;
+      say($("sd-confirm-msg"), "");
+      await afterChange();
+    } finally { btn.disabled = false; }
   }
 
   // ----- Mes absences -----
@@ -369,6 +468,9 @@
       start_date: String(a.start_date).slice(0, 10), end_date: String(a.end_date).slice(0, 10),
       change_start: a.change_start && String(a.change_start).slice(0, 10), change_end: a.change_end && String(a.change_end).slice(0, 10)
     }));
+    // Avancement des validations (rechargé à chaque ouverture : un validateur a pu décider entre-temps)
+    const r = await sb.rpc("absence_approvals_all", { p_user: state.who || null });
+    if (state.who) state.whoApprovals = groupApprovals(r.data); else state.approvals = groupApprovals(r.data);
     fillYears();
     renderMine();
   }
@@ -413,12 +515,29 @@
         : await sb.rpc("absence_update", Object.assign({ p_id: a.id }, args));
       if (error) { save.disabled = false; return say(out, error.message, "error"); }
       state.mineWarn = warnBox(data.conflicts, "Attention : trop d'absences en même temps");
-      say($("ab-mine-msg"), mode === "change" ? "Demande de modification envoyée : l'absence reste validée aux anciennes dates jusqu'à la décision." : "Demande mise à jour et transmise aux valideurs.", "ok");
-      notify(a.id, mode === "change" ? "change" : "request");
+      say($("ab-mine-msg"), mode === "change" ? "Demande de modification envoyée aux validateurs : l'absence reste validée aux anciennes dates jusqu'à leur décision (tous doivent l'accepter)." : "Demande modifiée : elle repasse en brouillon, envoyez-la pour relancer la validation.", "ok");
+      if (mode === "change") mailer();
       await afterChange();
     });
     return f;
   }
+
+  // Avancement de la validation : qui a validé, qui attend, qui a refusé
+  function approvalsBlock(rows) {
+    const box = el("div", "ab-appr");
+    if (!rows.length) { box.append(el("p", "muted", "Aucun validateur désigné : l'administration décide.")); return box; }
+    const ul = el("ul", "ab-appr-list");
+    const LABEL = { approved: "a validé", pending: "en attente", rejected: "a refusé", skipped: "n'a pas eu à se prononcer (demande déjà refusée)" };
+    rows.forEach((r) => {
+      const li = el("li", "ab-appr-" + r.decision);
+      li.append(el("strong", null, r.validator_name || r.name),
+        document.createTextNode(` : ${LABEL[r.decision]}${r.decided_at && ["approved", "rejected"].includes(r.decision) ? " le " + fmtCH(r.decided_at) : ""}${r.comment ? " · « " + r.comment + " »" : ""}`));
+      ul.append(li);
+    });
+    box.append(ul);
+    return box;
+  }
+  const approvalCount = (rows) => rows.filter((r) => r.decision === "approved").length;
 
   function absenceCard(a, own) {
     const card = el("article", `card ab-item ab-item-${a.status}`);
@@ -436,17 +555,62 @@
         ? "Suppression demandée, en attente de décision. L'absence reste validée en attendant."
         : `Modification demandée : ${a.change_kind ? KINDS[a.change_kind][0] + ", " : ""}${period(a.change_start, a.change_end)}${a.change_note ? " · " + a.change_note : ""}, en attente de décision. L'absence reste validée aux dates actuelles en attendant.`));
     }
+    // Avancement : cliquer pour voir qui a validé, qui attend, qui a refusé
+    const rows = (own ? state.approvals : state.whoApprovals).get(String(a.id)) || [];
+    if (a.status === "requested" || a.status === "rejected" || (a.status === "approved" && a.change_type)) {
+      const d = el("details", "ab-progress");
+      const total = rows.length;
+      d.append(el("summary", null, a.status === "rejected" ? "Voir qui a refusé" : total ? `Voir qui a validé (${approvalCount(rows)} sur ${total})` : "Voir qui décide"));
+      d.append(approvalsBlock(rows));
+      card.append(d);
+    }
+    if (a.status === "rejected" && a.decided_at) {
+      const gone = new Date(new Date(a.decided_at).getTime() + 14 * 864e5);
+      card.append(el("p", "muted ab-item-meta", `Cette demande refusée disparaîtra d'elle-même le ${fmtCH(iso(gone))}. Vous pouvez la supprimer dès maintenant.`));
+    }
+    if (a.status === "draft") card.append(el("p", "muted ab-item-meta", "Brouillon : les validateurs ne sont pas encore prévenus. Envoyez-le pour lancer la validation."));
+    if (!own && a.status === "rejected" && state.who) {
+      const del = el("div", "btn-row ab-actions");
+      del.append(button("Supprimer cette demande refusée", "btn btn-outline lt-danger", async () => {
+        const { error } = await sb.rpc("absence_delete_rejected", { p_id: a.id });
+        if (error) return say($("ab-mine-msg"), error.message, "error");
+        say($("ab-mine-msg"), "Demande refusée supprimée.", "ok");
+        await afterChange();
+      }));
+      card.append(del);
+    }
     if (!own) return card;
     const actions = el("div", "btn-row ab-actions");
     const swap = (node) => { actions.replaceWith(node); };
-    if (a.status === "requested" || a.status === "rejected") {
+    if (a.status === "draft") {
       actions.append(
-        button(a.status === "rejected" ? "Modifier et renvoyer" : "Modifier", "btn btn-outline", () => swap(editForm(a, "update"))),
-        button("Retirer la demande", "btn btn-outline lt-danger", async () => {
-          if (!confirm(`Retirer cette demande (${period(a.start_date, a.end_date)}) ?`)) return;
+        button("Envoyer pour validation…", "btn", () => openSend([])),
+        button("Modifier", "btn btn-outline", () => swap(editForm(a, "update"))),
+        button("Retirer", "btn btn-outline lt-danger", async () => {
+          if (!confirm(`Retirer ce brouillon (${period(a.start_date, a.end_date)}) ?`)) return;
           const { error } = await sb.rpc("absence_withdraw", { p_id: a.id });
           if (error) return say($("ab-mine-msg"), error.message, "error");
-          say($("ab-mine-msg"), "Demande retirée.", "ok");
+          say($("ab-mine-msg"), "Brouillon retiré.", "ok");
+          await afterChange();
+        }));
+    } else if (a.status === "requested") {
+      actions.append(
+        button("Modifier (repasse en brouillon)", "btn btn-outline", () => swap(editForm(a, "update"))),
+        button("Annuler la demande", "btn btn-outline lt-danger", async () => {
+          if (!confirm(`Annuler cette demande en cours (${period(a.start_date, a.end_date)}) ? Les validations déjà données seront perdues.`)) return;
+          const { error } = await sb.rpc("absence_withdraw", { p_id: a.id });
+          if (error) return say($("ab-mine-msg"), error.message, "error");
+          say($("ab-mine-msg"), "Demande annulée.", "ok");
+          await afterChange();
+        }));
+    } else if (a.status === "rejected") {
+      actions.append(
+        button("Modifier et renvoyer", "btn btn-outline", () => swap(editForm(a, "update"))),
+        button("Supprimer", "btn btn-outline lt-danger", async () => {
+          if (!confirm(`Supprimer cette demande refusée (${period(a.start_date, a.end_date)}) ?`)) return;
+          const { error } = await sb.rpc("absence_delete_rejected", { p_id: a.id });
+          if (error) return say($("ab-mine-msg"), error.message, "error");
+          say($("ab-mine-msg"), "Demande refusée supprimée.", "ok");
           await afterChange();
         }));
     } else if (a.status === "approved" && !a.change_type) {
@@ -457,7 +621,7 @@
           const { error } = await sb.rpc("absence_request_change", { p_id: a.id, p_type: "delete", p_kind: null, p_note: null, p_start: null, p_end: null });
           if (error) return say($("ab-mine-msg"), error.message, "error");
           say($("ab-mine-msg"), "Demande de suppression envoyée. L'absence reste validée jusqu'à la décision.", "ok");
-          notify(a.id, "change");
+          mailer();
           await afterChange();
         }));
     } else if (a.status === "approved" && a.change_type) {
@@ -479,7 +643,7 @@
     if (state.mineWarn) { list.append(state.mineWarn); state.mineWarn = null; }
     const today = todayIso();
     const live = state.mine.filter((a) => a.status !== "cancelled");
-    const current = live.filter((a) => a.end_date >= today || a.status === "requested" || a.change_type).sort((a, b) => a.start_date.localeCompare(b.start_date));
+    const current = live.filter((a) => a.end_date >= today || a.status === "draft" || a.status === "requested" || a.change_type).sort((a, b) => a.start_date.localeCompare(b.start_date));
     const past = live.filter((a) => !current.includes(a));
     const cancelled = state.mine.filter((a) => a.status === "cancelled");
     if (!current.length) list.append(el("p", "muted", own ? "Aucune absence à venir. Utilisez le formulaire ci-dessus pour en demander une." : "Aucune absence à venir."));
@@ -507,6 +671,32 @@
     }));
     renderTodo();
   }
+  async function loadRejected() {
+    const { data, error } = await sb.rpc("absence_rejected_to_manage");
+    if (error) return;
+    state.rejected = (data || []).map((a) => Object.assign(a, { start_date: String(a.start_date).slice(0, 10), end_date: String(a.end_date).slice(0, 10) }));
+    const box = $("ab-rej-list");
+    $("ab-rej-wrap").hidden = !state.rejected.length;
+    box.replaceChildren();
+    for (const a of state.rejected) {
+      const card = el("article", "card ab-item ab-item-rejected");
+      const head = el("div", "ab-item-head");
+      head.append(el("strong", null, a.name), el("span", "ug-badge", KINDS[a.kind][0]), el("strong", null, period(a.start_date, a.end_date)));
+      card.append(head);
+      const gone = new Date(new Date(a.decided_at).getTime() + 14 * 864e5);
+      card.append(el("p", "ab-decision", `Refusée${a.decided_by_name ? " par " + a.decided_by_name : ""} le ${fmtCH(a.decided_at)}${a.decision_comment ? " : « " + a.decision_comment + " »" : ""}. Disparaît d'elle-même le ${fmtCH(iso(gone))}.`));
+      const act = el("div", "btn-row ab-actions");
+      act.append(button("Supprimer", "btn btn-outline lt-danger", async () => {
+        if (!confirm(`Supprimer la demande refusée de ${a.name} (${period(a.start_date, a.end_date)}) ?`)) return;
+        const { error: e2 } = await sb.rpc("absence_delete_rejected", { p_id: a.id });
+        if (e2) return say($("ab-todo-msg"), e2.message, "error");
+        say($("ab-todo-msg"), "Demande refusée supprimée.", "ok");
+        await loadRejected();
+      }));
+      card.append(act);
+      box.append(card);
+    }
+  }
   function renderTodo() {
     const list = $("ab-todo-list");
     list.replaceChildren();
@@ -524,6 +714,14 @@
       if (a.change_type === "modify") {
         card.append(el("p", null, `Nouvelle période demandée : ${KINDS[a.change_kind][0]} · ${period(a.change_start, a.change_end)} · ${plur(workdays(a.change_start, a.change_end), "jour ouvrable", "jours ouvrables")}${a.change_note ? " · " + a.change_note : ""}`));
       }
+      const prog = a.progress || [];
+      if (prog.length) {
+        const d = el("details", "ab-progress");
+        d.open = true;
+        d.append(el("summary", null, `Validation : ${approvalCount(prog)} sur ${prog.length}`), approvalsBlock(prog));
+        card.append(d);
+        card.append(el("p", "muted ab-item-meta", "L'absence n'est validée que lorsque tous les validateurs concernés ont validé ; un seul refus suffit à la refuser."));
+      }
       const w = warnBox(a.conflicts, "Attention : trop d'absences en même temps si vous validez");
       if (w) card.append(w);
       const comment = el("input"); comment.type = "text"; comment.maxLength = 500; comment.placeholder = "Commentaire (obligatoire pour un refus)";
@@ -533,10 +731,12 @@
       const decide = async (approve, b1, b2) => {
         if (!approve && comment.value.trim().length < 3) { comment.focus(); return say(out, "Un refus demande un commentaire.", "error"); }
         b1.disabled = b2.disabled = true;
-        const { error } = await sb.rpc("absence_decide", { p_id: a.id, p_approve: approve, p_comment: comment.value.trim() });
+        const { data: res, error } = await sb.rpc("absence_decide", { p_id: a.id, p_approve: approve, p_comment: comment.value.trim() });
         if (error) { b1.disabled = b2.disabled = false; return say(out, error.message, "error"); }
-        notify(a.id, "decision");
-        say($("ab-todo-msg"), `${a.name} : ${approve ? "accepté" : "refusé"}.`, "ok");
+        mailer();
+        say($("ab-todo-msg"), approve
+          ? (res === "requested" ? `${a.name} : votre validation est enregistrée ; il reste des validateurs à se prononcer.` : `${a.name} : accepté, l'usager est prévenu par e-mail.`)
+          : `${a.name} : refusé, l'usager est prévenu par e-mail.`, "ok");
         await afterChange();
       };
       const actions = el("div", "btn-row");
@@ -546,6 +746,48 @@
       card.append(lab, out, actions);
       list.append(card);
     }
+  }
+
+  // ----- Abonnement à son agenda des absences (flux iCal privé) -----
+  async function subscribeBody(box) {
+    const get = async (reset) => {
+      const { data, error } = await sb.rpc("calendar_token", { p_reset: !!reset });
+      if (error || !data) throw error || new Error("jeton");
+      return data;
+    };
+    const feed = (t) => `${cfg.supabaseUrl}/functions/v1/absence-feed?t=${t}`;
+    box.replaceChildren(el("p", "muted", "Chargement…"));
+    let token;
+    try { token = await get(false); } catch (err) { box.replaceChildren(el("p", "form-msg error", "Abonnement indisponible pour l'instant.")); return; }
+    const render = () => {
+      const url = feed(token);
+      box.replaceChildren();
+      box.append(el("p", null, "Un lien privé garde votre agenda à jour : vos absences validées (fermes) et vos demandes en attente (provisoires). Il est aussi utilisé pour votre agenda des congrès. Ne le partagez pas."));
+      const row = el("div", "ab-sub-row");
+      const input = el("input");
+      input.readOnly = true; input.value = url; input.setAttribute("aria-label", "Lien d'abonnement à votre agenda des absences");
+      input.addEventListener("focus", () => input.select());
+      const copy = button("Copier le lien", "btn btn-outline", async () => {
+        try { await navigator.clipboard.writeText(url); copy.textContent = "Copié"; } catch (x) { input.select(); copy.textContent = "Sélectionné : copiez"; }
+        setTimeout(() => (copy.textContent = "Copier le lien"), 1800);
+      });
+      row.append(input, copy);
+      box.append(row);
+      const open = el("a", "btn", "Ouvrir dans mon agenda");
+      open.href = url.replace(/^https:/, "webcal:");
+      const actions = el("div", "btn-row");
+      actions.append(open, button("Générer un nouveau lien", "btn btn-outline", async () => {
+        if (!confirm("Générer un nouveau lien ? L'ancien cessera de fonctionner dans vos agendas (absences et congrès).")) return;
+        try { token = await get(true); render(); } catch (x) { alert("Impossible de renouveler le lien."); }
+      }));
+      box.append(actions);
+      const ol = el("ol", "ab-steps");
+      ["iPhone, iPad, Mac : touchez « Ouvrir dans mon agenda » puis « S'abonner ».",
+        "Google Agenda : Autres agendas › À partir de l'URL, collez le lien (Google actualise jusqu'à une fois par jour).",
+        "Outlook : Ajouter un calendrier › S'abonner à partir du web, collez le lien."].forEach((t) => ol.append(el("li", null, t)));
+      box.append(ol);
+    };
+    render();
   }
 
   // ----- Export Word -----
@@ -567,7 +809,7 @@
       const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, ShadingType, AlignmentType, BorderStyle } = window.docx;
       const year = $("ab-year").value;
       const from = year ? `${year}-01-01` : null, to = year ? `${year}-12-31` : null;
-      const rows = state.mine.filter((a) => a.status !== "cancelled" && (!year || (a.start_date <= to && a.end_date >= from)))
+      const rows = state.mine.filter((a) => a.status !== "cancelled" && a.status !== "draft" && (!year || (a.start_date <= to && a.end_date >= from)))
         .sort((a, b) => a.start_date.localeCompare(b.start_date));
       const person = state.who ? state.people.find((p) => p.id === state.who) : state.people.find((p) => p.is_me);
       const name = person ? person.name : "Membre";
@@ -712,6 +954,24 @@
     $("ab-t-mine").addEventListener("click", () => setTab("mine"));
     $("ab-t-todo").addEventListener("click", () => setTab("todo"));
     $("ab-docx").addEventListener("click", exportDocx);
+    // Popup d'envoi
+    $("ab-drafts-open").addEventListener("click", () => openSend([]));
+    $("sd-add-form").addEventListener("submit", addToSend);
+    $("sd-start").addEventListener("change", () => { if (!$("sd-end").value || $("sd-end").value < $("sd-start").value) $("sd-end").value = $("sd-start").value; });
+    $("sd-go").addEventListener("click", askConfirm);
+    $("sd-back").addEventListener("click", () => { $("sd-confirm").hidden = true; $("sd-main").hidden = false; });
+    $("sd-yes").addEventListener("click", doSend);
+    for (const id of ["sd-close", "sd-done-close"]) $(id).addEventListener("click", () => $("sd").close());
+    $("sd").addEventListener("close", () => loadDrafts());
+    $("sd-start").min = $("sd-end").min = todayIso().slice(0, 4) + "-01-01";
+    // Abonnement à l'agenda
+    const subBtn = $("ab-sub-btn"), subBox = $("ab-sub");
+    subBtn.addEventListener("click", () => {
+      const open = subBox.hidden;
+      subBox.hidden = !open;
+      subBtn.setAttribute("aria-expanded", String(open));
+      if (open && !subBox.dataset.ready) { subBox.dataset.ready = "1"; subscribeBody(subBox); }
+    });
     if (ctx.validates.length) {
       $("ab-t-todo").hidden = false;
       const who = $("ab-who");
@@ -719,8 +979,9 @@
       state.people.filter((p) => !p.is_me && (ctx.role === "admin" || sharesClinic(p, ctx.validates))).forEach((p) => { const o = el("option", null, p.name); o.value = p.id; who.append(o); });
       who.addEventListener("change", () => { state.who = who.value; loadMine(); });
       $("ab-who-wrap").hidden = false;
+      loadRejected();
     }
-    await Promise.all([renderGrid(), loadMine(), refreshPending()]);
+    await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending()]);
     if (location.hash === "#todo" && ctx.validates.length) setTab("todo");
     else if (location.hash === "#mine") setTab("mine");
   })();

@@ -14,7 +14,7 @@
 - Planning : toutes les personnes ayant l'outil sont visibles, par défaut celles des cliniques du membre ; choix libre des personnes et du nombre de lignes (préférence gardée dans le navigateur). Motif visible de tous ; précision (note) réservée à l'intéressé et à ses valideurs. Demande = hachuré, validée = plein.
 - Avertissement (non bloquant, pour le demandeur et le valideur) : quand, un jour donné, le nombre de membres d'une clinique absents (demandes comprises, demandeur inclus) dépasse le seuil de la clinique (2 par défaut, réglable par l'admin).
 - Export Word (`docx` 9.5.1 via jsdelivr) : résumé des absences validées et des demandes en attente ou refusées, par année ; les valideurs l'exportent pour les membres de leurs cliniques.
-- Notifications : Web Push (fonction `notify-absence`, abonnements de `push_subscriptions`, case de Mon compte) aux valideurs à chaque demande ou demande de changement, au demandeur à chaque décision ; compteur « n à valider » sur la tuile.
+- Notifications : voir « Validation par tous les validateurs » ci-dessous (e-mails par la boîte d'envoi, push en plus si activé dans Mon compte).
 
 ## Agenda commun (première ligne du planning)
 - Jours fériés vaudois calculés par la page (Nouvel An, 2 janvier, Vendredi saint, Lundi de Pâques, Ascension, Lundi de Pentecôte, 1er août, Lundi du Jeûne fédéral, Noël) ; ils sont déduits des jours ouvrables.
@@ -23,10 +23,18 @@
 ## Depuis la page Congrès
 - Quand un membre passe à « J'y vais » ou « Je présente » (nouvelle participation ferme, événement non passé), un dialogue propose la demande d'absence (motif congrès, dates de l'événement modifiables, précision = titre). Rien n'est proposé sans accès à l'outil Absences ; si une absence couvre déjà ces dates, le dialogue le dit sans créer de doublon.
 
+## Validation par tous les validateurs (06.11.2026, `supabase/absences_validation.sql`)
+- **Brouillons puis envoi par lot.** Une nouvelle absence (formulaire ou page Congrès) est un brouillon invisible des autres. Un popup nomme les validateurs qui seront prévenus, permet d'ajouter d'autres absences, puis demande confirmation ; `absence_submit()` envoie tous les brouillons d'un coup (un seul e-mail par validateur). « Plus tard » garde les brouillons (bandeau de rappel). Modifier une demande en cours ou refusée la remet en brouillon.
+- **Tous les validateurs concernés doivent valider** (médecins cadres cochés et désignés pour une clinique du membre, tous si le membre a plusieurs cliniques). Un seul refus suffit à refuser, avec commentaire. Sans validateur désigné, les admins décident. Un admin tranche seul. Les demandes de modification ou de suppression suivent la même règle ; si un validateur est retiré (case décochée ou désignation supprimée), `absence_recheck()` fait aboutir les demandes qui n'attendaient plus que lui.
+- **Avancement visible** : sur chaque demande en cours ou refusée, « Voir qui a validé (n sur m) » (`absence_approvals_all`), qui a validé, attend ou refusé, avec date et commentaire ; mêmes informations côté valideur.
+- **E-mails** : les fonctions SQL déposent les messages dans `absence_outbox`, la fonction `notify-absence` (SMTP Infomaniak, `noreply@onconic.ch`, plus push) les expédie ; l'interface l'appelle après chaque envoi ou décision. Validateurs : nouvelles demandes (un message pour tout le lot) et demandes de changement ; usager : absence validée par tous, refus immédiat (auteur et commentaire), changement accepté ou refusé.
+- **Demandes refusées** : supprimables par l'usager et par les validateurs (`absence_delete_rejected`, section « Demandes refusées » de l'onglet À valider) ; elles disparaissent d'elles-mêmes 14 jours après le refus (masquées par les listes, purge physique à chaque envoi et par `notify-absence`).
+- **Agenda personnel** : bouton « S'abonner à mon agenda des absences » dans Mes absences ; flux iCal `absence-feed` (sans JWT), même jeton que « Mes congrès » (`calendar_token()`, renouvelable), absences validées fermes, demandes provisoires.
+
 ## Limites
-- Pas de soldes de vacances. Pas d'e-mail : seul le push (à activer par appareil) prévient en dehors de The Hive.
+- Pas de soldes de vacances. L'e-mail dépend du secret `SMTP_PASSWORD` (comme le formulaire de contact) : sans lui, les messages restent dans `absence_outbox` (5 essais) et seul le push éventuel part.
 
 ## Mise en service (ordre)
-1. Exécuter `supabase/absences.sql`.
-2. Déployer la fonction `notify-absence` (JWT vérifié).
+1. Exécuter `supabase/absences.sql`, puis `cadre_medecin.sql`, `cadre_validateur.sql` et `absences_validation.sql`.
+2. Déployer `notify-absence` (JWT vérifié, secret `SMTP_PASSWORD`) et `absence-feed` (sans JWT).
 3. Fusionner la PR, puis dans `/admin/membres.html` : rôle Cadre aux cadres, cliniques aux médecins, et `/admin/absences.html` pour les valideurs.
