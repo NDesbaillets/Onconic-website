@@ -25,10 +25,10 @@ create table if not exists public.absence_clinic_settings (
 );
 insert into public.absence_clinic_settings (clinic, pos) values
   ('Sénologie', 1), ('Gynécologie', 2), ('Urologie', 3), ('Thoracique', 4), ('Neuro-oncologie', 5), ('Mélanome', 6),
-  ('Lower GI', 7), ('Upper GI', 8), ('ORL', 9), ('Sarcomes', 10), ('Radiologie interventionnelle', 11), ('Plateforme', 12), ('Administration', 13)
+  ('Lower GI', 7), ('Upper GI', 8), ('ORL', 9), ('Sarcomes', 10), ('Rad-Inter', 11), ('ION', 12), ('UTOH', 13), ('Plateforme', 14), ('Administration', 15)
 on conflict (clinic) do nothing;
 -- Base déjà installée avant l'ajout de Plateforme : Administration redevient la dernière
-update public.absence_clinic_settings set pos = 13 where clinic = 'Administration' and pos = 12;
+update public.absence_clinic_settings set pos = 13 where clinic = 'Administration' and pos = 12; -- (rangement final : voir clinics.sql)
 
 -- Cadres qui valident les absences d'une clinique (désignés par l'admin)
 create table if not exists public.absence_validators (

@@ -147,7 +147,7 @@ begin
   if r is distinct from 'cdc' then raise exception 'Réservé aux membres du rôle CDC / Cadre.'; end if;
   select c into bad from unnest(coalesce(p_clinics, '{}')) c
     where c not in ('Sénologie', 'Gynécologie', 'Urologie', 'Thoracique', 'Neuro-oncologie', 'Mélanome',
-                    'Lower GI', 'Upper GI', 'ORL', 'Sarcomes', 'Radiologie interventionnelle') limit 1;
+                    'Lower GI', 'Upper GI', 'ORL', 'Sarcomes', 'Rad-Inter', 'ION', 'UTOH') limit 1;
   if bad is not null then raise exception 'Clinique inconnue : %', bad; end if;
   update public.profiles set cdc_clinics = coalesce(array(select distinct c from unnest(coalesce(p_clinics, '{}')) c order by c), '{}')
     where id = p_user;

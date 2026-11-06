@@ -7,7 +7,8 @@
   const BLOCS = [
     ["Bloc 1", ["Sénologie", "Gynécologie", "Urologie"]],
     ["Bloc 2", ["Thoracique", "Neuro-oncologie", "Mélanome"]],
-    ["Bloc 3", ["Lower GI", "Upper GI", "ORL", "Sarcomes", "Radiologie interventionnelle"]]
+    ["Bloc 3", ["Lower GI", "Upper GI", "ORL", "Sarcomes", "Rad-Inter"]],
+    ["Autres cliniques", ["ION", "UTOH"]]
   ];
   const ALL = "Transversal"; // concerne toutes les cliniques
   const KINDS = [["congrès", "Congrès"], ["formation", "Formations"], ["symposium", "Symposiums"], ["webinaire", "Webinaires"]];

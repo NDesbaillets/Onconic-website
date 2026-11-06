@@ -8,7 +8,7 @@
   const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
   const PDFJS_WORKER = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
   const MAX_HTML = 15 * 1024 * 1024;
-  const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome", "Lower GI", "Upper GI", "ORL", "Sarcomes", "Radiologie interventionnelle"];
+  const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome", "Lower GI", "Upper GI", "ORL", "Sarcomes", "Rad-Inter", "ION", "UTOH"];
   const LEVELS = { tous: "Tous niveaux", residents: "Résidents", cadres: "Cadres" };
   const COLS = "id, title, clinic, pathology, tags, level, author, summary, kind, file_path, file_size, source_path, status, created_at, updated_at";
 

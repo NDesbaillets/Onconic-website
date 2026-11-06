@@ -12,7 +12,7 @@
   const BLOCS = [
     ["Bloc 1", ["Sénologie", "Gynécologie", "Urologie"]],
     ["Bloc 2", ["Thoracique", "Neuro-oncologie", "Mélanome"]],
-    ["Bloc 3", ["Lower GI", "Upper GI", "ORL", "Sarcomes", "Radiologie interventionnelle"]]
+    ["Bloc 3", ["Lower GI", "Upper GI", "ORL", "Sarcomes", "Rad-Inter"]]
   ];
 
   const $ = (id) => document.getElementById(id);

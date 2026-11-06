@@ -74,7 +74,7 @@
       markers: ["Grade FNCLCC …", "Amplification MDM2", "Translocation SS18-SSX", "Réarrangement EWSR1", "KIT exon 11",
         "KIT exon 9", "PDGFRA D842V", "Fusion NTRK", "Index mitotique … /5 mm²"]
     },
-    "Radiologie interventionnelle": {
+    "Rad-Inter": {
       histo: ["Carcinome hépatocellulaire", "Métastases hépatiques de …", "Cholangiocarcinome intrahépatique", "Carcinome rénal"],
       markers: ["AFP … ng/ml", "Child-Pugh …", "BCLC …", "ALBI grade …", "Nombre de lésions …", "Plus grande lésion … mm"]
     }

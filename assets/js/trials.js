@@ -8,7 +8,8 @@
   const BLOCS = [
     ["Bloc 1", ["Sénologie", "Gynécologie", "Urologie"]],
     ["Bloc 2", ["Thoracique", "Neuro-oncologie", "Mélanome"]],
-    ["Bloc 3", ["Lower GI", "Upper GI", "ORL", "Sarcomes", "Radiologie interventionnelle"]]
+    ["Bloc 3", ["Lower GI", "Upper GI", "ORL", "Sarcomes", "Rad-Inter"]],
+    ["Autres cliniques", ["ION", "UTOH"]]
   ];
   const LINES = [["neoadj", "Néoadjuvant"], ["adj", "Adjuvant"], ["1L", "1re ligne"], ["2L", "2e ligne"], ["3L", "3e ligne et plus"]];
   const LINE_LABEL = Object.fromEntries(LINES);
