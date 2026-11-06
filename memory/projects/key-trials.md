@@ -23,9 +23,9 @@ Schéma de l'étude (SVG : population et critères d'inclusion → randomisation
 - Doses à vérifier en priorité : chimiothérapie du bras contrôle KEYNOTE-024, doublets adjuvants et stratification d'IMpower010.
 - Relancer `trials.sql` met à jour seulement les fiches non modifiées à la main et non relues.
 
-## Visibilité, brouillons et rôle CDC / Cadre (décision du 04.11.2026)
+## Visibilité, brouillons et rôle CDC (décision du 04.11.2026)
 - Toutes les fiches, brouillons compris, sont visibles de tous les utilisateurs de l'outil. Une fiche en brouillon affiche un bandeau « Brouillon : pas encore relue ni validée par un médecin cadre » et un badge « Brouillon ». Le 04.11.2026, les 11 fiches publiées sont repassées en brouillon.
-- Rôle `cdc` (« CDC / Cadre ») : droits d'un médecin, plus modification et validation (statut publié, relu par) des fiches des cliniques que l'admin lui attribue (`profiles.cdc_clinics`, une ou plusieurs, réglées dans `/admin/membres.html`). Droit contrôlé en base par `can_edit_trials(clinic)` (RLS de `key_trials`). Suppression de fiche : admin seulement.
+- Rôle `cdc` (« CDC », chef de clinique) : droits d'un médecin, plus modification et validation (statut publié, relu par) des fiches des cliniques que l'admin lui attribue (`profiles.cdc_clinics`, une ou plusieurs, réglées dans `/admin/membres.html`). Droit contrôlé en base par `can_edit_trials(clinic)` (RLS de `key_trials`). Suppression de fiche : admin seulement.
 - Chaque fiche porte un sélecteur de clinique (modifiable par l'admin et les CDC de la clinique ; un CDC ne peut attribuer que ses cliniques).
 - Signalement « à réviser » : tout utilisateur peut signaler une fiche avec un commentaire (table `trial_flags`). Les signalements ouverts apparaissent sur la fiche et dans la section « À réviser » en bas de page pour les admins et les CDC de la clinique, avec « Marquer comme traité ».
 - SQL : `supabase/trials_roles.sql`.

@@ -15,11 +15,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261105a">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261106c">
   <script src="/assets/js/site.js?v=20261105a" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/congres.js?v=20261103c" defer></script>
+  <script src="/assets/js/congres.js?v=20261106b" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -111,6 +111,28 @@
             <div class="btn-row">
               <button class="btn" type="submit" value="save">Enregistrer</button>
               <button class="btn btn-outline" type="button" id="cg-cancel">Annuler</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog class="cg-dialog cg-abs" id="cg-abs" aria-labelledby="cg-abs-title">
+          <form id="cg-abs-form" method="dialog" novalidate>
+            <h2 id="cg-abs-title">Demander une absence ?</h2>
+            <p id="cg-abs-intro"></p>
+            <div id="cg-abs-fields">
+              <div class="cg-grid">
+                <label>Du <input id="cg-abs-start" type="date" required></label>
+                <label>Au (inclus) <input id="cg-abs-end" type="date" required></label>
+                <label class="cg-wide">Précision <input id="cg-abs-note" maxlength="200" autocomplete="off"></label>
+              </div>
+              <p class="muted" id="cg-abs-hint">Vous pouvez élargir les dates (voyage, récupération). La demande suit la validation habituelle par les cadres de votre clinique.</p>
+            </div>
+            <div id="cg-abs-warn"></div>
+            <p class="form-msg" id="cg-abs-msg" role="status" aria-live="polite"></p>
+            <div class="btn-row">
+              <button class="btn" type="submit" id="cg-abs-send">Demander l'absence</button>
+              <a class="btn btn-outline" id="cg-abs-link" href="/app/absences.html#mine" hidden>Voir mes absences</a>
+              <button class="btn btn-outline" type="button" id="cg-abs-close">Non merci</button>
             </div>
           </form>
         </dialog>

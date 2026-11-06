@@ -489,6 +489,7 @@
   }
 
   async function setStatus(e, status) {
+    const before = (mine(e) || {}).status;
     const q = status
       ? sb.from("event_participants").upsert({ event_id: e.id, user_id: state.me.id, status }, { onConflict: "event_id,user_id" })
       : sb.from("event_participants").delete().eq("event_id", e.id).eq("user_id", state.me.id);
@@ -497,6 +498,78 @@
     // Prévient (une seule fois par événement) les autres membres qui ont accepté les notifications ; sans effet sur la page
     if (status === "going" || status === "presenting") sb.functions.invoke("notify-event-join", { body: { event_id: e.id } }).catch(() => {});
     await refresh(e.id);
+    // Nouvelle participation ferme : propose de déclarer l'absence correspondante (outil Absences)
+    if ((status === "going" || status === "presenting") && before !== "going" && before !== "presenting") proposeAbsence(e);
+  }
+
+  // ----- Proposition de demande d'absence après « J'y vais » ou « Je présente » -----
+  const absState = { event: null, done: false };
+  const periodCH = (a, b) => (a === b ? fmtCH(a) : `${fmtCH(a)} – ${fmtCH(b)}`);
+  async function proposeAbsence(e) {
+    const start = e.start_date, end = e.end_date || e.start_date;
+    if (end < todayIso()) return;
+    let existing = [];
+    try {
+      const ctx = await sb.rpc("absence_context");
+      if (ctx.error || !ctx.data) return; // pas d'accès à l'outil Absences : rien à proposer
+      const res = await sb.rpc("absence_list", { p_user: null });
+      if (res.error) return;
+      existing = (res.data || []).filter((a) => (a.status === "requested" || a.status === "approved")
+        && String(a.start_date).slice(0, 10) <= end && String(a.end_date).slice(0, 10) >= start);
+    } catch (err) { return; }
+    absState.event = e; absState.done = false;
+    $("cg-abs-warn").replaceChildren();
+    $("cg-abs-msg").textContent = ""; $("cg-abs-msg").className = "form-msg";
+    $("cg-abs-fields").hidden = false;
+    $("cg-abs-send").hidden = false;
+    $("cg-abs-link").hidden = true;
+    $("cg-abs-close").textContent = "Non merci";
+    $("cg-abs-title").textContent = "Demander une absence ?";
+    $("cg-abs-start").value = start; $("cg-abs-end").value = end; $("cg-abs-note").value = e.title.slice(0, 200);
+    $("cg-abs-hint").textContent = e.to_confirm
+      ? "Les dates de cet événement sont à confirmer : vérifiez-les avant d'envoyer. La demande suit la validation habituelle par les cadres de votre clinique."
+      : "Vous pouvez élargir les dates (voyage, récupération). La demande suit la validation habituelle par les cadres de votre clinique.";
+    if (existing.length) {
+      // Déjà couvert : on le dit, sans proposer de doublon
+      $("cg-abs-title").textContent = "Absence déjà déclarée";
+      $("cg-abs-intro").textContent = `Vous avez déjà une absence demandée ou validée qui touche ces dates (${existing.map((a) => periodCH(String(a.start_date).slice(0, 10), String(a.end_date).slice(0, 10))).join(", ")}).`;
+      $("cg-abs-fields").hidden = true; $("cg-abs-send").hidden = true;
+      $("cg-abs-link").hidden = false; $("cg-abs-close").textContent = "Fermer";
+    } else {
+      $("cg-abs-intro").textContent = `Vous participez à « ${e.title} » (${periodCH(start, end)}). Voulez-vous demander l'absence correspondante, avec le motif « congrès » ?`;
+    }
+    $("cg-abs").showModal();
+  }
+  async function sendAbsence(ev) {
+    ev.preventDefault();
+    if (absState.done) return;
+    const msg = $("cg-abs-msg"), btn = $("cg-abs-send");
+    const start = $("cg-abs-start").value, end = $("cg-abs-end").value;
+    if (!start || !end || end < start) { msg.className = "form-msg error"; msg.textContent = "Vérifiez les dates."; return; }
+    btn.disabled = true;
+    msg.className = "form-msg"; msg.textContent = "Envoi en cours…";
+    try {
+      const { data, error } = await sb.rpc("absence_request", { p_kind: "congres", p_note: $("cg-abs-note").value.trim(), p_start: start, p_end: end });
+      if (error) { msg.className = "form-msg error"; msg.textContent = error.message; return; }
+      absState.done = true;
+      try { sb.functions.invoke("notify-absence", { body: { absence_id: data.id, event: "request" } }).catch(() => {}); } catch (err) { /* facultatif */ }
+      $("cg-abs-title").textContent = "Demande envoyée";
+      $("cg-abs-intro").textContent = `Absence « congrès » demandée du ${periodCH(start, end)}. Elle apparaît en hachuré dans le planning jusqu'à sa validation.`;
+      $("cg-abs-fields").hidden = true; btn.hidden = true;
+      msg.textContent = ""; msg.className = "form-msg";
+      const warn = $("cg-abs-warn");
+      warn.replaceChildren();
+      if ((data.conflicts || []).length) {
+        const box = el("div", "ab-warn");
+        box.append(el("strong", null, "Attention : trop d'absences en même temps"));
+        const ul = el("ul");
+        data.conflicts.forEach((c) => ul.append(el("li", null, `Du ${periodCH(String(c.first_day).slice(0, 10), String(c.last_day).slice(0, 10))} : ${c.peak} membres de la clinique ${c.clinic} seraient absents en même temps (maximum prévu : ${c.max_absent})${(c.others || []).length ? ". Déjà absent·e·s ou en demande : " + c.others.join(", ") + "." : "."}`)));
+        box.append(ul, el("p", "muted", "La demande est quand même transmise ; le valideur voit le même avertissement."));
+        warn.append(box);
+      }
+      $("cg-abs-link").hidden = false;
+      $("cg-abs-close").textContent = "Fermer";
+    } finally { btn.disabled = false; }
   }
 
   async function remove(e) {
@@ -738,6 +811,9 @@
       if (!end.value || end.value < e.target.value) end.value = e.target.value;
     });
     $("cg-cancel").addEventListener("click", () => $("cg-dialog").close());
+    $("cg-abs-form").addEventListener("submit", sendAbsence);
+    $("cg-abs-close").addEventListener("click", () => $("cg-abs").close());
+    $("cg-abs-start").addEventListener("change", () => { if (!$("cg-abs-end").value || $("cg-abs-end").value < $("cg-abs-start").value) $("cg-abs-end").value = $("cg-abs-start").value; });
     // « S'abonner à l'agenda » : le panneau (lien, copie, instructions) n'apparaît qu'au clic sur le bouton
     const subBtn = $("cg-sub-btn"), subBox = $("cg-subscribe");
     const subToggle = (open) => {
