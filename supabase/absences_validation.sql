@@ -509,3 +509,10 @@ begin
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;
 end $$;
+
+-- ===== 7. Reprise des demandes déjà en cours avant cette migration =====
+-- Un tour de validation s'ouvre pour celles qui n'ont encore aucune ligne de validation (sans effet si aucun validateur n'est désigné :
+-- l'administrateur décide, comme avant). Aucun e-mail n'est envoyé pour ces demandes.
+select public.absence_open_round(a.id) from public.absences a
+where (a.status = 'requested' or (a.status = 'approved' and a.change_type is not null))
+  and not exists (select 1 from public.absence_approvals p where p.absence_id = a.id);

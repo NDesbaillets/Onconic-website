@@ -6,7 +6,7 @@ export type Row = {
 const SITE = "https://onconic.ch";
 const KIND: Record<string, string> = { vacances: "Vacances", congres: "Congrès", autre: "Absence" };
 
-export const esc = (s: unknown) => String(s ?? "").replace(/\\/g, "\\\\").replace(/;/g, "\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+export const esc = (s: unknown) => String(s ?? "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
 export function fold(line: string): string {
   const enc = new TextEncoder();
   const out: string[] = [];
