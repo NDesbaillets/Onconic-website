@@ -5,8 +5,8 @@
 **Fichiers :** `app/absences.html`, `assets/js/absences.js`, `admin/absences.html`, `assets/js/admin-absences.js`, `supabase/absences.sql`, `supabase/functions/notify-absence/` (`index.ts`, `message.ts`), styles `.ab-*` et `.aa-*` dans `assets/css/onconic.css`. Tuile dans l'espace collaboratif de The Hive (outil `absences`, ouvert à médecins, CDC, cadres, assistantes, pharmaciens, admin).
 
 ## Rôles et cliniques
-- Rôle `cdc` = chef de clinique (médecin ; son rôle Key trials ne change pas). Nouveau rôle `cadre` : valide les absences des cliniques où l'admin le désigne ; accès par défaut limité à l'outil Absences.
-- Seuls les médecins (`clinician`, `cdc`) ont des cliniques (`profiles.clinics`, choisies par l'admin dans Membres et accès). Cadre, assistante, pharmacien et admin relèvent de la clinique **Administration**. Cliniques de l'outil (`absence_clinic_settings`) : les 11 de Key trials, plus **Plateforme** (médecins, ajoutée le 06.11.2026) et Administration ; Key trials et Congrès gardent leur propre liste de 11.
+- Rôle `cdc` = chef de clinique (médecin ; son rôle Key trials ne change pas). Rôle `cadre` (médecin cadre, depuis le 06.11.2026 : exactement les droits d'un CDC, rattaché à des cliniques comme un médecin, gestion Key trials par `cdc_clinics`) : en plus, valide les absences des cliniques où l'admin le désigne (`supabase/cadre_medecin.sql`). Un CDC ou un médecin ne valide jamais d'absence.
+- Seuls les médecins (`clinician`, `cdc`, `cadre`) ont des cliniques (`profiles.clinics`, choisies par l'admin dans Membres et accès). Assistante, pharmacien et admin relèvent de la clinique **Administration**. Cliniques de l'outil (`absence_clinic_settings`) : les 11 de Key trials, plus **Plateforme** (médecins, ajoutée le 06.11.2026) et Administration ; Key trials et Congrès gardent leur propre liste de 11.
 - Valideurs : `absence_validators(clinic, user_id)`, réglés par l'admin dans `/admin/absences.html` (un seul valideur suffit). Sans valideur désigné, les demandes vont aux admins, qui valident tout. Nul ne valide ses propres absences (sauf l'admin).
 
 ## Fonctionnement

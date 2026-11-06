@@ -11,3 +11,6 @@
 
 ## Rôle CDC (chef de clinique)
 Rôle `cdc` (ex « CDC / Cadre », renommé le 06.11.2026 ; « Cadre » est devenu un rôle distinct, voir absences.md) : droits d'un médecin, plus gestion des fiches Key trials des cliniques cochées sur la fiche du membre (`admin_set_cdc_clinics`). Le changement de rôle efface les cliniques.
+
+## Rôle cadre (médecin cadre, 06.11.2026)
+Exactement les droits d'un CDC (tous les outils, Key trials par `cdc_clinics`, cliniques de rattachement), plus la validation des absences s'il est désigné valideur d'une clinique. Voir absences.md et `supabase/cadre_medecin.sql`.
