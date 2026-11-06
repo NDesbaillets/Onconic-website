@@ -1226,3 +1226,11 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .ab-sub-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .ab-sub-row input { flex: 1 1 280px; font: inherit; min-height: 44px; padding: 8px 12px; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); min-width: 0; }
 .ab-steps { margin: 0; padding-left: 1.2em; font-size: .92rem; color: var(--ink-600); }
+
+/* Retour à The Hive : lien persistant dans l'en-tête collant des pages d'outils (ajouté par site.js) */
+.hive-home { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid var(--navy-800); background: var(--white); color: var(--navy-800); font-size: .92rem; font-weight: 500; text-decoration: none; white-space: nowrap; flex: none; }
+.hive-home:hover { background: var(--mist); color: var(--navy-800); }
+.has-hive-home .hive-back { display: none; }
+.has-hive-home .nav a[href="/app/"], .has-hive-home .nav a[href="/fr/app/"] { display: none; }
+/* Étroit : le mot-symbole cède la place au lien, le logo reste */
+@media (max-width: 520px) { .has-hive-home .brand .wordmark { display: none; } .hive-home { padding: 0 12px; } }
