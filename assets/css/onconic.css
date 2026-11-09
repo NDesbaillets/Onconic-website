@@ -1250,15 +1250,3 @@ input[type="checkbox"], input[type="radio"] { width: 22px; height: 22px; flex: n
 .cg-cal-nav .btn { min-width: 44px; min-height: 44px; }
 details:not(.ug-card) > summary { padding-block: 10px; }
 .section.ug h1 { font-size: clamp(2.2rem, 4.5vw, 3rem); }
-/* Alvéoles du Hive sur mobile : liste verticale avec description, plutôt que des hexagones sans texte */
-@media (max-width: 560px) {
-  .hive-group .hex-row { display: grid; grid-template-columns: 1fr; gap: var(--space-2); justify-content: stretch; }
-  .hive-group .hex-row .hex:nth-child(n) { grid-area: auto; width: auto; height: auto; margin: 0; clip-path: none; align-self: stretch; }
-  .hive-group .hex-row .hex[hidden] { display: none; }
-  .hive-group .hex-row .hex:hover, .hive-group .hex-row .hex:focus-visible { transform: none; }
-  .hive-group .hex-row .hex-in { position: static; inset: auto; clip-path: none; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 16px; row-gap: 2px; align-items: center; text-align: left; padding: 14px 16px 14px 18px; margin-left: 4px; min-height: 64px; }
-  .hive-group .hex-row .hex-in svg { grid-row: 1 / 4; width: 32px; height: 32px; justify-self: center; }
-  .hive-group .hex-row .hex-in h3 { font-size: 1rem; }
-  .hive-group .hex-row .hex-in p { display: block; font-size: .85rem; }
-  .hive-group .hex-row .hex-tag { margin-top: 2px; }
-}
