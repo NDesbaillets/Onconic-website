@@ -75,6 +75,34 @@ def _colored(o):
     return max(c) - min(c) > 0.08
 
 
+def _marker(o):
+    """Trait de repère de la médiane : 3 à 4 points, uniquement horizontal et vertical (en L)."""
+    pts = o['pts']
+    return len(pts) <= 4 and all(abs(a[0] - b[0]) < 0.3 or abs(a[1] - b[1]) < 0.3 for a, b in zip(pts, pts[1:]))
+
+
+def _hsegments(page, test, colorfn):
+    """Courbes dessinées en petits segments (2 points) : on garde les segments horizontaux
+    (niveaux de survie) d'une couleur si elle en compte au moins 6 sur 4 niveaux distincts, sans remontée (une ligne de repère en pointillés n'a qu'un niveau) ; les verticaux (chutes,
+    marques de censure) sont ignorés."""
+    by = collections.defaultdict(list)
+    for o in page.lines:
+        if not colorfn(o) or len(o['pts']) != 2 or not test(o):
+            continue
+        (xa, ya), (xb, yb) = o['pts']
+        if abs(ya - yb) < 0.2 and abs(xb - xa) >= 0.4:
+            by[_key(o)].append(o['pts'])
+    out = {}
+    for k, v in by.items():
+        segs = sorted(v, key=lambda sg: min(sg[0][0], sg[1][0]))
+        levels = sorted({round(sg[0][1], 1) for sg in segs})
+        ys = [sg[0][1] for sg in segs]  # y PDF croissant = survie décroissante : les niveaux ne remontent pas
+        monotone = all(b >= a - 0.5 for a, b in zip(ys, ys[1:]))
+        if len(levels) >= 4 and monotone and len(segs) >= 6:
+            out[k] = [pt for sg in v for pt in sg]
+    return out
+
+
 def _key(o):
     return tuple(round(v, 2) for v in o['stroking_color'])
 
@@ -176,11 +204,19 @@ def series(page, bbox, cal):
             continue
         if max(o['x1'] - o['x0'], o['bottom'] - o['top']) < 6:
             continue
+        if _marker(o):  # repères de médiane (traits en L, pointillés)
+            continue
         if not (x0 - 5 <= o['x0'] and o['x1'] <= x1 + 5 and t0 - 5 <= o['top'] and o['bottom'] <= b0 + 5):
             continue
         by[_key(o)] += [(px * mx + cx, py * my + cy) for px, py in o['pts']
                         if min(xr[0], 0.0) - 0.3 <= px * mx + cx <= xr[1] + 0.3
                         and min(yr[0], 0.0) - 1 <= py * my + cy <= yr[1] + 1]
+    inbox = lambda o: x0 - 5 <= o['x0'] and o['x1'] <= x1 + 5 and t0 - 5 <= o['top'] and o['bottom'] <= b0 + 5
+    for k, v in _hsegments(page, inbox, _color_axes).items():
+        if len(by.get(k, [])) < 10:  # pas de polyligne pour cette couleur : courbe en segments
+            by[k] = [(px * mx + cx, py * my + cy) for px, py in v
+                     if min(xr[0], 0.0) - 0.3 <= px * mx + cx <= xr[1] + 0.3
+                     and min(yr[0], 0.0) - 1 <= py * my + cy <= yr[1] + 1]
     return {k: sorted(v) for k, v in by.items()}
 
 
@@ -268,11 +304,19 @@ def series_free(page, bb, xp, yp):
             continue
         if max(o['x1'] - o['x0'], o['bottom'] - o['top']) < 6:
             continue
+        if _marker(o):  # repères de médiane (traits en L, pointillés)
+            continue
         if not (x0 - 3 <= o['x0'] and o['x1'] <= x1 + 3 and t0 - 3 <= o['top'] and o['bottom'] <= b0 + 3):
             continue
         by[_key(o)] += [(px * mx + cx, py * my + cy) for px, py in o['pts']
                         if min(xr[0], 0.0) - 0.3 <= px * mx + cx <= xr[1] + 0.3
                         and min(yr[0], 0.0) - 1 <= py * my + cy <= yr[1] + 1]
+    inbox = lambda o: x0 - 3 <= o['x0'] and o['x1'] <= x1 + 3 and t0 - 3 <= o['top'] and o['bottom'] <= b0 + 3
+    for k, v in _hsegments(page, inbox, _colored).items():
+        if len(by.get(k, [])) < 10:
+            by[k] = [(px * mx + cx, py * my + cy) for px, py in v
+                     if min(xr[0], 0.0) - 0.3 <= px * mx + cx <= xr[1] + 0.3
+                     and min(yr[0], 0.0) - 1 <= py * my + cy <= yr[1] + 1]
     return {k: sorted(v) for k, v in by.items()}, yr
 
 
