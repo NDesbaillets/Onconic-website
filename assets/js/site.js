@@ -100,3 +100,16 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
   const first = hub.querySelector(".section .container");
   if (first) first.prepend(box);
 })();
+
+// Lien d'évitement : premier élément atteignable au clavier, mène au contenu principal
+(function () {
+  const main = document.querySelector("main");
+  if (!main || document.querySelector(".skip-link")) return;
+  if (!main.id) main.id = "main";
+  main.tabIndex = -1;
+  const a = document.createElement("a");
+  a.className = "skip-link";
+  a.href = "#" + main.id;
+  a.textContent = document.documentElement.lang === "fr" ? "Aller au contenu" : "Skip to content";
+  document.body.prepend(a);
+})();
