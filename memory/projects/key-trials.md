@@ -29,3 +29,9 @@ Schéma de l'étude (SVG : population et critères d'inclusion → randomisation
 - Chaque fiche porte un sélecteur de clinique (modifiable par l'admin et les CDC de la clinique ; un CDC ne peut attribuer que ses cliniques).
 - Signalement « à réviser » : tout utilisateur peut signaler une fiche avec un commentaire (table `trial_flags`). Les signalements ouverts apparaissent sur la fiche et dans la section « À réviser » en bas de page pour les admins et les CDC de la clinique, avec « Marquer comme traité ».
 - SQL : `supabase/trials_roles.sql`.
+
+## Texte intégral et courbes depuis Zotero (décision du 09.11.2026)
+- Les PDF viennent de la bibliothèque Zotero de Nicolas (accès CHUV), collection `KeyTrials-queue`, un article par étude du backlog (tag `KT:<étude>`, PMID dans Extra). La tâche quotidienne lit l'API Zotero (clé injectée par l'environnement) avant toute autre source ; sans PDF, elle ajoute l'article à Zotero et construit la fiche par les voies libres.
+- Courbes : extraites des tracés vectoriels du PDF avec `tools/km/kmextract.py` (voir `tools/km/README.md`), contrôlées contre le texte (médiane à ±0,5 mois, taux à ±2 points). Figure en image : précision moindre, à signaler dans `sources_note`.
+- Audit du 09.11.2026 : 58 des 75 premières fiches avaient été générées sur abstract seul. Reprises à partir du PDF : FLAURA, FLAURA2, ADAURA, ALTA-1L, KEYNOTE-042, EMPOWER-Lung 1 et 3, POSEIDON, IMpower150, CheckMate 017/057, OAK. Restent à reprendre : neuro-oncologie (21), mélanome (30).
+- Les courbes de FLAURA et FLAURA2 ont été digitalisées avant l'affinage de la calibration sur les graduations (écart de 0,3 point de survie) : à régénérer.

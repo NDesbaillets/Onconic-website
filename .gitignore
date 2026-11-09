@@ -5,3 +5,7 @@
 *.csv
 __pycache__/
 *.pyc
+
+# PDF d'éditeurs : ne jamais commiter (droits d'auteur)
+tools/km/**/*.pdf
+tools/km/tmp/
