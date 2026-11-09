@@ -2,6 +2,7 @@
 
 Liste établie le 03.11.2026 (de mémoire, à vérifier à la rédaction de chaque fiche). Ordre de traitement : de haut en bas. Une étude est « faite » quand une fiche de même acronyme existe dans `key_trials` (slug = acronyme en minuscules, caractères non alphanumériques remplacés par `-`). ✓ = déjà en base.
 Cliniques de référence : celles de l'outil Lettres médicales (Thoracique, Sénologie, Gynécologie, Urologie, Neuro-oncologie, Mélanome, Lower GI, Upper GI, ORL, Sarcomes). Slug particulier : VISION (¹⁷⁷Lu-PSMA) = `vision-psma` (`vision` = tépotinib).
+Résultats non publiés au 09.11.2026 (aucun article trouvé dans PubMed, à sauter et à signaler) : CE.7, STAMP, KEYNOTE-630, TIGER, ANNOUNCE, DESTINY-Breast05, Euro-EWING 99.
 Sources autorisées : PubMed, Europe PMC et PMC (accès libre), éditeurs en accès libre, notices FDA/EMA, Unpaywall/OpenAlex pour les versions libres. Pas de Sci-Hub ni de copie non autorisée.
 
 ## Neuro-oncologie
