@@ -15,11 +15,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261110c">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261110e">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/absences.js?v=20261110d" defer></script>
+  <script src="/assets/js/absences.js?v=20261110e" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -82,6 +82,20 @@
           </div>
 
           <section id="ab-p-plan" role="tabpanel" aria-labelledby="ab-t-plan">
+            <div class="ab-viewbar">
+              <div class="ab-view" id="ab-view" role="group" aria-label="Type d'affichage"></div>
+              <label class="ab-viewsel" id="ab-win-wrap" hidden>Durée affichée
+                <select id="ab-winlen">
+                  <option value="28">4 semaines</option>
+                  <option value="42">6 semaines</option>
+                  <option value="91">3 mois</option>
+                  <option value="182">6 mois</option>
+                </select>
+              </label>
+              <label class="ab-viewsel" id="ab-ov-wrap" hidden>Clinique
+                <select id="ab-ov-clinic"></select>
+              </label>
+            </div>
             <div class="ab-toolbar">
               <div class="ab-month">
                 <button class="btn btn-outline" id="ab-prev" type="button" aria-label="Mois précédent">‹</button>
@@ -136,6 +150,18 @@
             </ul>
             <p class="muted ab-count-line" id="ab-shown" aria-live="polite"></p>
             <div class="ab-scroll" id="ab-scroll" tabindex="0" role="region" aria-label="Planning mensuel des absences"></div>
+            <div class="ab-ov" id="ab-ov" hidden>
+              <ul class="ab-legend" aria-label="Légende de la vue d'ensemble" id="ab-ov-legend">
+                <li><span class="ab-key ab-h0">0</span> Aucun absent</li>
+                <li><span class="ab-key ab-h1">1</span> Absents, sous le seuil</li>
+                <li><span class="ab-key ab-h2">2</span> Seuil atteint</li>
+                <li><span class="ab-key ab-h3">3</span> Seuil dépassé</li>
+                <li><span class="ab-key ab-we">S</span> Week-end ou férié</li>
+              </ul>
+              <p class="muted" id="ab-ov-info" aria-live="polite"></p>
+              <div class="ab-scroll" id="ab-ov-scroll" tabindex="0" role="region" aria-label="Vue d'ensemble des absences de la clinique sur l'année"></div>
+            </div>
+
             <div class="card ab-detail" id="ab-detail" hidden aria-live="polite"></div>
             <p class="muted ab-note-line">Week-ends et jours fériés en gris. Le décompte des jours ouvrables exclut les week-ends et les fériés vaudois. La première ligne reprend les fériés, les vacances scolaires vaudoises et les événements importants saisis par l'administrateur.</p>
           </section>

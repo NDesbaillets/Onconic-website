@@ -15,7 +15,7 @@
 
   const $ = (id) => document.getElementById(id);
   const state = {
-    ctx: null, people: [], clinics: [], month: null, cache: new Map(), prefs: { scope: "mine", ids: [], rows: 20, order: [] },
+    ctx: null, people: [], clinics: [], month: null, cache: new Map(), cur: null, view: "month", win: { start: null }, ov: { clinic: "", year: new Date().getFullYear() }, prefs: { scope: "mine", ids: [], rows: 20, order: [], winLen: 42 },
     mine: [], mineWarn: null, todo: [], rejected: [], who: "", drafts: [], approvals: new Map(), whoApprovals: new Map()
   };
 
@@ -86,6 +86,7 @@
         if (Array.isArray(p.ids)) state.prefs.ids = p.ids.filter((x) => typeof x === "string");
         if (Array.isArray(p.order)) state.prefs.order = p.order.filter((x) => typeof x === "string");
         if ([0, 5, 10, 15, 20, 30, 50].includes(Number(p.rows))) state.prefs.rows = Number(p.rows);
+        if ([28, 42, 91, 182].includes(Number(p.winLen))) state.prefs.winLen = Number(p.winLen);
       }
     } catch (e) { /* préférences par défaut */ }
   }
@@ -114,13 +115,12 @@
   }
 
   // ----- Données -----
-  async function loadMonth() {
-    const { y, m } = state.month;
-    const key = `${y}-${m}`;
+  async function loadRange(from, to) {
+    const key = `${from}|${to}`;
     if (state.cache.has(key)) return state.cache.get(key);
     const [{ data, error }, calRes] = await Promise.all([
-      sb.rpc("absence_grid", { p_from: monthStart(y, m), p_to: monthEnd(y, m) }),
-      sb.rpc("absence_calendar", { p_from: monthStart(y, m), p_to: monthEnd(y, m) })
+      sb.rpc("absence_grid", { p_from: from, p_to: to }),
+      sb.rpc("absence_calendar", { p_from: from, p_to: to })
     ]);
     if (error) throw error;
     const cal = (calRes.data || []).map((c) => Object.assign(c, { start_date: String(c.start_date).slice(0, 10), end_date: String(c.end_date).slice(0, 10) }));
@@ -134,6 +134,7 @@
     state.cache.set(key, out);
     return out;
   }
+  const loadMonth = () => loadRange(monthStart(state.month.y, state.month.m), monthEnd(state.month.y, state.month.m));
   async function refreshPending() {
     const { data } = await sb.rpc("absence_pending_count");
     const n = Number(data) || 0;
@@ -211,6 +212,9 @@
 
   // ----- Planning mensuel -----
   async function renderGrid() {
+    chrome();
+    if (state.view === "year") return renderOverview();
+    if (state.view === "window") return renderWindow();
     const { y, m } = state.month;
     $("ab-title").textContent = `${MONTHS[m][0].toUpperCase()}${MONTHS[m].slice(1)} ${y}`;
     let byUser, cal;
@@ -218,6 +222,7 @@
       $("ug-status").hidden = false;
       return say($("ug-status"), "Chargement du planning impossible : " + e.message, "error");
     }
+    state.cur = { byUser, cal };
     const all = selection();
     const limit = state.prefs.rows;
     const people = limit ? all.slice(0, limit) : all;
@@ -318,8 +323,261 @@
     }
     return tr;
   }
+
+  // ----- Vues : mois (par défaut), fenêtre glissante, vue d'ensemble de l'année -----
+  const addD = (s, n) => iso(new Date(pd(s).getTime() + n * 864e5));
+  const fmtDM = (s) => `${s.slice(8, 10)}.${s.slice(5, 7)}`;
+  const mondayOf = (s) => addD(s, -((pd(s).getUTCDay() + 6) % 7));
+  const addMonths = (s, n) => { const d = pd(s); const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1)); const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate(); t.setUTCDate(Math.min(d.getUTCDate(), last)); return iso(t); };
+  const VIEWS = [["month", "Mois"], ["window", "Fenêtre glissante"], ["year", "Vue d'ensemble"]];
+  const winMonthly = () => state.prefs.winLen >= 91;
+  const winDays = () => { const out = []; for (let i = 0; i < state.prefs.winLen; i++) out.push(addD(state.win.start, i)); return out; };
+
+  // Interface du planning selon la vue : boutons, titres, contrôles utiles seulement
+  function chrome() {
+    const v = state.view;
+    $("ab-view").replaceChildren(...VIEWS.map(([k, label]) => {
+      const b = button(label, "ug-chip", () => setView(k));
+      b.setAttribute("aria-pressed", String(v === k));
+      return b;
+    }));
+    $("ab-win-wrap").hidden = v !== "window";
+    $("ab-ov-wrap").hidden = v !== "year";
+    $("ab-winlen").value = String(state.prefs.winLen);
+    for (const id of ["ab-scope", "ab-rows"]) $(id).closest("label").hidden = v === "year";
+    $("ab-pick-toggle").hidden = v === "year";
+    if (v === "year") $("ab-pick").hidden = true;
+    $("ab-scroll").hidden = v === "year";
+    $("ab-ov").hidden = v !== "year";
+    document.querySelector("#ab-p-plan > .ab-legend").hidden = v === "year";
+    $("ab-detail").hidden = true;
+    $("ab-prev").setAttribute("aria-label", v === "year" ? "Année précédente" : v === "window" && !winMonthly() ? "Semaine précédente" : "Mois précédent");
+    $("ab-next").setAttribute("aria-label", v === "year" ? "Année suivante" : v === "window" && !winMonthly() ? "Semaine suivante" : "Mois suivant");
+    $("ab-scroll").setAttribute("aria-label", v === "window" ? "Planning des absences, fenêtre glissante" : "Planning mensuel des absences");
+    if (v === "year") $("ab-title").textContent = String(state.ov.year);
+    if (v === "window") { const d = winDays(); $("ab-title").textContent = `${fmtDM(d[0])}.${d[0].slice(0, 4)} – ${fmtDM(d[d.length - 1])}.${d[d.length - 1].slice(0, 4)}`; }
+  }
+  function setView(k) {
+    if (k === "window" && state.view !== "window") {
+      const t = todayIso();
+      const first = monthStart(state.month.y, state.month.m);
+      state.win.start = first.slice(0, 7) === t.slice(0, 7) ? mondayOf(t) : first;
+    }
+    if (k === "year" && !state.ov.clinic) state.ov.clinic = overviewClinics()[0] || "";
+    state.view = k;
+    renderGrid();
+  }
+  function shiftView(n) {
+    if (state.view === "year") state.ov.year += n;
+    else if (state.view === "window") state.win.start = winMonthly() ? addMonths(state.win.start, n) : addD(state.win.start, 7 * n);
+    else { const d = new Date(Date.UTC(state.month.y, state.month.m + n, 1)); state.month = { y: d.getUTCFullYear(), m: d.getUTCMonth() }; }
+    renderGrid();
+  }
+  function goToday() {
+    const t = new Date();
+    if (state.view === "year") state.ov.year = t.getFullYear();
+    else if (state.view === "window") state.win.start = mondayOf(todayIso());
+    else state.month = { y: t.getFullYear(), m: t.getMonth() };
+    renderGrid();
+  }
+  function pickMonth(y, m) {
+    if (state.view === "year") state.ov.year = y;
+    else if (state.view === "window") state.win.start = monthStart(y, m);
+    else state.month = { y, m };
+    renderGrid();
+  }
+  function pickerValue() {
+    if (state.view === "year") return { y: state.ov.year, m: 0 };
+    if (state.view === "window") return { y: Number(state.win.start.slice(0, 4)), m: Number(state.win.start.slice(5, 7)) - 1 };
+    return { y: state.month.y, m: state.month.m };
+  }
+  function shownLine(all, people) {
+    $("ab-shown").textContent = all.length
+      ? `${plur(people.length, "personne affichée", "personnes affichées")}` + (all.length > people.length ? ` sur ${all.length} (augmentez « Lignes affichées » pour voir les autres)` : "")
+      : "Aucune personne sélectionnée : utilisez « Choisir les personnes » ou changez de clinique.";
+  }
+
+  // Fenêtre glissante : N semaines ou mois à partir d'une date ; une absence est une barre continue, même à cheval sur deux mois
+  async function renderWindow() {
+    const days = winDays();
+    const len = days.length, from = days[0], to = days[len - 1];
+    let byUser, cal;
+    try { ({ byUser, cal } = await loadRange(from, to)); } catch (e) {
+      $("ug-status").hidden = false;
+      return say($("ug-status"), "Chargement du planning impossible : " + e.message, "error");
+    }
+    state.cur = { byUser, cal };
+    const all = selection();
+    const limit = state.prefs.rows;
+    const people = limit ? all.slice(0, limit) : all;
+    shownLine(all, people);
+    const today = todayIso();
+    const narrow = len >= 91;
+    const wk = (day) => { const w = pd(day).getUTCDay(); return w === 0 || w === 6 || holidayOf(day); };
+    const ms = (day, i) => (i > 0 && day.slice(8) === "01" ? " ab-ms" : "");
+    const table = el("table", "ab-grid ab-win ab-w" + len + (narrow ? " ab-narrow" : len > 28 ? " ab-mid" : ""));
+    table.append(el("caption", "visually-hidden", `Absences du ${fmtCH(from)} au ${fmtCH(to)}`));
+    const h1 = el("tr"), h2 = el("tr");
+    const corner = el("th", "ab-name", "Collaborateur");
+    corner.scope = "col"; corner.rowSpan = 2;
+    h1.append(corner);
+    for (let i = 0; i < len;) {
+      const mo = days[i].slice(0, 7);
+      let j = i; while (j + 1 < len && days[j + 1].slice(0, 7) === mo) j++;
+      const n = j - i + 1, mi = Number(mo.slice(5)) - 1;
+      const th = el("th", "ab-mh" + ms(days[i], i), n < 4 ? "" : n < 8 ? MONTHS[mi].slice(0, 3) + "." : `${MONTHS[mi][0].toUpperCase()}${MONTHS[mi].slice(1)} ${mo.slice(0, 4)}`);
+      th.colSpan = n; th.scope = "colgroup";
+      h1.append(th);
+      i = j + 1;
+    }
+    days.forEach((day, i) => {
+      const d = Number(day.slice(8)), w = pd(day).getUTCDay();
+      const th = el("th", "ab-d" + (wk(day) ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i));
+      th.scope = "col"; th.title = fmtCH(day);
+      if (narrow) {
+        const show = w === 1 || d === 1;
+        th.append(show ? document.createTextNode(String(d)) : el("span", "visually-hidden", String(d)));
+      } else th.append(el("span", "ab-dow", DOW[w]), document.createTextNode(String(d)));
+      h2.append(th);
+    });
+    const thead = el("thead"); thead.append(h1, h2); table.append(thead);
+    const body = el("tbody");
+    // Agenda commun : une cellule par jour
+    const calTr = el("tr", "ab-cal");
+    const cth = el("th", "ab-name"); cth.scope = "row";
+    cth.append(el("span", "ab-pname", "Fériés et événements"), el("span", "ab-pclinic muted", "Vacances scolaires VD, agenda commun"));
+    calTr.append(cth);
+    days.forEach((day, i) => {
+      const td = el("td", "ab-c ab-cal-c" + (pd(day).getUTCDay() % 6 === 0 ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i));
+      const list = calEntries(day, cal);
+      if (list.length) {
+        const top = list[0];
+        td.className += ` ab-cal-${top.kind}`;
+        td.textContent = narrow ? "" : CAL_LETTER[top.kind];
+        td.dataset.cal = day;
+        const label = list.map((x) => x.label).join(" ; ");
+        td.title = label;
+        const prev = i > 0 ? days[i - 1] : null;
+        if (!prev || calEntries(prev, cal).map((x) => x.label).join() !== list.map((x) => x.label).join()) { td.tabIndex = 0; td.setAttribute("role", "button"); td.setAttribute("aria-label", `${fmtCH(day)} : ${label}`); }
+      }
+      calTr.append(td);
+    });
+    body.append(calTr);
+    for (const p of people) {
+      const tr = el("tr", p.is_me ? "ab-me" : "");
+      const th = el("th", "ab-name"); th.scope = "row";
+      th.append(el("span", "ab-pname", p.name + (p.is_me ? " (moi)" : "")), el("span", "ab-pclinic muted", (p.clinics || []).join(", ")));
+      tr.append(th);
+      const list = byUser.get(p.id) || [];
+      for (let i = 0; i < len;) {
+        const day = days[i];
+        const a = list.find((x) => x.start_date <= day && day <= x.end_date);
+        if (!a) {
+          tr.append(el("td", "ab-c" + (wk(day) ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i)));
+          i++;
+          continue;
+        }
+        let j = i; while (j + 1 < len && days[j + 1] <= a.end_date) j++;
+        const span = j - i + 1, left = a.start_date < from, right = a.end_date > to;
+        const td = el("td", `ab-c ab-bar-c ab-k-${a.kind} ab-s-${a.status}` + (a.change_type ? " ab-chg" : "") + ms(day, i));
+        td.colSpan = span;
+        const name = span >= 4 ? KINDS[a.kind][0] : KINDS[a.kind][1];
+        td.textContent = [left ? "◂" : "", name, span >= 8 ? `${fmtDM(a.start_date)} – ${fmtDM(a.end_date)}` : "", right ? "▸" : ""].filter(Boolean).join(" ");
+        td.dataset.id = a.id; td.dataset.user = p.id;
+        const label = `${p.name} : ${KINDS[a.kind][0]}, ${STATUS[a.status].toLowerCase()}, ${period(a.start_date, a.end_date)}`
+          + (a.change_type === "delete" ? " (suppression demandée)" : a.change_type === "modify" ? " (modification demandée)" : "");
+        td.title = label; td.tabIndex = 0; td.setAttribute("role", "button"); td.setAttribute("aria-label", label);
+        tr.append(td);
+        i = j + 1;
+      }
+      body.append(tr);
+    }
+    table.append(body);
+    $("ab-scroll").replaceChildren(table);
+    $("ab-detail").hidden = true;
+  }
+
+  // Vue d'ensemble : une clinique sur une année, une ligne par mois, un jour par colonne, teinte selon le nombre d'absents et le seuil
+  function overviewClinics() {
+    const mine = new Set([...(state.ctx.clinics || []), ...(state.ctx.validates || [])]);
+    return state.clinics.map((c) => c.clinic).filter((c) => state.isDir || mine.has(c));
+  }
+  async function renderOverview() {
+    const list = overviewClinics();
+    const sel = $("ab-ov-clinic");
+    if (![...sel.options].map((o) => o.value).every((v, i) => v === list[i]) || sel.options.length !== list.length) {
+      sel.replaceChildren(...list.map((c) => { const o = el("option", null, c); o.value = c; return o; }));
+    }
+    if (!list.includes(state.ov.clinic)) state.ov.clinic = (state.ctx.clinics || []).find((c) => list.includes(c)) || list[0] || "";
+    sel.value = state.ov.clinic;
+    const box = $("ab-ov-scroll");
+    const info = $("ab-ov-info");
+    $("ab-shown").textContent = "";
+    if (!state.ov.clinic) { box.replaceChildren(el("p", "muted ab-ov-empty", "Aucune clinique à afficher : la vue d'ensemble porte sur vos cliniques et sur celles que vous validez.")); info.textContent = ""; return; }
+    const y = state.ov.year, key = `ov|${state.ov.clinic}|${y}`;
+    let rows;
+    try {
+      if (!state.cache.has(key)) {
+        const { data, error } = await sb.rpc("absence_load", { p_clinic: state.ov.clinic, p_from: `${y}-01-01`, p_to: `${y}-12-31` });
+        if (error) throw error;
+        state.cache.set(key, data || []);
+      }
+      rows = state.cache.get(key);
+    } catch (e) { return say($("ug-status"), "Chargement de la vue d'ensemble impossible : " + e.message, "error"), ($("ug-status").hidden = false); }
+    const byDay = new Map(rows.map((r) => [String(r.day).slice(0, 10), r]));
+    const max = rows.length ? rows[0].max_absent : 0;
+    state.ovData = byDay;
+    info.textContent = `${state.ov.clinic} : seuil de ${plur(max, "absent simultané", "absents simultanés")} (réglé par l'administration). Les demandes en cours comptent. Cliquez sur un jour pour voir qui est absent.`;
+    const today = todayIso();
+    const table = el("table", "ab-grid ab-heat");
+    table.append(el("caption", "visually-hidden", `Absences de la clinique ${state.ov.clinic} en ${y}`));
+    const head = el("tr");
+    const corner = el("th", "ab-name", "Mois"); corner.scope = "col"; head.append(corner);
+    for (let d = 1; d <= 31; d++) { const th = el("th", "ab-d", String(d)); th.scope = "col"; head.append(th); }
+    const thead = el("thead"); thead.append(head); table.append(thead);
+    const body = el("tbody");
+    for (let m = 0; m < 12; m++) {
+      const tr = el("tr");
+      const th = el("th", "ab-name", `${MONTHS[m][0].toUpperCase()}${MONTHS[m].slice(1)}`); th.scope = "row"; tr.append(th);
+      const n = Number(monthEnd(y, m).slice(8));
+      for (let d = 1; d <= 31; d++) {
+        if (d > n) { tr.append(el("td", "ab-c ab-void")); continue; }
+        const day = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        const w = pd(day).getUTCDay();
+        const r = byDay.get(day) || { n: 0 };
+        const level = r.n === 0 ? 0 : r.n < max ? 1 : r.n === max ? 2 : 3;
+        const td = el("td", `ab-c ab-h${level}` + (w === 0 || w === 6 || holidayOf(day) ? " ab-wk" : "") + (day === today ? " ab-today" : ""));
+        if (r.n) {
+          td.textContent = String(r.n);
+          td.dataset.day = day; td.tabIndex = 0; td.setAttribute("role", "button");
+          td.setAttribute("aria-label", `${fmtCH(day)} : ${plur(r.n, "absent", "absents")} sur un seuil de ${max}` + (level === 3 ? ", seuil dépassé" : level === 2 ? ", seuil atteint" : ""));
+        } else td.title = fmtCH(day);
+        tr.append(td);
+      }
+      body.append(tr);
+    }
+    table.append(body);
+    box.replaceChildren(table);
+    $("ab-detail").hidden = true;
+  }
+  function showLoadDetail(day) {
+    const r = state.ovData && state.ovData.get(day);
+    if (!r) return;
+    const box = $("ab-detail");
+    box.replaceChildren();
+    const head = el("div", "ab-detail-head");
+    head.append(el("strong", null, `${fmtCH(day)} · ${state.ov.clinic}`), el("span", "ug-badge" + (r.n > r.max_absent ? " ug-warn" : ""), `${plur(r.n, "absent", "absents")} sur un seuil de ${r.max_absent}`));
+    box.append(head);
+    const names = r.names || [];
+    if (names.length) { const ul = el("ul", "ab-ov-names"); names.forEach((n) => ul.append(el("li", null, n))); box.append(ul); }
+    if (names.length < r.n) box.append(el("p", "muted", `${plur(r.n - names.length, "autre personne n'est pas nommée", "autres personnes ne sont pas nommées")} (visibilité choisie par la personne).`));
+    const go = button("Ouvrir ce mois dans le planning", "btn btn-outline", () => { state.month = { y: Number(day.slice(0, 4)), m: Number(day.slice(5, 7)) - 1 }; state.view = "month"; renderGrid(); });
+    box.append(go);
+    box.hidden = false;
+  }
+
   function showCalDetail(day) {
-    const { cal } = state.cache.get(`${state.month.y}-${state.month.m}`);
+    const { cal } = state.cur;
     const box = $("ab-detail");
     box.replaceChildren();
     box.append(el("strong", null, fmtCH(day)));
@@ -333,7 +591,7 @@
 
   function showDetail(userId, id) {
     const people = new Map(state.people.map((p) => [p.id, p]));
-    const a = (state.cache.get(`${state.month.y}-${state.month.m}`).byUser.get(userId) || []).find((x) => String(x.id) === String(id));
+    const a = (state.cur.byUser.get(userId) || []).find((x) => String(x.id) === String(id));
     if (!a) return;
     const p = people.get(userId);
     const box = $("ab-detail");
@@ -1388,11 +1646,18 @@
     $("ab-rows").value = String(state.prefs.rows);
     $("ab-scope").addEventListener("change", (e) => { state.prefs.scope = e.target.value; savePrefs(); fillScope(); renderGrid(); if (!$("ab-pick").hidden) renderPicker(); });
     $("ab-rows").addEventListener("change", (e) => { state.prefs.rows = Number(e.target.value); savePrefs(); renderGrid(); });
-    const shift = (n) => { const d = new Date(Date.UTC(state.month.y, state.month.m + n, 1)); state.month = { y: d.getUTCFullYear(), m: d.getUTCMonth() }; renderGrid(); };
-    if (window.monthPicker) window.monthPicker($("ab-title"), { get: () => ({ y: state.month.y, m: state.month.m }), onPick: (y, m) => { state.month = { y, m }; renderGrid(); } });
-    $("ab-prev").addEventListener("click", () => shift(-1));
-    $("ab-next").addEventListener("click", () => shift(1));
-    $("ab-today").addEventListener("click", () => { state.month = { y: t.getFullYear(), m: t.getMonth() }; renderGrid(); });
+    if (window.monthPicker) window.monthPicker($("ab-title"), { get: pickerValue, onPick: pickMonth });
+    $("ab-prev").addEventListener("click", () => shiftView(-1));
+    $("ab-next").addEventListener("click", () => shiftView(1));
+    $("ab-today").addEventListener("click", goToday);
+    $("ab-winlen").addEventListener("change", (e) => { state.prefs.winLen = Number(e.target.value); savePrefs(); renderGrid(); });
+    $("ab-ov-clinic").addEventListener("change", (e) => { state.ov.clinic = e.target.value; renderGrid(); });
+    $("ab-ov").addEventListener("click", (e) => { const td = e.target.closest("td[data-day]"); if (td) showLoadDetail(td.dataset.day); });
+    $("ab-ov").addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const td = e.target.closest("td[data-day]");
+      if (td) { e.preventDefault(); showLoadDetail(td.dataset.day); }
+    });
     $("ab-pick-toggle").addEventListener("click", (e) => {
       const open = $("ab-pick").hidden;
       $("ab-pick").hidden = !open;
