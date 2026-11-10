@@ -15,11 +15,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261109d">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261110b">
   <script src="/assets/js/site.js?v=20261109a" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/trials.js?v=20261106e" defer></script>
+  <script src="/assets/js/trials.js?v=20261110a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -45,6 +45,9 @@
         <p class="form-msg" id="ug-status" role="status">Chargement…</p>
 
         <div id="ug-tool" hidden>
+          <div class="kt-split" id="kt-split">
+            <div class="kt-left" id="kt-left">
+              <div class="kt-filters">
           <label class="ug-search">
             <span class="visually-hidden">Rechercher une étude par acronyme, médicament ou mot-clé (ex. KEYNOTE-189, osimertinib, adjuvant)</span>
             <input id="q" type="search" autocomplete="off" placeholder="Acronyme ou médicament">
@@ -63,7 +66,17 @@
             <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
             <button class="btn" id="kt-new" type="button" hidden>Nouvelle fiche</button>
           </div>
-          <div id="ug-results"></div>
+              </div>
+              <div id="ug-results"></div>
+            </div>
+            <aside class="kt-detail" id="kt-detail" aria-label="Fiche de l'étude" hidden>
+              <div class="kt-detail-bar">
+                <div class="ug-chips" id="kt-width" role="group" aria-label="Largeur du panneau"></div>
+                <button class="btn btn-outline" id="kt-close" type="button">Fermer ✕</button>
+              </div>
+              <div class="kt-detail-body" id="kt-detail-body"></div>
+            </aside>
+          </div>
           <section class="kt-review" id="kt-review" aria-labelledby="kt-review-title" hidden>
             <h2 id="kt-review-title">À réviser <span id="kt-review-count"></span></h2>
             <p class="muted">Fiches signalées par les utilisateurs, pour les cliniques que vous gérez.</p>

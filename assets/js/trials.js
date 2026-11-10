@@ -20,7 +20,10 @@
 
   const $ = (id) => document.getElementById(id);
   const CLINICS = BLOCS.flatMap(([, list]) => list);
-  const state = { rows: [], admin: false, cdc: [], flags: [], clinic: "", line: "", me: "", meId: "" };
+  const state = { rows: [], admin: false, cdc: [], flags: [], clinic: "", line: "", me: "", meId: "", selected: "", panel: "wide" };
+  // Ordinateur : liste à gauche, fiche dans un panneau à droite. Mobile et tablette : fiches dépliables dans la liste.
+  const wide = window.matchMedia ? window.matchMedia("(min-width: 1100px)") : { matches: false };
+  const desktop = () => wide.matches;
   // Droit de modifier une fiche : admin, ou CDC / cadre de sa clinique (contrôlé aussi en base)
   const canEdit = (clinic) => state.admin || (!!clinic && state.cdc.includes(clinic));
   const editableClinics = () => (state.admin ? CLINICS : CLINICS.filter((c) => state.cdc.includes(c)));
@@ -86,7 +89,7 @@
       (!mk.length || mk.every((t) => r._mk.some((m) => m.includes(t) && (neg || !/negati/.test(m))))));
     $("ug-count").textContent = `${list.length} étude${list.length > 1 ? "s" : ""}` + (list.length !== state.rows.length ? ` sur ${state.rows.length}` : "");
     $("ug-results").replaceChildren(...list.map(card));
-    if (list.length === 1) $("ug-results").firstChild.open = true;
+    if (list.length === 1) openTrial(list[0].slug, false);
   }
 
   function card(r) {
@@ -109,8 +112,66 @@
     if (key) head.append(el("p", "lt-drugs", key));
     s.append(head);
     d.append(s);
+    // Ordinateur : un clic (ou Entrée) sur le résumé ouvre la fiche dans le panneau de droite, la liste reste en place
+    s.addEventListener("click", (e) => { if (desktop()) { e.preventDefault(); select(r); } });
     d.addEventListener("toggle", () => { if (d.open && !d.dataset.ready) body(d, r); });
+    if (desktop() && state.selected === r.slug) { d.classList.add("is-active"); s.setAttribute("aria-current", "true"); }
     return d;
+  }
+
+  // ----- Panneau de détail (ordinateur) -----
+  function select(r, scrollList) {
+    state.selected = r.slug;
+    const panel = $("kt-detail"), host = $("kt-detail-body");
+    panel.hidden = false;
+    $("kt-split").classList.add("has-detail");
+    host.replaceChildren();
+    const head = el("header", "kt-detail-head");
+    const h = el("h2", "kt-detail-title");
+    h.append(el("span", "kt-acro", r.acronym), " ", r.title);
+    head.append(h);
+    host.append(head);
+    const holder = el("div", "kt-detail-content");
+    host.append(holder);
+    body(holder, r);
+    panel.scrollTop = 0;
+    document.querySelectorAll("#ug-results .kt-card").forEach((d) => {
+      const on = d.id === "trial-" + r.slug;
+      d.classList.toggle("is-active", on);
+      const sm = d.querySelector("summary");
+      if (on) sm.setAttribute("aria-current", "true"); else sm.removeAttribute("aria-current");
+      if (on && scrollList) d.scrollIntoView({ block: "nearest" });
+    });
+    try { history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(r.slug)); } catch (e) { /* ignoré */ }
+  }
+  function closePanel() {
+    state.selected = "";
+    $("kt-detail").hidden = true;
+    $("kt-detail-body").replaceChildren();
+    $("kt-split").classList.remove("has-detail");
+    document.querySelectorAll("#ug-results .kt-card.is-active").forEach((d) => { d.classList.remove("is-active"); d.querySelector("summary").removeAttribute("aria-current"); });
+    try { history.replaceState(null, "", location.pathname); } catch (e) { /* ignoré */ }
+  }
+  // Ouvre une fiche selon l'écran : panneau sur ordinateur, carte dépliée ailleurs
+  function openTrial(slug, scroll) {
+    const r = state.rows.find((x) => x.slug === slug);
+    if (!r) return;
+    if (desktop()) { select(r, scroll !== false); return; }
+    const d = document.getElementById("trial-" + slug);
+    if (d) { d.open = true; if (scroll !== false) d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  }
+  function setupPanel() {
+    const box = $("kt-width");
+    const set = (v) => { state.panel = v; try { localStorage.setItem("kt.panel", v); } catch (e) { /* ignoré */ } setupPanel(); applyPanel(); const r = state.rows.find((x) => x.slug === state.selected); if (r) select(r, false); };
+    box.replaceChildren(...[["half", "Moitié"], ["wide", "Deux tiers"]].map(([v, label]) => {
+      const b = button(label, "ug-chip", () => set(v));
+      b.setAttribute("aria-pressed", String(state.panel === v));
+      return b;
+    }));
+  }
+  function applyPanel() {
+    $("kt-split").classList.toggle("kt-half", state.panel === "half");
+    document.querySelector(".kt").classList.toggle("kt-split-on", desktop());
   }
 
   // Résultat principal en une ligne : premier critère avec HR
@@ -671,7 +732,7 @@
       const head = el("p", "kt-review-head");
       const a = el("a", null, `${r.acronym} : ${r.title}`);
       a.href = "#trial-" + r.slug;
-      a.addEventListener("click", (ev) => { ev.preventDefault(); const d = document.getElementById("trial-" + r.slug); if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); } });
+      a.addEventListener("click", (ev) => { ev.preventDefault(); openTrial(r.slug); });
       head.append(a, " ", badge(r.clinic || "Non classée", "kt-clinic"));
       c.append(head);
       openFlags(r).forEach((f) => c.append(flagItem(f, true)));
@@ -730,10 +791,7 @@
     setupFilters();
     search();
     renderReview();
-    if (openSlug) {
-      const d = document.getElementById("trial-" + openSlug);
-      if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
-    }
+    if (openSlug) openTrial(openSlug);
   }
 
   // ----- Filtres -----
@@ -792,7 +850,13 @@
     setupFilters();
     search();
     renderReview();
+    try { const v = localStorage.getItem("kt.panel"); if (v === "half" || v === "wide") state.panel = v; } catch (e) { /* ignoré */ }
+    setupPanel();
+    applyPanel();
+    $("kt-close").addEventListener("click", closePanel);
+    const onWide = () => { applyPanel(); if (!desktop()) closePanel(); search(); };
+    if (wide.addEventListener) wide.addEventListener("change", onWide);
     const slug = new URLSearchParams(location.search).get("t");
-    if (slug) { const d = document.getElementById("trial-" + slug); if (d) { d.open = true; d.scrollIntoView(); } }
+    if (slug) openTrial(slug);
   })();
 })();
