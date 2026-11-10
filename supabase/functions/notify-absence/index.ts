@@ -4,6 +4,8 @@
 // Garde-fous : les messages viennent de la base (jamais de la requête) ; chaque message est pris une seule fois
 // (absence_outbox_claim), réessayé jusqu'à 5 fois si l'e-mail échoue ; les refus de plus de 14 jours sont purgés.
 // E-mail : boîte noreply@onconic.ch (secret SMTP_PASSWORD, comme contact-request). Push : abonnements de notify-event-join.
+// Messages destinés à la direction (visa, pré-avis, et messages de validation reçus par un membre « direction ») : un seul e-mail
+// par message, à la boîte commune (secret ABSENCE_FORMS_TO, comme les formulaires) ; à défaut du secret, à l'adresse de chaque membre.
 import nodemailer from "npm:nodemailer@6.9.16";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import webpush from "npm:web-push@3.6.7";
@@ -83,7 +85,12 @@ function b64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createTransport> | null): Promise<string | null> {
+// Adresses de la boîte commune de la direction (secret ABSENCE_FORMS_TO, séparées par une virgule)
+const sharedBox = () => (Deno.env.get("ABSENCE_FORMS_TO") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+const DIRECTION_KINDS = ["to_direction", "to_opinion"];
+const VALIDATE_KINDS = ["to_validate", "to_validate_change"];
+
+async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createTransport> | null, sentShared: Set<string>): Promise<string | null> {
   if (row.kind === "form") return await sendForm(row, transport);
   if (!row.recipient) return null;
   const { data: absences } = await admin.from("absences")
@@ -91,7 +98,7 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
     .in("id", row.absence_ids).order("start_date");
   if (!absences?.length) return null; // absence supprimée entre-temps : rien à envoyer
 
-  const { data: prof } = await admin.from("profiles").select("lang, notify_events").eq("id", row.recipient).maybeSingle();
+  const { data: prof } = await admin.from("profiles").select("lang, notify_events, role").eq("id", row.recipient).maybeSingle();
   const lang: Lang = prof?.lang === "en" ? "en" : "fr";
   const first = absences[0];
   const { data: ownerName } = await admin.rpc("member_name", { p_user: first.user_id });
@@ -122,9 +129,20 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
     }
   } catch (_) { /* le push ne doit jamais bloquer l'e-mail */ }
 
-  // E-mail
-  const { data: u } = await admin.auth.admin.getUserById(row.recipient);
-  const to = u?.user?.email;
+  // E-mail : boîte commune de la direction pour ses messages (un seul envoi par message), sinon adresse du destinataire
+  const toDirection = DIRECTION_KINDS.includes(row.kind) || (VALIDATE_KINDS.includes(row.kind) && prof?.role === "direction");
+  const box = toDirection ? sharedBox() : [];
+  let to: string | string[] | undefined;
+  if (box.length) {
+    const key = `${row.kind}|${row.absence_ids.join(",")}|${row.payload.reminder ? "r" : ""}`;
+    if (sentShared.has(key)) return null; // déjà envoyé à la boîte commune pour un autre membre de la direction
+    if (!transport) return "SMTP_PASSWORD manquant";
+    sentShared.add(key);
+    to = box;
+  } else {
+    const { data: u } = await admin.auth.admin.getUserById(row.recipient);
+    to = u?.user?.email ?? undefined;
+  }
   if (!to) return null; // pas d'adresse : rien à envoyer
   if (!transport) return "SMTP_PASSWORD manquant";
   try {
@@ -163,9 +181,10 @@ Deno.serve(async (req) => {
   const pass = Deno.env.get("SMTP_PASSWORD");
   const transport = pass ? nodemailer.createTransport({ host: "mail.infomaniak.com", port: 465, secure: true, auth: { user: SMTP_USER, pass } }) : null;
   let sent = 0, failed = 0;
+  const sentShared = new Set<string>();
   for (const row of rows as Row[]) {
     let err: string | null;
-    try { err = await sendOne(row, transport); } catch (e) { err = String((e as Error).message ?? e).slice(0, 250); }
+    try { err = await sendOne(row, transport, sentShared); } catch (e) { err = String((e as Error).message ?? e).slice(0, 250); }
     await admin.rpc("absence_outbox_done", { p_id: row.id, p_error: err });
     err ? failed++ : sent++;
   }
