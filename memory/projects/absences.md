@@ -31,6 +31,16 @@
 - **Demandes refusées** : supprimables par l'usager et par les validateurs (`absence_delete_rejected`, section « Demandes refusées » de l'onglet À valider) ; elles disparaissent d'elles-mêmes 14 jours après le refus (masquées par les listes, purge physique à chaque envoi et par `notify-absence`).
 - **Agenda personnel** : bouton « S'abonner à mon agenda des absences » dans Mes absences ; flux iCal `absence-feed` (sans JWT), même jeton que « Mes congrès » (`calendar_token()`, renouvelable), absences validées fermes, demandes provisoires.
 
+## Formulaires papier en PDF, signés électroniquement (10.11.2026, `supabase/absences_forms.sql`)
+- **Trois formulaires** repris du papier du département : médecin assistant, chefs de clinique (cdc), médecin cadre ; le rôle du demandeur choisit le modèle. Assistante, pharmacien et admin n'ont pas de formulaire. Générés en PDF par la fonction `notify-absence` (`form.ts`, pdf-lib), jamais dans le navigateur.
+- **Signature électronique simple** : nom du validateur et horodatage (heure de Zurich) de sa validation, case « Favorable » cochée ; commentaires des validateurs repris. Pas de signature qualifiée (ZertES) ni de tampon : à faire accepter par la gestion des absences.
+- **Ce qui est rempli et ce qui reste manuscrit** : médecin assistant = avis du médecin cadre signé en ligne, pré-avis des chefs de clinique laissé vide ; cdc = pré-avis du médecin cadre signé en ligne, avis du chef de service vide ; cadre = validation en ligne mentionnée, avis du chef de service vide (le chef de service et les CDC ne sont pas validateurs dans Onconic).
+- **Envoi automatique** : un « envoi » = les absences soumises ensemble (même `submitted_at`). Quand plus aucune absence de l'envoi n'attend de décision et qu'au moins une est validée, `absence_form_after()` dépose une ligne `form` dans `absence_outbox` (une seule fois, `absences.form_queued_at`, verrou par membre) et `notify-absence` envoie le PDF en pièce jointe. Seules les absences validées figurent sur le formulaire. Les refus complets, les changements (modification, suppression) et les absences décidées avant la mise en service ne déclenchent rien.
+- **Destinataire** : secret `ABSENCE_FORMS_TO` de la fonction (une ou plusieurs adresses séparées par une virgule), jamais dans le dépôt public. En phase de test : l'adresse de Nicolas. Sans ce secret, la ligne reste dans la boîte d'envoi (5 essais).
+- **Téléchargement** : bouton « Télécharger le formulaire (PDF) » sur chaque absence validée (l'intéressé, ses validateurs, un admin ; `absence_form_access()`), appel `notify-absence` avec `{ action: "form", ids }`.
+- **Logo CHUV** : hors dépôt public. Déposer `logo.png` dans le bucket privé `absence-forms` (créé par le SQL) ; à défaut, l'en-tête est en texte (département, adresse).
+- **Mise en service** : exécuter `absences_forms.sql` après `absences_validation.sql`, déployer `notify-absence` (fichiers `index.ts`, `message.ts`, `form.ts`), créer le secret `ABSENCE_FORMS_TO`, fusionner la PR.
+
 ## Limites
 - Pas de soldes de vacances. L'e-mail dépend du secret `SMTP_PASSWORD` (comme le formulaire de contact) : sans lui, les messages restent dans `absence_outbox` (5 essais) et seul le push éventuel part.
 
