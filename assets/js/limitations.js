@@ -65,11 +65,14 @@
       if (data.length < 1000) return out;
     }
   }
+  // Textes d'ordonnance ; « strengths » (dosages du Compendium) peut manquer tant que supabase/sl_rx_auto.sql n'est pas exécuté
+  const RX_COLS = "id, substance, product_line, indication, indication_match, sig, dose_levels, dose_note, source, status, position, updated_at, validated_at";
+  const loadRx = () => all("sl_rx", RX_COLS + ", strengths").catch(() => all("sl_rx", RX_COLS));
   async function load() {
     const [products, limits, rx, changes, meta] = await Promise.all([
       all("sl_products", "specialty, galenic, substance, atc, limited, peros"),
       all("sl_limitations", "specialty, substance, atc, galenics, lim_code, ind_code, valid_from, valid_to, body"),
-      all("sl_rx", "id, substance, product_line, indication, indication_match, sig, dose_levels, dose_note, source, status, position, updated_at, validated_at"),
+      loadRx(),
       all("sl_changes", "kind, specialty, substance, lim_code, ind_code"),
       sb.from("sl_meta").select("source_file, imported_at, product_count, limitation_count").maybeSingle()
     ]);
@@ -313,9 +316,29 @@
       const tw = el("div", "ls-levels-wrap"); tw.append(el("p", "ls-levels-title", "Paliers de dose"), tbl);
       wrap.append(tw);
     }
+    const avail = strengthsOf(t, tpls);
+    if (avail.length) {
+      const tbl = el("table", "ls-levels ls-strengths");
+      const thead = el("thead"); const hr = el("tr");
+      hr.append(el("th", null, "Forme"), el("th", null, "Dosages disponibles"));
+      thead.append(hr); tbl.append(thead);
+      const tb = el("tbody");
+      for (const [form, doses] of avail) { const tr = el("tr"); tr.append(el("td", null, form), el("td", null, doses.join(", "))); tb.append(tr); }
+      tbl.append(tb);
+      const tw = el("div", "ls-levels-wrap"); tw.append(el("p", "ls-levels-title", "Dosages disponibles (Compendium)"), tbl);
+      wrap.append(tw);
+    }
     if (t.dose_note) wrap.append(el("p", "ls-note", t.dose_note));
     wrap.append(el("p", "muted ls-src", [t.source, t.validated_at ? "validé le " + new Date(t.validated_at).toLocaleDateString("fr-CH") : ""].filter(Boolean).join(" · ")));
     return wrap;
+  }
+
+  // Dosages du Compendium regroupés par forme : [[« comprimé pelliculé », [« 40 mg », « 80 mg »]], …]
+  function strengthsOf(t, tpls) {
+    const src = (Array.isArray(t.strengths) && t.strengths.length ? t.strengths : (tpls.find((x) => Array.isArray(x.strengths) && x.strengths.length) || {}).strengths) || [];
+    const by = new Map();
+    for (const s of src) { if (!by.has(s.form)) by.set(s.form, []); by.get(s.form).push(s.dose); }
+    return [...by.entries()];
   }
 
   // ----- Panier d'ordonnance : plusieurs textes per os copiés en un bloc (conservé pendant la session de l'onglet) -----
@@ -408,6 +431,7 @@
       head.append(el("span", "ug-badge " + (r.status === "validated" ? "ls-ok" : "ls-draft"), r.status === "validated" ? "Validé" : "Brouillon"),
         el("strong", null, r.product_line));
       if (r.indication) head.append(el("span", "ug-badge", r.indication));
+      if (/extraction automatique/.test(r.source || "")) head.append(el("span", "ug-badge", "Extrait du Compendium"));
       const row = el("div", "btn-row");
       row.append(button("Voir / modifier", "btn btn-outline ug-copy", () => openEditor(r)));
       if (r.status !== "validated") row.append(button("Valider", "btn ug-copy", () => save(r.id, { status: "validated", validated_by: state.uid, validated_at: new Date().toISOString() })));
@@ -494,7 +518,7 @@
     await reloadRx();
   }
   async function reloadRx() {
-    const rx = await all("sl_rx", "id, substance, product_line, indication, indication_match, sig, dose_levels, dose_note, source, status, position, updated_at, validated_at");
+    const rx = await loadRx();
     for (const r of rx) r._k = stem(norm(r.substance));
     state.rx = rx.sort((a, b) => a.position - b.position || a.product_line.localeCompare(b.product_line));
     renderRxAdmin(); render();

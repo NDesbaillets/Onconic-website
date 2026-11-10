@@ -21,3 +21,10 @@
 - Panier : une seule ligne par présentation, quelle que soit l'indication ; l'indication est rappelée dans le panier.
 - Éditeur admin : champs Indication et Mots-clés, bouton « Dupliquer pour une autre indication », refus des doublons.
 - Aucune donnée de dosage par indication n'est préremplie : les variantes sont à saisir (ou à préparer depuis les RCP, à valider par un médecin).
+
+## Dosages et posologies depuis le Compendium (10.11.2026)
+- Source : fichier AIPS Swissmedic/Refdata (conditions d'utilisation acceptées par Nicolas le 10.11.2026) ; le XML ne contient que les URL des RCP en HTML. Script `tools/compendium/aips_rx.py` (voir son README), qui produit `supabase/sl_rx_auto.sql`.
+- Colonne `sl_rx.strengths` : l'app affiche sous le tableau des paliers « Dosages disponibles (Compendium) », par forme. Repli automatique si la colonne n'existe pas encore.
+- Posologies par indication : une variante brouillon par régime distinct du RCP (ex. sunitinib GIST/RCC 50 mg 4/2 vs pNET 37,5 mg continu, cabozantinib 60 mg vs 40 mg avec nivolumab, capécitabine 1250/1000/625 mg/m², talazoparib seul vs avec enzalutamide, ribociclib 400 vs 600 mg). Badge « Extrait du Compendium » dans l'admin ; à relire puis valider.
+- Sans RCP trouvé : dacomitinib, pralsétinib, sotorasib, adagrasib (noms commerciaux à ajouter dans `substances.json`).
+- Mise à jour : télécharger le nouveau fichier AIPS et relancer le script.

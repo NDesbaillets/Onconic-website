@@ -1,0 +1,291 @@
+{
+ "osimertinib": {
+  "dci": "osimertinib",
+  "brands": [
+   "Tagrisso"
+  ]
+ },
+ "gefitinib": {
+  "dci": "gefitinib",
+  "brands": [
+   "Iressa"
+  ]
+ },
+ "erlotinib": {
+  "dci": "erlotinib",
+  "brands": [
+   "Tarceva"
+  ]
+ },
+ "afatinib": {
+  "dci": "afatinib",
+  "brands": [
+   "Giotrif"
+  ]
+ },
+ "dacomitinib": {
+  "dci": "dacomitinib",
+  "brands": [
+   "Vizimpro"
+  ]
+ },
+ "lazertinib": {
+  "dci": "lazertinib",
+  "brands": [
+   "Lazcluze"
+  ]
+ },
+ "alectinib": {
+  "dci": "alectinib",
+  "brands": [
+   "Alecensa"
+  ]
+ },
+ "brigatinib": {
+  "dci": "brigatinib",
+  "brands": [
+   "Alunbrig"
+  ]
+ },
+ "lorlatinib": {
+  "dci": "lorlatinib",
+  "brands": [
+   "Lorviqua"
+  ]
+ },
+ "crizotinib": {
+  "dci": "crizotinib",
+  "brands": [
+   "Xalkori"
+  ]
+ },
+ "dabrafenib": {
+  "dci": "dabrafenib",
+  "brands": [
+   "Tafinlar"
+  ]
+ },
+ "trametinib": {
+  "dci": "trametinib",
+  "brands": [
+   "Mekinist"
+  ]
+ },
+ "selpercatinib": {
+  "dci": "selpercatinib",
+  "brands": [
+   "Retsevmo"
+  ]
+ },
+ "pralsetinib": {
+  "dci": "pralsetinib",
+  "brands": [
+   "Gavreto"
+  ]
+ },
+ "capmatinib": {
+  "dci": "capmatinib",
+  "brands": [
+   "Tabrecta"
+  ]
+ },
+ "tepotinib": {
+  "dci": "tepotinib",
+  "brands": [
+   "Tepmetko"
+  ]
+ },
+ "sotorasib": {
+  "dci": "sotorasib",
+  "brands": [
+   "Lumykras"
+  ]
+ },
+ "adagrasib": {
+  "dci": "adagrasib",
+  "brands": [
+   "Krazati"
+  ]
+ },
+ "entrectinib": {
+  "dci": "entrectinib",
+  "brands": [
+   "Rozlytrek"
+  ]
+ },
+ "larotrectinib": {
+  "dci": "larotrectinib",
+  "brands": [
+   "Vitrakvi"
+  ]
+ },
+ "encorafenib": {
+  "dci": "encorafenib",
+  "brands": [
+   "Braftovi"
+  ]
+ },
+ "binimetinib": {
+  "dci": "binimetinib",
+  "brands": [
+   "Mektovi"
+  ]
+ },
+ "vemurafenib": {
+  "dci": "vemurafenib",
+  "brands": [
+   "Zelboraf"
+  ]
+ },
+ "cobimetinib": {
+  "dci": "cobimetinib",
+  "brands": [
+   "Cotellic"
+  ]
+ },
+ "palbociclib": {
+  "dci": "palbociclib",
+  "brands": [
+   "Ibrance"
+  ]
+ },
+ "ribociclib": {
+  "dci": "ribociclib",
+  "brands": [
+   "Kisqali"
+  ]
+ },
+ "abemaciclib": {
+  "dci": "abemaciclib",
+  "brands": [
+   "Verzenios"
+  ]
+ },
+ "olaparib": {
+  "dci": "olaparib",
+  "brands": [
+   "Lynparza"
+  ]
+ },
+ "talazoparib": {
+  "dci": "talazoparib",
+  "brands": [
+   "Talzenna"
+  ]
+ },
+ "alpelisib": {
+  "dci": "alpelisib",
+  "brands": [
+   "Piqray"
+  ]
+ },
+ "capivasertib": {
+  "dci": "capivasertib",
+  "brands": [
+   "Truqap"
+  ]
+ },
+ "tucatinib": {
+  "dci": "tucatinib",
+  "brands": [
+   "Tukysa"
+  ]
+ },
+ "neratinib": {
+  "dci": "neratinib",
+  "brands": [
+   "Nerlynx"
+  ]
+ },
+ "everolimus": {
+  "dci": "everolimus",
+  "brands": [
+   "Afinitor"
+  ]
+ },
+ "capecitabine": {
+  "dci": "capecitabin",
+  "brands": [
+   "Xeloda"
+  ]
+ },
+ "abirateron": {
+  "dci": "abirateron",
+  "brands": [
+   "Zytiga"
+  ]
+ },
+ "enzalutamid": {
+  "dci": "enzalutamid",
+  "brands": [
+   "Xtandi"
+  ]
+ },
+ "apalutamid": {
+  "dci": "apalutamid",
+  "brands": [
+   "Erleada"
+  ]
+ },
+ "darolutamid": {
+  "dci": "darolutamid",
+  "brands": [
+   "Nubeqa"
+  ]
+ },
+ "cabozantinib": {
+  "dci": "cabozantinib",
+  "brands": [
+   "Cabometyx"
+  ]
+ },
+ "axitinib": {
+  "dci": "axitinib",
+  "brands": [
+   "Inlyta"
+  ]
+ },
+ "sunitinib": {
+  "dci": "sunitinib",
+  "brands": [
+   "Sutent"
+  ]
+ },
+ "pazopanib": {
+  "dci": "pazopanib",
+  "brands": [
+   "Votrient"
+  ]
+ },
+ "regorafenib": {
+  "dci": "regorafenib",
+  "brands": [
+   "Stivarga"
+  ]
+ },
+ "trifluridin": {
+  "dci": "trifluridin",
+  "brands": [
+   "Lonsurf"
+  ]
+ },
+ "sorafenib": {
+  "dci": "sorafenib",
+  "brands": [
+   "Nexavar"
+  ]
+ },
+ "vorasidenib": {
+  "dci": "vorasidenib",
+  "brands": [
+   "Voranigo"
+  ]
+ },
+ "temozolomid": {
+  "dci": "temozolomid",
+  "brands": [
+   "Temodal"
+  ],
+  "no_variants": true
+ }
+}
