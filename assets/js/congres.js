@@ -413,6 +413,7 @@
       const url = feed(token);
       box.replaceChildren();
       box.append(el("p", null, "Un lien privé garde votre agenda à jour : les événements où vous participez, leurs échéances (abstracts, tarif réduit, avec rappel) et vos présentations. Ne le partagez pas."));
+      box.append(el("p", "cg-note", "Ce lien privé sert aussi à votre agenda des absences et à l'agenda combiné : générer un nouveau lien les coupe tous, il faudra vous réabonner partout."));
       const row = el("div", "cg-wa-row");
       const input = el("input");
       input.readOnly = true; input.value = url; input.setAttribute("aria-label", "Lien d'abonnement à votre agenda");
@@ -427,7 +428,7 @@
       open.href = url.replace(/^https:/, "webcal:");
       const actions = el("div", "btn-row");
       actions.append(open, button("Générer un nouveau lien", "btn btn-outline ug-copy", async () => {
-        if (!confirm("Générer un nouveau lien ? L'ancien cessera de fonctionner dans vos agendas.")) return;
+        if (!confirm("Générer un nouveau lien ? Les anciens liens cesseront de fonctionner dans vos agendas (congrès, absences et agenda combiné).")) return;
         try { token = await get(true); render(); } catch (x) { alert("Impossible de renouveler le lien."); }
       }));
       box.append(actions);
@@ -436,6 +437,26 @@
         "Google Agenda : Autres agendas › À partir de l'URL, collez le lien (Google actualise jusqu'à une fois par jour).",
         "Outlook : Ajouter un calendrier › S'abonner à partir du web, collez le lien."].forEach((t) => ol.append(el("li", null, t)));
       box.append(ol);
+      // Lien combiné : congrès et absences dans un seul agenda (même jeton)
+      const both = `${cfg.supabaseUrl}/functions/v1/agenda-feed?t=${token}`;
+      const comb = el("div", "cg-combined");
+      comb.append(el("h4", null, "Tout dans un seul agenda"),
+        el("p", "muted", "Ce lien réunit vos congrès et vos absences dans un même agenda. Abonnez-vous à celui-ci ou aux liens séparés, pas aux deux, pour éviter les doublons."));
+      const crow = el("div", "cg-wa-row");
+      const cin = el("input");
+      cin.readOnly = true; cin.value = both; cin.setAttribute("aria-label", "Lien d'abonnement à votre agenda combiné (congrès et absences)");
+      cin.addEventListener("focus", () => cin.select());
+      const ccopy = button("Copier le lien", "btn btn-outline ug-copy", async () => {
+        try { await navigator.clipboard.writeText(both); ccopy.textContent = "Copié"; } catch (x) { cin.select(); ccopy.textContent = "Sélectionné : copiez"; }
+        setTimeout(() => (ccopy.textContent = "Copier le lien"), 1800);
+      });
+      crow.append(cin, ccopy);
+      const copen = el("a", "btn ug-copy", "Ouvrir dans mon agenda");
+      copen.href = both.replace(/^https:/, "webcal:");
+      const cact = el("div", "btn-row");
+      cact.append(copen);
+      comb.append(crow, cact);
+      box.append(comb);
     };
     render();
   }

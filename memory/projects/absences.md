@@ -29,7 +29,7 @@
 - **Avancement visible** : sur chaque demande en cours ou refusée, « Voir qui a validé (n sur m) » (`absence_approvals_all`), qui a validé, attend ou refusé, avec date et commentaire ; mêmes informations côté valideur.
 - **E-mails** : les fonctions SQL déposent les messages dans `absence_outbox`, la fonction `notify-absence` (SMTP Infomaniak, `noreply@onconic.ch`, plus push) les expédie ; l'interface l'appelle après chaque envoi ou décision. Validateurs : nouvelles demandes (un message pour tout le lot) et demandes de changement ; usager : absence validée par tous, refus immédiat (auteur et commentaire), changement accepté ou refusé.
 - **Demandes refusées** : supprimables par l'usager et par les validateurs (`absence_delete_rejected`, section « Demandes refusées » de l'onglet À valider) ; elles disparaissent d'elles-mêmes 14 jours après le refus (masquées par les listes, purge physique à chaque envoi et par `notify-absence`).
-- **Agenda personnel** : bouton « S'abonner à mon agenda des absences » dans Mes absences ; flux iCal `absence-feed` (sans JWT), même jeton que « Mes congrès » (`calendar_token()`, renouvelable), absences validées fermes, demandes provisoires.
+- **Agenda personnel** : bouton « S'abonner à mon agenda des absences » dans Mes absences ; flux iCal `absence-feed` (sans JWT), même jeton que « Mes congrès » (`calendar_token()`, renouvelable), absences validées fermes, demandes provisoires. Lien combiné congrès + absences : fonction `agenda-feed` (voir congres-plus.md).
 
 ## Limites
 - Pas de soldes de vacances. L'e-mail dépend du secret `SMTP_PASSWORD` (comme le formulaire de contact) : sans lui, les messages restent dans `absence_outbox` (5 essais) et seul le push éventuel part.
