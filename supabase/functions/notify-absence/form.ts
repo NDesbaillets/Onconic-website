@@ -8,7 +8,7 @@ export type FormRole = "clinician" | "cdc" | "cadre";
 export type FormAbsence = { kind: "vacances" | "congres" | "autre"; start_date: string; end_date: string; note: string | null };
 export type FormSigner = { name: string; at: string; comment?: string | null };
 export type FormData = {
-  role: FormRole; owner: string; clinics: string[]; requestedAt: string; absences: FormAbsence[]; signers: FormSigner[];
+  role: FormRole; owner: string; clinics: string[]; requestedAt: string; absences: FormAbsence[]; signers: FormSigner[]; direction?: { name: string; at: string } | null;
   generatedAt: string; ref: string;
 };
 
@@ -131,6 +131,16 @@ export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): P
     } else page.drawText("Tampon - signature", { x: ML + 380, y: y - 9, size: 7.5, font: reg, color: GREY });
     y -= 30;
   };
+  // Visa de la direction (2e ligne de validation en ligne)
+  const directionRow = () => {
+    need(30);
+    text("VISA DE LA DIRECTION :", ML, bold, 10);
+    if (d.direction) {
+      page.drawText(safe(`Signé électroniquement : ${d.direction.name}`), { x: ML + 200, y: y - 9, size: 8.5, font: bold, color: SIGN });
+      page.drawText(safe(stamp(d.direction.at)), { x: ML + 200, y: y - 19, size: 8, font: reg, color: SIGN });
+    } else page.drawText("Tampon - signature", { x: ML + 380, y: y - 9, size: 7.5, font: reg, color: GREY });
+    y -= 30;
+  };
   const comments = () => {
     text("Commentaires : ", ML, bold, 10);
     text(".".repeat(80), ML + bold.widthOfTextAtSize("Commentaires : ", 10), reg, 9, GREY); y -= 18;
@@ -150,10 +160,10 @@ export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): P
     for (let i = 0; i < 3; i++) optionRow("Avis : ", null, false);
     comments(); y -= 4; rule2();
     text("AVIS DU MÉDECIN CADRE RESPONSABLE DE LA CLINIQUE", ML, bold, 10); y -= 20;
-    approvals(); y -= 4;
+    approvals(); y -= 4; directionRow();
   } else if (d.role === "cdc") {
     text("PRÉ-AVIS DU MÉDECIN CADRE RESPONSABLE DE LA CLINIQUE", ML, bold, 10); y -= 20;
-    approvals(); y -= 4; rule2();
+    approvals(); y -= 4; directionRow(); rule2();
     text("AVIS DU CHEF DE SERVICE :", ML, bold, 10); text("Tampon et signature.", ML + 230, reg, 10); y -= 22;
     need(24); text("Demande acceptée :", ML, reg, 10); let x = ML + reg.widthOfTextAtSize("Demande acceptée :", 10) + 14;
     text("oui", x, reg, 10); box(x + 20, y - 1, false); text("non", x + 55, reg, 10); box(x + 76, y - 1, false); y -= 24;
@@ -164,6 +174,7 @@ export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): P
       signers.forEach((s) => para(`${s.name} : favorable, signé électroniquement le ${stamp(s.at)}${s.comment ? ` · « ${s.comment} »` : ""}`, ML + 12, CW - 14, reg, 9, SIGN));
       y -= 8;
     }
+    directionRow();
     text("AVIS DU CHEF DE SERVICE :", ML, bold, 10); text("Tampon et signature.", ML + 230, reg, 10); y -= 22;
     need(24); text("Demande acceptée :", ML, reg, 10); const x = ML + reg.widthOfTextAtSize("Demande acceptée :", 10) + 14;
     text("oui", x, reg, 10); box(x + 20, y - 1, false); text("non", x + 55, reg, 10); box(x + 76, y - 1, false); y -= 24;

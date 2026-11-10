@@ -5,13 +5,14 @@
   const $ = (id) => document.getElementById(id);
 
   const ROLES = [["member", "En attente de validation"], ["clinician", "Médecin assistant"], ["cdc", "CDC (chef·fe de clinique)"], ["cadre", "Médecin cadre"], ["assistant", "Assistante médicale"],
-    ["pharmacist", "Pharmacien·ne"], ["admin", "Administrateur"]];
+    ["pharmacist", "Pharmacien·ne"], ["direction", "Admin de direction"], ["admin", "Administrateur"]];
   const ROLE_LABEL = Object.fromEntries(ROLES);
   const TOOLS = [["congres", "Congrès"], ["trials", "Key trials"], ["lettres", "Lettres d'assurance"],
     ["limitations", "Limitations LS"], ["duree", "Durée de traitement"], ["absences", "Absences"], ["medletters", "Lettres médicales"]];
   const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome", "Lower GI", "Upper GI", "ORL", "Sarcomes", "Rad-Inter", "ION", "UTOH"];
   const ABS_CLINICS = CLINICS.concat(["Plateforme"]); // cliniques de rattachement pour les absences (Key trials garde CLINICS)
-  const state = { rows: [], me: null, changes: new Map() };
+  const state = { rows: [], me: null, role: null, changes: new Map() };
+  const RESERVED = ["admin", "direction"]; // seul un administrateur donne ou retire ces rôles
 
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   function el(tag, cls, txt) {
@@ -124,8 +125,11 @@
     ROLES.forEach(([v, l]) => { const o = el("option", null, l); o.value = v; sel.append(o); });
     sel.value = r.role;
     const self = r.id === state.me;
-    sel.disabled = self;
+    const locked = state.role === "direction" && RESERVED.includes(r.role);
+    if (state.role === "direction") Array.from(sel.options).forEach((o) => { if (RESERVED.includes(o.value)) o.disabled = true; });
+    sel.disabled = self || locked;
     if (self) rl.title = "Vous ne pouvez pas modifier votre propre rôle.";
+    else if (locked) rl.title = "Seul un administrateur modifie un compte admin ou direction.";
     sel.addEventListener("change", async () => {
       const to = sel.value;
       const msg = to === "admin" ? `Donner les droits administrateur complets à ${nameOf(r)} ?`
@@ -142,13 +146,13 @@
 
     const tools = el("fieldset", "am-tools");
     tools.append(el("legend", null, "Outils"));
-    const fixed = r.role === "admin" || r.role === "member";
+    const fixed = r.role === "admin" || r.role === "direction" || r.role === "member";
     for (const [t, label] of TOOLS) {
       const st = (r.tools || {})[t] || { allowed: false, custom: false };
       const lab = el("label", "cg-check am-tool" + (st.custom ? " am-custom" : ""));
       const cb = el("input");
       cb.type = "checkbox"; cb.checked = !!st.allowed;
-      const medOk = t !== "medletters" || ["clinician", "cdc", "cadre", "pharmacist"].includes(r.role);
+      const medOk = t !== "medletters" || (state.role === "admin" && ["clinician", "cdc", "cadre", "pharmacist"].includes(r.role));
       cb.disabled = fixed || !medOk;
       cb.addEventListener("change", async () => {
         cb.disabled = true;
@@ -209,7 +213,7 @@
       c.append(fs);
       if (!mine.size) c.append(el("p", "muted am-note", "Aucune clinique choisie : ce membre n'a pas encore le droit de modifier de fiche."));
     }
-    if (r.role === "cadre") {
+    if (r.role === "cadre" || r.role === "direction") {
       // Tous les médecins cadres ne valident pas les absences : la case ouvre ce droit, les cliniques se choisissent ensuite
       const fs = el("fieldset", "am-tools am-validator");
       fs.append(el("legend", null, "Validation des absences"));
@@ -236,10 +240,11 @@
     }
     const notes = [];
     if (r.role === "admin") notes.push("Administrateur : accès à tout.");
+    if (r.role === "direction") notes.push("Admin de direction : gère les membres (sauf les comptes admin et direction), le calendrier commun et les deux annuaires, valide les absences en 2e ligne (et en 1re ligne si désigné·e validateur·trice d'une clinique), saisit des absences au nom d'un membre.");
     if (r.role === "member") notes.push("Compte en attente : choisissez un rôle pour ouvrir les accès.");
     if (r.role === "cdc") notes.push("CDC (chef·fe de clinique) : droits d'un médecin assistant, plus modification et validation des fiches Key trials des cliniques cochées.");
     if (r.role === "cadre") notes.push("Médecin cadre : exactement les droits d'un·e CDC, plus, si la case « Validateur des absences » est cochée, la validation des absences des cliniques où il ou elle est désigné·e (page « Absences : valideurs par clinique »).");
-    if (["assistant", "pharmacist", "admin"].includes(r.role)) notes.push("Rattaché·e à la clinique Administration pour les absences (seuls les médecins, CDC et cadres ont des cliniques).");
+    if (["assistant", "pharmacist", "direction", "admin"].includes(r.role)) notes.push("Rattaché·e à la clinique Administration pour les absences (seuls les médecins, CDC et cadres ont des cliniques).");
     if (r.role === "pharmacist") notes.push("Pharmacien·ne : administre aussi les Lettres d'assurance, Limitations LS et Durée de traitement auxquelles il ou elle a accès.");
     if (notes.length) c.append(el("p", "muted am-note", notes.join(" ")));
     if (Object.values(r.tools || {}).some((x) => x.custom)) {
@@ -270,7 +275,8 @@
     $("logout").addEventListener("click", async () => { await sb.auth.signOut(); location.href = "/fr/"; });
     state.me = data.session.user.id;
     const { data: role } = await sb.rpc("current_role_name");
-    if (role !== "admin") return ($("ug-status").textContent = "Page réservée à l'administrateur.");
+    if (role !== "admin" && role !== "direction") return ($("ug-status").textContent = "Page réservée à l'administration.");
+    state.role = role;
     try { await load(); } catch (e) { return ($("ug-status").textContent = "Chargement impossible : " + e.message); }
     $("ug-status").hidden = true;
     $("am-tool").hidden = false;
