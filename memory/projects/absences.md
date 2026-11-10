@@ -18,7 +18,10 @@
 
 ## Agenda commun (première ligne du planning)
 - Jours fériés vaudois calculés par la page (Nouvel An, 2 janvier, Vendredi saint, Lundi de Pâques, Ascension, Lundi de Pentecôte, 1er août, Lundi du Jeûne fédéral, Noël) ; ils sont déduits des jours ouvrables.
-- Vacances scolaires vaudoises et événements importants : table `absence_calendar`, saisie par l'admin dans `/admin/absences.html` (section Agenda commun). Vacances 2026-2027 préremplies d'après des sources tierces, à confirmer sur vd.ch/vacances ; années suivantes à ajouter.
+- Vacances scolaires vaudoises : importées chaque mois depuis OpenHolidays (openholidaysapi.org, canton CH-VD) par la fonction Edge `holidays-sync` (sans JWT, au plus un import par 10 minutes), appelée par pg_cron le 3 de chaque mois (`agenda_commun.sql`) et par le bouton « Importer maintenant » de l'admin. Une période importée reste « à confirmer » (affichée ainsi dans le planning) jusqu'à « Confirmer » ; confirmée ou saisie à la main, elle n'est plus modifiée : un écart de dates est seulement signalé dans l'admin (table `calendar_sync`). OpenHolidays publie avec retard (au 10.11.2026 : jusqu'à Noël 2026-2027 seulement).
+- Événements importants : saisis par l'admin dans `/admin/absences.html` (section Agenda commun).
+- Congrès importants : case admin « Afficher dans l'agenda des absences » dans le formulaire Congrès (`events.in_absence_calendar`, modifiable par l'admin seul, trigger `events_absence_flag_guard`) ; affichés ★ dans la ligne commune du planning (id négatif dans `absence_calendar()`).
+- Décision du 10.11.2026 : pas de flux d'abonnement à l'agenda commun.
 
 ## Depuis la page Congrès
 - Quand un membre passe à « J'y vais » ou « Je présente » (nouvelle participation ferme, événement non passé), un dialogue propose la demande d'absence (motif congrès, dates de l'événement modifiables, précision = titre). Rien n'est proposé sans accès à l'outil Absences ; si une absence couvre déjà ces dates, le dialogue le dit sans créer de doublon.

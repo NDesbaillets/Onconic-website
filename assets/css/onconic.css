@@ -1162,6 +1162,7 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .ab-key.ab-cal-ferie, .ab-grid td.ab-cal-ferie { background: #5A6478; color: var(--white); }
 .ab-key.ab-cal-vacances_scolaires, .ab-grid td.ab-cal-vacances_scolaires { background: #C3CBD9; color: var(--navy-800); }
 .ab-key.ab-cal-evenement, .ab-grid td.ab-cal-evenement { background: var(--amber-50); color: var(--amber-700); outline: 2px solid var(--amber-700); outline-offset: -2px; }
+.ab-key.ab-cal-congres, .ab-grid td.ab-cal-congres { background: var(--white); color: var(--navy-800); outline: 2px solid var(--navy-800); outline-offset: -2px; }
 .ab-grid td.ab-cal-c[data-cal] { cursor: pointer; }
 .ab-grid td.ab-cal-c[data-cal]:focus-visible { outline: 3px solid var(--amber-500); outline-offset: -3px; }
 .ab-detail p .ug-badge { margin-right: 6px; }
@@ -1256,3 +1257,7 @@ details:not(.ug-card) > summary { padding-block: 10px; }
 .cg-combined, .ab-combined { display: grid; gap: var(--space-2); border-top: 1px solid var(--navy-100); padding-top: var(--space-3); margin-top: var(--space-2); }
 .cg-combined h4, .ab-combined h4 { margin: 0; font-size: 1rem; font-weight: 500; color: var(--navy-800); }
 .cg-combined p, .ab-combined p { margin: 0; max-width: none; }
+.aa-sync { display: grid; gap: var(--space-2); margin-bottom: var(--space-3); }
+.aa-sync p { margin: 0; max-width: none; }
+.aa-sync .btn { justify-self: start; }
+.ug-badge.cg-abs-badge { background: var(--white); color: var(--navy-800); border: 1px solid var(--navy-800); }
