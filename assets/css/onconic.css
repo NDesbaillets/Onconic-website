@@ -751,6 +751,7 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 .ls-levels th, .ls-levels td { text-align: left; padding: 6px 10px; border: 1px solid var(--navy-100); }
 .ls-levels th { font-weight: 500; color: var(--ink-600); }
 .ls-note { margin: 0; font-size: .9rem; }
+.ls-disclaimer { margin: 0; padding: 8px 12px; font-size: .85rem; color: var(--ink-600); border-left: 3px solid var(--navy-100); background: var(--white); }
 .ls-src { margin: 0; font-size: .8rem; }
 .ls-h2 { margin-top: var(--space-5); }
 .ls-h3 { font-size: 1.05rem; font-weight: 500; margin: var(--space-4) 0 var(--space-2); }
