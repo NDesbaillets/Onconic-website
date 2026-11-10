@@ -674,7 +674,12 @@
     const y = first.getUTCFullYear(), m = first.getUTCMonth();
     const nav = el("div", "cg-cal-nav");
     const shift = (n) => { const d = new Date(Date.UTC(y, m + n, 1)); state.month = iso(d); state.day = null; renderCalendar(); };
-    nav.append(button("‹", "btn btn-outline ug-copy", () => shift(-1)), el("h2", "cg-month", `${MONTHS[m]} ${y}`),
+    const title = el("h2", "cg-month");
+    const monthBtn = el("button", "cg-month-btn", `${MONTHS[m]} ${y}`);
+    monthBtn.type = "button";
+    title.append(monthBtn);
+    if (window.monthPicker) window.monthPicker(monthBtn, { get: () => ({ y, m }), onPick: (yy, mm) => { state.month = iso(new Date(Date.UTC(yy, mm, 1))); state.day = null; renderCalendar(); } });
+    nav.append(button("‹", "btn btn-outline ug-copy", () => shift(-1)), title,
       button("›", "btn btn-outline ug-copy", () => shift(1)),
       button("Aujourd'hui", "btn btn-outline ug-copy", () => { state.month = todayIso().slice(0, 7) + "-01"; state.day = todayIso(); renderCalendar(); }));
     const grid = el("div", "cg-grid-cal");

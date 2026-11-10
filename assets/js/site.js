@@ -113,3 +113,66 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
   a.textContent = document.documentElement.lang === "fr" ? "Aller au contenu" : "Skip to content";
   document.body.prepend(a);
 })();
+
+// Sélecteur rapide de mois (Congrès, Absences) : un clic sur le mois affiché ouvre l'année (flèches ou saisie) et les 12 mois.
+// monthPicker(bouton, { get: () => ({ y, m }), onPick: (y, m) => … }) ; m va de 0 à 11.
+window.monthPicker = function (trigger, opts) {
+  const NAMES = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+  const SHORT = ["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."];
+  const MIN = 1990, MAX = 2100;
+  let pop = null;
+  trigger.setAttribute("aria-haspopup", "dialog");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.parentElement.classList.add("mp-host");
+  const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const btn = (txt, cls, label, fn) => { const b = mk("button", cls, txt); b.type = "button"; if (label) b.setAttribute("aria-label", label); b.addEventListener("click", fn); return b; };
+
+  function close(refocus) {
+    if (!pop) return;
+    pop.remove();
+    pop = null;
+    trigger.setAttribute("aria-expanded", "false");
+    document.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("click", onDoc, true);
+    if (refocus) trigger.focus();
+  }
+  const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); close(true); } };
+  const onDoc = (e) => { if (pop && !pop.contains(e.target) && !trigger.contains(e.target)) close(false); };
+
+  function open() {
+    const cur = opts.get();
+    const now = new Date();
+    let year = cur.y;
+    pop = mk("div", "mp-pop");
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-label", "Choisir un mois");
+    const bar = mk("div", "mp-years");
+    const input = mk("input", "mp-year");
+    input.type = "number"; input.min = MIN; input.max = MAX; input.step = 1; input.value = year;
+    input.setAttribute("aria-label", "Année");
+    const grid = mk("div", "mp-grid");
+    const setYear = (y) => { const v = Math.min(MAX, Math.max(MIN, y)); input.value = v; if (v === year && grid.children.length) return; year = v; paint(); };
+    bar.append(btn("‹", "mp-step", "Année précédente", () => setYear(year - 1)), input, btn("›", "mp-step", "Année suivante", () => setYear(year + 1)));
+    input.addEventListener("change", () => { const v = parseInt(input.value, 10); setYear(Number.isFinite(v) ? v : cur.y); });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.dispatchEvent(new Event("change")); } });
+    function paint() {
+      grid.replaceChildren(...NAMES.map((n, i) => {
+        const b = btn(SHORT[i], "mp-m", n + " " + year, () => { close(true); opts.onPick(year, i); });
+        if (year === cur.y && i === cur.m) b.setAttribute("aria-pressed", "true");
+        if (year === now.getFullYear() && i === now.getMonth()) b.classList.add("now");
+        return b;
+      }));
+    }
+    paint();
+    const foot = mk("div", "mp-foot");
+    foot.append(btn("Aujourd'hui", "mp-today", null, () => { close(true); opts.onPick(now.getFullYear(), now.getMonth()); }), btn("Fermer", "mp-close", null, () => close(true)));
+    pop.append(bar, grid, foot);
+    trigger.after(pop);
+    trigger.setAttribute("aria-expanded", "true");
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("click", onDoc, true);
+    const sel = grid.querySelector('[aria-pressed="true"]') || grid.querySelector(".now") || grid.firstChild;
+    if (sel) sel.focus();
+  }
+  trigger.addEventListener("click", () => { if (pop) close(true); else open(); });
+};
