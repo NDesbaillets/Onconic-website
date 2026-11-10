@@ -157,6 +157,7 @@
               <button class="btn btn-outline" id="ab-sub-btn" type="button" aria-expanded="false" aria-controls="ab-sub">S'abonner à mon agenda des absences</button>
             </div>
             <div class="card ab-sub" id="ab-sub" hidden></div>
+            <div class="card ab-balance" id="ab-balance" aria-live="polite"></div>
             <p class="form-msg" id="ab-mine-msg" role="status" aria-live="polite"></p>
             <div id="ab-mine-list" class="ab-list"></div>
           </section>
@@ -192,21 +193,31 @@
 
           <section id="ab-p-dir" role="tabpanel" aria-labelledby="ab-t-dir" hidden>
             <h2>Absence au nom d'un membre</h2>
-            <p class="muted">Saisie par la direction : l'absence est validée d'office, le membre est prévenu par e-mail et le formulaire part à la gestion des absences. Pour modifier ou annuler une absence validée, choisissez le membre dans « Résumé de » (onglet Mes absences) : les boutons apparaissent sur chaque absence.</p>
+            <p class="muted">Saisie directe par la direction, pour la visualisation et la planification : aucune validation, aucun formulaire PDF. Le membre concerné est prévenu par e-mail (pas pour vos propres absences). Pour modifier ou annuler une absence, choisissez le membre dans « Résumé de » (onglet Mes absences) : les boutons apparaissent sur chaque absence.</p>
             <form class="card ab-new" id="ab-dir-form" novalidate>
               <div class="ab-fields">
                 <label>Membre <select id="ab-dir-who" required></select></label>
                 <label>Motif
                   <select id="ab-dir-kind"><option value="vacances">Vacances</option><option value="congres">Congrès</option><option value="autre">Autre</option></select>
                 </label>
-                <label class="ab-note">Précision <input id="ab-dir-note" type="text" maxlength="200" autocomplete="off"></label>
+                <label class="ab-note"><span id="ab-dir-note-label">Précision</span> <input id="ab-dir-note" type="text" maxlength="200" autocomplete="off" list="ab-dir-types"></label>
+                <datalist id="ab-dir-types">
+                  <option value="Maladie"><option value="Accident"><option value="Congé maternité"><option value="Congé paternité"><option value="Obligations militaires">
+                  <option value="Service civil"><option value="Rendez-vous médical"><option value="RTT"><option value="Deuil"><option value="Mariage"><option value="Déménagement">
+                </datalist>
                 <label>Du <input id="ab-dir-start" type="date" required></label>
                 <label>Au (inclus) <input id="ab-dir-end" type="date" required></label>
-                <button class="btn" type="submit">Ajouter, validée d'office</button>
+                <button class="btn" type="submit">Ajouter (sans validation)</button>
               </div>
+              <label class="cg-check" id="ab-dir-conf-wrap" hidden><input type="checkbox" id="ab-dir-conf"> Confidentiel : seuls la personne et la direction voient le type (les autres, y compris les validateurs, voient « Autre »)</label>
               <p class="form-msg" id="ab-dir-msg" role="status" aria-live="polite"></p>
               <div id="ab-dir-warn" role="alert"></div>
             </form>
+            <h2 class="ab-sub-title">Soldes de vacances et de congrès</h2>
+            <p class="muted">Droits par année civile : 25 jours de vacances pour chacun ; congrès et formation, 3 jours (médecin assistant), 5 (CDC), sans limite pour les médecins cadres. Les jours ouvrables (fériés vaudois déduits) des absences demandées ou validées sont décomptés. Un solde insuffisant ne bloque jamais une demande : il génère un avertissement pour la personne et pour la direction. Pour corriger un solde, inscrivez les jours restants (aujourd'hui) : seuls les jours posés après cette date sont encore déduits ; une case vide revient au droit par défaut.</p>
+            <div class="ab-bar-sub"><label>Année <select id="ab-bal-year"></select></label></div>
+            <p class="form-msg" id="ab-bal-msg" role="status" aria-live="polite"></p>
+            <div class="ab-scroll"><table class="ab-bal-table" id="ab-bal-table"><thead><tr><th>Membre</th><th>Vacances</th><th>Reste (vacances)</th><th>Congrès</th><th>Reste (congrès)</th><th></th></tr></thead><tbody></tbody></table></div>
           </section>
         </div>
       </div>
