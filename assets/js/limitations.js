@@ -31,7 +31,7 @@
   const CLINICS = Object.keys(CANCERS);
   const GUARANTEE = /garantie|accord prealable|autorisation prealable|consultation prealable du medecin[- ]conseil/;
 
-  const state = { products: [], limits: [], rx: [], changes: [], meta: null, admin: false, uid: null, pick: {}, rxPick: {}, varPick: {}, cart: [] };
+  const state = { products: [], limits: [], rx: [], changes: [], meta: null, admin: false, uid: null, pick: {}, rxPick: {}, sitPick: {}, cart: [] };
 
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
   function el(tag, cls, txt) {
@@ -252,38 +252,55 @@
       wrap.append(el("p", "muted", "Aucun texte d'ordonnance validé pour cette substance."));
       return wrap;
     }
-    // Présentations (lignes produit) ; chacune peut avoir plusieurs posologies selon l'indication
-    const lines = [...new Set(tpls.map((x) => x.product_line))];
-    const line = lines.includes(state.rxPick[g.key]) ? state.rxPick[g.key] : lines[0];
+    // La dose dépend de la situation clinique (monothérapie, association, stade...) : on la choisit d'abord ;
+    // la présentation (dosage du comprimé, forme galénique) n'est demandée que s'il en reste plusieurs pour cette situation
+    const lim = limits.find((l) => key(l) === state.pick[g.key]);
+    const sits = [...new Set(tpls.map((x) => x.indication || ""))];
+    const doseOf = (v) => {
+      const lv = Array.isArray(v.dose_levels) && v.dose_levels[0] && v.dose_levels[0][1];
+      const m = /^S\.\s*(\d[\d.,]*\s*(?:mg|µg|g)(?:\/m²)?)/.exec(v.sig || "");
+      return lv || (m ? m[1] : "");
+    };
+    let sit = sits[0], choose = false;
+    if (sits.length > 1) {
+      // Jamais de choix par défaut silencieux : présélection seulement si un seul libellé correspond à la limitation ou au cancer
+      sit = state.sitPick[g.key];
+      if (!sits.includes(sit)) {
+        const m = sits.filter((s) => tpls.some((v) => (v.indication || "") === s && matchesIndication(v, lim, cancer)));
+        sit = m.length === 1 ? m[0] : null;
+      }
+      choose = sit === null;
+      const sel = el("select", "ls-rx-sel");
+      sel.append(new Option("Choisir la situation clinique", ""));
+      sits.forEach((s) => {
+        const d = doseOf(tpls.find((v) => (v.indication || "") === s));
+        const o = new Option((s || "Posologie standard") + (d ? " · " + d : ""), s || "__standard");
+        sel.append(o);
+      });
+      sel.value = choose ? "" : sit || "__standard";
+      sel.addEventListener("change", () => { state.sitPick[g.key] = sel.value === "__standard" ? "" : sel.value || null; render(); });
+      const lab = el("label", "ls-rx-label", "Situation clinique"); lab.append(sel); wrap.append(lab);
+      wrap.append(el("p", "ls-note ls-variant-note", "La posologie de cette substance dépend de la situation clinique : choisissez-la d'abord, la présentation en découle."));
+    } else if (sit) {
+      wrap.append(el("p", "ls-note ls-variant-note", "Situation : " + sit));
+    }
+    const cands = choose ? [] : tpls.filter((x) => (x.indication || "") === sit);
+    const lines = [...new Set(cands.map((x) => x.product_line))];
+    const pk = g.key + "|" + sit;
+    const line = choose ? "" : lines.includes(state.rxPick[pk]) ? state.rxPick[pk] : lines[0];
     if (lines.length > 1) {
       const sel = el("select", "ls-rx-sel");
       lines.forEach((l) => { const o = el("option", null, l); o.value = l; sel.append(o); });
       sel.value = line;
-      sel.addEventListener("change", () => { state.rxPick[g.key] = sel.value; render(); });
+      sel.addEventListener("change", () => { state.rxPick[pk] = sel.value; render(); });
       const lab = el("label", "ls-rx-label", "Présentation"); lab.append(sel); wrap.append(lab);
     }
-    const variants = tpls.filter((x) => x.product_line === line);
-    const lim = limits.find((l) => key(l) === state.pick[g.key]);
-    let t = variants[0], choose = false;
-    if (variants.length > 1) {
-      // La dose dépend de l'indication : jamais de choix par défaut silencieux
-      const vk = g.key + "|" + line;
-      t = variants.find((v) => v.id === state.varPick[vk]);
-      if (!t) { const m = variants.filter((v) => matchesIndication(v, lim, cancer)); if (m.length === 1) t = m[0]; }
-      choose = !t;
-      const sel = el("select", "ls-rx-sel");
-      sel.append(new Option("Choisir l'indication", ""));
-      variants.forEach((v) => sel.append(new Option(v.indication || "Posologie standard", String(v.id))));
-      sel.value = t ? String(t.id) : "";
-      sel.addEventListener("change", () => { state.varPick[vk] = sel.value ? Number(sel.value) : null; render(); });
-      const lab = el("label", "ls-rx-label", "Indication"); lab.append(sel); wrap.append(lab);
-      wrap.append(el("p", "ls-note ls-variant-note", "La posologie de cette substance varie selon l'indication."));
-    }
-    if (!choose && variants.length > 1 && lim && keywords(t).length && !matchesIndication(t, lim, null)) {
-      wrap.append(el("p", "ls-note ls-warn", "L'indication choisie ne correspond pas au texte de la limitation sélectionnée : vérifiez la dose."));
+    const t = choose ? null : cands.find((x) => x.product_line === line);
+    if (!choose && sits.length > 1 && lim && keywords(t).length && !matchesIndication(t, lim, null)) {
+      wrap.append(el("p", "ls-note ls-warn", "La situation choisie ne correspond pas au texte de la limitation sélectionnée : vérifiez la dose."));
     }
     const text = choose
-      ? [line, "[choisir l'indication pour afficher la posologie]"].join("\n")
+      ? "[choisir la situation clinique pour afficher la posologie]"
       : [line, t.sig].concat(lim ? [lim.ind_code ? `Code d'indication : ${lim.ind_code}` : `Limitation : ${lim.lim_code}`]
         : limits.length ? ["Code d'indication : [choisir la limitation ci-dessus]"] : []).join("\n");
     wrap.append(el("pre", "ls-rx-text", text));
@@ -294,15 +311,15 @@
     const missingCode = !lim && limits.length > 0;
     const inCart = !choose && state.cart.some((c) => c.id === t.id && c.text === text);
     const add = button(inCart ? "Dans le panier" : "Ajouter au panier", "btn btn-outline ug-copy", () => {
-      addToCart({ id: t.id, grp: g.key + "|" + line, label: line, indication: t.indication || "", text });
+      addToCart({ id: t.id, grp: g.key, label: line, indication: t.indication || "", text });
       add.textContent = "Dans le panier"; add.disabled = true;
     });
     add.disabled = missingCode || choose || inCart;
-    if (choose) add.title = "Choisissez d'abord l'indication";
+    if (choose) add.title = "Choisissez d'abord la situation clinique";
     else if (missingCode) add.title = "Choisissez d'abord la limitation";
     row.append(add);
     wrap.append(row);
-    if (choose) { wrap.append(el("p", "muted ls-note", "Choisissez l'indication pour copier l'ordonnance ou l'ajouter au panier.")); return wrap; }
+    if (choose) { wrap.append(el("p", "muted ls-note", "Choisissez la situation clinique pour copier l'ordonnance ou l'ajouter au panier.")); return wrap; }
     if (missingCode) wrap.append(el("p", "muted ls-note", "Choisissez la limitation pour ajouter l'ordonnance au panier."));
     const levels = Array.isArray(t.dose_levels) ? t.dose_levels : [];
     if (levels.length) {
