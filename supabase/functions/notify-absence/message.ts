@@ -117,3 +117,25 @@ ${extra.map((e) => `<p style="margin:0 0 8px">${esc(e)}</p>`).join("")}
   };
   return { subject: `Onconic · ${subject}`, text, html, push };
 }
+
+// E-mail à la gestion des absences : le formulaire PDF (déjà signé électroniquement) est en pièce jointe. Français seulement.
+export type FormMail = { owner: string; roleLabel: string; absences: { kind: Abs["kind"]; start_date: string; end_date: string; note: string | null }[]; signers: { name: string; at: string }[]; file: string };
+export function buildFormEmail(c: FormMail, stamp: (iso: string) => string) {
+  const lines = c.absences.map((a) => `${period(a.start_date, a.end_date)} · ${KIND.fr[a.kind]}${a.note ? ` (précision : ${a.note})` : ""}`);
+  const who = c.signers.map((s) => `${s.name} (${stamp(s.at)})`);
+  const congres = c.absences.some((a) => a.kind === "congres");
+  const subject = `Demande d'absence validée : ${c.owner}`;
+  const intro = `${c.owner} (${c.roleLabel}) : la demande d'absence ci-dessous est validée dans Onconic. Le formulaire pré-rempli est en pièce jointe (${c.file}).`;
+  const extra = [
+    who.length ? `Validation électronique : ${who.join(", ")}.` : "Validation électronique dans Onconic.",
+    ...(congres ? ["La demande contient un congrès ou une formation : le formulaire ad' hoc doit être joint séparément."] : []),
+    "Validation électronique simple (nom et horodatage), sans signature manuscrite ni tampon.",
+  ];
+  const text = [intro, "", ...lines.map((l) => `• ${l}`), "", ...extra, "", "Message automatique de The Hive Onconic."].join("\n");
+  const html = `<div style="font-family:Helvetica,Arial,sans-serif;color:#1A2A4A;font-size:15px;line-height:1.5;max-width:560px">
+<p style="font-size:18px;color:#001B4D;margin:0 0 12px">${esc(intro)}</p>
+<ul style="padding-left:18px;margin:0 0 12px">${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
+${extra.map((e) => `<p style="margin:0 0 8px">${esc(e)}</p>`).join("")}
+<p style="font-size:12px;color:#5A6478">Message automatique de The Hive Onconic.</p></div>`;
+  return { subject: `Onconic · ${subject}`, text, html };
+}

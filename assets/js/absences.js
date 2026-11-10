@@ -597,6 +597,31 @@
     await loadMine();
   }
 
+  // ----- Formulaire papier du département (PDF pré-rempli, signé électroniquement) -----
+  // Un formulaire couvre toutes les absences validées du même envoi (même membre, même date d'envoi).
+  async function downloadForm(a) {
+    const msg = $("ab-mine-msg");
+    const ids = state.mine.filter((x) => x.status === "approved" && x.user_id === a.user_id && x.submitted_at === a.submitted_at).map((x) => x.id);
+    say(msg, "Préparation du formulaire…");
+    const { data, error } = await sb.functions.invoke("notify-absence", { body: { action: "form", ids } });
+    if (error || !data || !data.pdf) {
+      let code = "";
+      try { code = (await error.context.json()).error; } catch (e) { /* message générique */ }
+      return say(msg, code === "no_form" ? "Aucun formulaire n'est prévu pour ce rôle." : code === "forbidden" ? "Accès refusé." : "Le formulaire n'a pas pu être généré. Réessayez dans un instant.", "error");
+    }
+    const bytes = Uint8Array.from(atob(data.pdf), (c) => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+    const link = document.createElement("a");
+    link.href = url; link.download = data.file; document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    say(msg, "Formulaire téléchargé.", "ok");
+  }
+  function formButton(a, own) {
+    if (a.status !== "approved" || !a.submitted_at) return null;
+    if (own && !["clinician", "cdc", "cadre"].includes(state.ctx.role)) return null;
+    return button("Télécharger le formulaire (PDF)", "btn btn-outline", () => downloadForm(a));
+  }
+
   function absenceCard(a, own) {
     const card = el("article", `card ab-item ab-item-${a.status}`);
     const head = el("div", "ab-item-head");
@@ -640,7 +665,11 @@
       }));
       card.append(del);
     }
-    if (!own) return card;
+    if (!own) {
+      const fb = formButton(a, false);
+      if (fb) { const row = el("div", "btn-row ab-actions"); row.append(fb); card.append(row); }
+      return card;
+    }
     const actions = el("div", "btn-row ab-actions");
     const swap = (node) => { actions.replaceWith(node); };
     if (a.status === "draft") {
@@ -694,6 +723,8 @@
         await afterChange();
       }));
     }
+    const fb = formButton(a, true);
+    if (fb) actions.append(fb);
     if (actions.children.length) card.append(actions);
     return card;
   }

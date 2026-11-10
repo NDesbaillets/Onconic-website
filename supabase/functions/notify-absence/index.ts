@@ -7,7 +7,8 @@
 import nodemailer from "npm:nodemailer@6.9.16";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import webpush from "npm:web-push@3.6.7";
-import { type Abs, buildEmail, type Kind, type Lang } from "./message.ts";
+import { type Abs, buildEmail, buildFormEmail, type Kind, type Lang } from "./message.ts";
+import { buildAbsenceForm, FILE_LABEL, type FormData, stamp } from "./form.ts";
 
 const SITE = "https://onconic.ch";
 const ORIGINS = [SITE, "https://www.onconic.ch"];
@@ -38,9 +39,53 @@ async function vapidKeys() {
   return row!;
 }
 
-type Row = { id: number; kind: Kind; recipient: string; absence_ids: number[]; payload: { owner?: string; by?: string; comment?: string; reminder?: boolean } };
+type Row = { id: number; kind: Kind | "form"; recipient: string | null; absence_ids: number[]; payload: { owner?: string; by?: string; comment?: string; reminder?: boolean } };
+
+const ROLE_LABEL: Record<string, string> = { clinician: "médecin assistant", cdc: "chef de clinique", cadre: "médecin cadre" };
+const slug = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "membre";
+
+// Formulaire PDF d'un envoi d'absences validées (données lues en base, jamais dans la requête)
+async function renderForm(ids: number[]) {
+  const { data: d } = await admin.rpc("absence_form_data", { p_ids: ids });
+  if (!d) return { error: "not_found" as const };
+  if (d.no_form) return { error: "no_form" as const };
+  let logo: Uint8Array | null = null;
+  try { const f = await admin.storage.from("absence-forms").download("logo.png"); if (f.data) logo = new Uint8Array(await f.data.arrayBuffer()); } catch (_) { /* logo facultatif */ }
+  const now = new Date().toISOString();
+  const form: FormData = {
+    role: d.role, owner: d.owner, clinics: d.clinics ?? [], requestedAt: d.requested_at ?? now, absences: d.absences, signers: d.signers ?? [],
+    generatedAt: now, ref: `OC-ABS-${ids.join("-")}`,
+  };
+  const bytes = await buildAbsenceForm(form, logo);
+  const file = `Demande_absence_${FILE_LABEL[d.role as keyof typeof FILE_LABEL]}_${slug(d.owner)}_${now.slice(0, 10).replaceAll("-", "")}.pdf`;
+  return { bytes, file, form };
+}
+
+// Envoi à la gestion des absences (adresse = secret ABSENCE_FORMS_TO, plusieurs adresses séparées par une virgule)
+async function sendForm(row: Row, transport: ReturnType<typeof nodemailer.createTransport> | null): Promise<string | null> {
+  const to = (Deno.env.get("ABSENCE_FORMS_TO") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!to.length) return "ABSENCE_FORMS_TO manquant";
+  if (!transport) return "SMTP_PASSWORD manquant";
+  const r = await renderForm(row.absence_ids);
+  if ("error" in r) return null; // absence supprimée ou rôle sans formulaire : rien à envoyer
+  const m = buildFormEmail({ owner: r.form.owner, roleLabel: ROLE_LABEL[r.form.role] ?? r.form.role, absences: r.form.absences, signers: r.form.signers, file: r.file }, stamp);
+  try {
+    await transport.sendMail({ from: `Onconic <${SMTP_USER}>`, to, subject: m.subject, text: m.text, html: m.html,
+      attachments: [{ filename: r.file, content: r.bytes, contentType: "application/pdf" }] });
+    return null;
+  } catch (e) {
+    return String((e as Error).message ?? e).slice(0, 250);
+  }
+}
+
+function b64(bytes: Uint8Array): string {
+  let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
 
 async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createTransport> | null): Promise<string | null> {
+  if (row.kind === "form") return await sendForm(row, transport);
+  if (!row.recipient) return null;
   const { data: absences } = await admin.from("absences")
     .select("id, user_id, kind, start_date, end_date, note, change_type, change_kind, change_note, change_start, change_end")
     .in("id", row.absence_ids).order("start_date");
@@ -97,6 +142,18 @@ Deno.serve(async (req) => {
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   const { data: auth } = await admin.auth.getUser(token);
   if (!auth?.user) return json(req, 401, { error: "unauthorized" });
+
+  // Téléchargement d'un formulaire par un membre autorisé (l'intéressé, ses validateurs, un admin) : { action: "form", ids: [..] }
+  const body = await req.json().catch(() => ({}));
+  if (body?.action === "form") {
+    const ids = Array.isArray(body.ids) ? body.ids.map(Number).filter((n: number) => Number.isInteger(n) && n > 0).slice(0, 50) : [];
+    if (!ids.length) return json(req, 400, { error: "ids" });
+    const { data: ok } = await admin.rpc("absence_form_access", { p_caller: auth.user.id, p_ids: ids });
+    if (!ok) return json(req, 403, { error: "forbidden" });
+    const r = await renderForm(ids);
+    if ("error" in r) return json(req, r.error === "no_form" ? 422 : 404, { error: r.error });
+    return json(req, 200, { file: r.file, pdf: b64(r.bytes) });
+  }
 
   await admin.rpc("absence_purge");
   const { data: rows, error } = await admin.rpc("absence_outbox_claim", { p_limit: 30 });
