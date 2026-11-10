@@ -1388,3 +1388,10 @@ details:not(.ug-card) > summary { padding-block: 10px; }
 .ab-ov-empty { padding: var(--space-3); }
 @media (max-width: 640px) { .ab-heat { min-width: 840px; } .ab-heat .ab-name { width: 84px; min-width: 84px; max-width: 84px; } }
 .ab-key.ab-we { background: #E8ECF3; color: var(--ink-600); }
+
+/* ---------- Pré-avis de la direction ---------- */
+.ab-opinions { background: var(--mist); border-left: 4px solid var(--navy-800); padding: 10px 14px; margin: var(--space-2) 0; }
+.ab-opinion { margin: 6px 0 0; max-width: none; }
+.ug-badge.ab-op-ok { background: var(--navy-800); color: var(--white); }
+.ab-op-choice { border: 0; padding: 0; margin: var(--space-2) 0; display: flex; flex-wrap: wrap; gap: 4px var(--space-3); align-items: center; }
+.ab-op-choice legend { font-weight: 500; color: var(--navy-800); padding: 0; margin-right: var(--space-3); float: left; }
