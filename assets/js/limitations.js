@@ -252,6 +252,8 @@
       wrap.append(el("p", "muted", "Aucun texte d'ordonnance validé pour cette substance."));
       return wrap;
     }
+    // Avertissement affiché avant la génération, sans validation à cocher ; hors du texte copié (copie et panier) : seul `text` est copié
+    wrap.append(el("p", "ls-disclaimer", "Suggestion de dosage fondée sur l'information professionnelle du Compendium. Le médecin reste responsable de la prescription : il tient compte de la situation clinique et du patient, et prescrit sous sa propre responsabilité."));
     // La dose dépend de la situation clinique (monothérapie, association, stade...) : on la choisit d'abord ;
     // la présentation (dosage du comprimé, forme galénique) n'est demandée que s'il en reste plusieurs pour cette situation
     const lim = limits.find((l) => key(l) === state.pick[g.key]);

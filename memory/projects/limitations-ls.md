@@ -38,3 +38,6 @@
 - Ordonnance per os : le sélecteur « Situation clinique » (libellé de l'indication, avec la dose) passe en premier ; la présentation (dosage du comprimé, forme) n'est demandée que s'il en reste plusieurs pour cette situation. Évite de choisir « 150 mg ou 200 mg » sans savoir qu'il s'agit d'association ou de monothérapie (abémaciclib, cabozantinib 40 ou 60 mg).
 - Présélection par mots-clés inchangée (limitation et type de cancer), mais jamais de choix par défaut silencieux. Le panier garde une ligne par substance.
 - Libellés des situations : champ « Indication » de l'éditeur admin (à rédiger clairement, ex. « En association à une hormonothérapie », « Monothérapie »).
+
+## Avertissement avant l'ordonnance (10.11.2026)
+- Bloc « Suggestion de dosage fondée sur le Compendium… le médecin reste responsable… sous sa propre responsabilité » affiché sous « Ordonnance (per os) », avant les sélecteurs. Aucune validation à cliquer. Il n'est jamais copié : seul le texte d'ordonnance l'est, ainsi que celui du panier.
