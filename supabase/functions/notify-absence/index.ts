@@ -39,7 +39,7 @@ async function vapidKeys() {
   return row!;
 }
 
-type Row = { id: number; kind: Kind | "form"; recipient: string | null; absence_ids: number[]; payload: { owner?: string; by?: string; comment?: string; reminder?: boolean } };
+type Row = { id: number; kind: Kind | "form"; recipient: string | null; absence_ids: number[]; payload: { owner?: string; by?: string; comment?: string; reminder?: boolean; action?: string } };
 
 const ROLE_LABEL: Record<string, string> = { clinician: "médecin assistant", cdc: "chef de clinique", cadre: "médecin cadre" };
 const slug = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "membre";
@@ -53,7 +53,7 @@ async function renderForm(ids: number[]) {
   try { const f = await admin.storage.from("absence-forms").download("logo.png"); if (f.data) logo = new Uint8Array(await f.data.arrayBuffer()); } catch (_) { /* logo facultatif */ }
   const now = new Date().toISOString();
   const form: FormData = {
-    role: d.role, owner: d.owner, clinics: d.clinics ?? [], requestedAt: d.requested_at ?? now, absences: d.absences, signers: d.signers ?? [],
+    role: d.role, owner: d.owner, clinics: d.clinics ?? [], requestedAt: d.requested_at ?? now, absences: d.absences, signers: d.signers ?? [], direction: d.direction ?? null,
     generatedAt: now, ref: `OC-ABS-${ids.join("-")}`,
   };
   const bytes = await buildAbsenceForm(form, logo);
@@ -68,7 +68,7 @@ async function sendForm(row: Row, transport: ReturnType<typeof nodemailer.create
   if (!transport) return "SMTP_PASSWORD manquant";
   const r = await renderForm(row.absence_ids);
   if ("error" in r) return null; // absence supprimée ou rôle sans formulaire : rien à envoyer
-  const m = buildFormEmail({ owner: r.form.owner, roleLabel: ROLE_LABEL[r.form.role] ?? r.form.role, absences: r.form.absences, signers: r.form.signers, file: r.file }, stamp);
+  const m = buildFormEmail({ owner: r.form.owner, roleLabel: ROLE_LABEL[r.form.role] ?? r.form.role, absences: r.form.absences, signers: r.form.signers, direction: r.form.direction, file: r.file }, stamp);
   try {
     await transport.sendMail({ from: `Onconic <${SMTP_USER}>`, to, subject: m.subject, text: m.text, html: m.html,
       attachments: [{ filename: r.file, content: r.bytes, contentType: "application/pdf" }] });
@@ -101,7 +101,7 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
   const approvers = await names((appr ?? []).filter((a) => a.decision === "approved").map((a) => a.validator_id));
 
   const msg = buildEmail({
-    lang, kind: row.kind, owner: row.payload.owner ?? (ownerName as string) ?? "Un membre", by: row.payload.by, comment: row.payload.comment, reminder: row.payload.reminder,
+    lang, kind: row.kind, owner: row.payload.owner ?? (ownerName as string) ?? "Un membre", by: row.payload.by, comment: row.payload.comment, reminder: row.payload.reminder, action: row.payload.action,
     absences: absences as unknown as Abs[], validators, approvers,
   });
 

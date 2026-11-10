@@ -23,7 +23,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Congrès** | App « Qui d'autre butine au congrès ? » |
 | **LS** | Liste des spécialités de l'OFSP (limitations, codes d'indication) |
 | **médecin plus** | Drapeau caché `profiles.med_plus` donnant accès aux Lettres médicales |
-| **rôles** | Trois rôles de médecins : clinician (**médecin assistant**), cdc (CDC = chef de clinique : médecin + gestion des fiches Key trials de ses cliniques), cadre (**médecin cadre** : exactement les droits d'un CDC, plus la validation des absences, s'il est coché « validateur des absences » et désigné pour une clinique par l'admin). Puis admin, assistant (assistante médicale), pharmacist ; « member » = en attente de validation. Les codes de rôle en base ne changent pas, seuls les libellés |
+| **rôles** | Trois rôles de médecins : clinician (**médecin assistant**), cdc (CDC = chef de clinique : médecin + gestion des fiches Key trials de ses cliniques), cadre (**médecin cadre** : exactement les droits d'un CDC, plus la validation des absences, s'il est coché « validateur des absences » et désigné pour une clinique par l'admin). Puis admin, direction (« Admin de direction » : gère les membres, le calendrier commun et les deux annuaires, vise les absences en 2e ligne, voir memory/projects/absences.md), assistant (assistante médicale), pharmacist ; « member » = en attente de validation. Les codes de rôle en base ne changent pas, seuls les libellés |
 | **pharmacist** | Droits médecin + assistante réunis, et administration de Lettres d'assurance, Limitations LS et Durée (`is_app_admin()`) |
 → Glossaire complet : memory/glossary.md
 

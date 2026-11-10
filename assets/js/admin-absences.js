@@ -67,7 +67,7 @@
         say(`${c.clinic} : ${chosen.size ? plur(chosen.size, "valideur désigné", "valideurs désignés") : "aucun valideur (les administrateurs décident)"}.`, "ok");
         note.hidden = chosen.size > 0;
       });
-      lab.append(cb, el("span", null, cadre.name));
+      lab.append(cb, el("span", null, cadre.name + (cadre.role === "direction" ? " (direction)" : "")));
       fs.append(lab);
     }
     root.append(fs);
@@ -163,7 +163,7 @@
     if (!data.session) return (location.href = "/fr/the-hive.html");
     $("logout").addEventListener("click", async () => { await sb.auth.signOut(); location.href = "/fr/"; });
     const { data: role } = await sb.rpc("current_role_name");
-    if (role !== "admin") return ($("ug-status").textContent = "Page réservée à l'administrateur.");
+    if (role !== "admin" && role !== "direction") return ($("ug-status").textContent = "Page réservée à l'administration.");
     try { await load(); } catch (e) { return ($("ug-status").textContent = "Chargement impossible : " + e.message); }
     $("ug-status").hidden = true;
     $("aa-tool").hidden = false;

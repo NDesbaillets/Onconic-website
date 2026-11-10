@@ -408,7 +408,7 @@
   }
   async function afterChange() {
     state.cache.clear();
-    await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending(), state.ctx.validates.length ? Promise.all([loadTodo(), loadRejected()]) : null]);
+    await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending(), (state.ctx.validates.length || state.isDir) ? Promise.all([loadTodo(), loadRejected()]) : null]);
   }
 
   // ----- Brouillons et popup d'envoi -----
@@ -547,7 +547,7 @@
     const out = el("p", "form-msg");
     out.setAttribute("role", "status");
     const actions = el("div", "btn-row");
-    const save = el("button", "btn", mode === "change" ? "Envoyer la demande de modification" : a.status === "rejected" ? "Renvoyer en validation" : "Enregistrer");
+    const save = el("button", "btn", mode === "change" ? "Envoyer la demande de modification" : mode === "direction" ? "Enregistrer (validée d'office)" : a.status === "rejected" ? "Renvoyer en validation" : "Enregistrer");
     save.type = "submit";
     actions.append(save, button("Annuler", "btn btn-outline", () => renderMine()));
     f.append(row, out, actions);
@@ -558,10 +558,13 @@
       const args = { p_kind: kind.value, p_note: note.value.trim(), p_start: start.value, p_end: end.value };
       const { data, error } = mode === "change"
         ? await sb.rpc("absence_request_change", Object.assign({ p_id: a.id, p_type: "modify" }, args))
-        : await sb.rpc("absence_update", Object.assign({ p_id: a.id }, args));
+        : mode === "direction"
+          ? await sb.rpc("absence_direction_update", Object.assign({ p_id: a.id }, args))
+          : await sb.rpc("absence_update", Object.assign({ p_id: a.id }, args));
       if (error) { save.disabled = false; return say(out, error.message, "error"); }
       state.mineWarn = warnBox(data.conflicts, "Attention : trop d'absences en même temps");
       say($("ab-mine-msg"), mode === "change" ? "Demande de modification envoyée aux validateurs : l'absence reste validée aux anciennes dates jusqu'à leur décision (tous doivent l'accepter)." : "Demande modifiée : elle repasse en brouillon, envoyez-la pour relancer la validation.", "ok");
+      if (mode === "direction") { say($("ab-mine-msg"), "Absence modifiée par la direction : le membre est prévenu.", "ok"); mailer(); }
       if (mode === "change") mailer();
       await afterChange();
     });
@@ -647,6 +650,9 @@
       d.append(approvalsBlock(rows));
       card.append(d);
     }
+    if (a.stage === 2 && (a.status === "requested" || (a.status === "approved" && a.change_type))) {
+      card.append(el("p", "ab-pending-change", "Validée par les validateurs de la clinique : en attente du visa de la direction."));
+    }
     if (a.status === "rejected" && a.decided_at) {
       const gone = new Date(new Date(a.decided_at).getTime() + 14 * 864e5);
       card.append(el("p", "muted ab-item-meta", `Cette demande refusée disparaîtra d'elle-même le ${fmtCH(iso(gone))}. Vous pouvez la supprimer dès maintenant.`));
@@ -666,8 +672,22 @@
       card.append(del);
     }
     if (!own) {
+      const row = el("div", "btn-row ab-actions");
       const fb = formButton(a, false);
-      if (fb) { const row = el("div", "btn-row ab-actions"); row.append(fb); card.append(row); }
+      if (fb) row.append(fb);
+      // La direction modifie ou annule au nom du membre (le membre est prévenu par e-mail)
+      if (state.isDir && state.who && (a.status === "approved" || a.status === "requested")) {
+        if (a.status === "approved") row.append(button("Modifier (direction)", "btn btn-outline", () => row.replaceWith(editForm(a, "direction"))));
+        row.append(button("Annuler cette absence (direction)", "btn btn-outline lt-danger", async () => {
+          if (!confirm(`Annuler l'absence de ${$("ab-who").selectedOptions[0].textContent} (${period(a.start_date, a.end_date)}) ? Le membre est prévenu par e-mail.`)) return;
+          const { error } = await sb.rpc("absence_direction_cancel", { p_id: a.id });
+          if (error) return say($("ab-mine-msg"), error.message, "error");
+          say($("ab-mine-msg"), "Absence annulée par la direction : le membre est prévenu.", "ok");
+          mailer();
+          await afterChange();
+        }));
+      }
+      if (row.children.length) card.append(row);
       return card;
     }
     const actions = el("div", "btn-row ab-actions");
@@ -807,6 +827,7 @@
       const isChange = !!a.change_type;
       head.append(el("strong", null, a.name), el("span", "ug-badge", (a.clinics || []).join(", ") || "Sans clinique"),
         el("span", "ug-badge ug-warn", isChange ? (a.change_type === "delete" ? "Suppression demandée" : "Modification demandée") : "Nouvelle demande"));
+      if (a.stage === 2) head.append(el("span", "ug-badge", "Visa de la direction"));
       card.append(head);
       const cur = `${KINDS[a.kind][0]} · ${period(a.start_date, a.end_date)} · ${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}`;
       card.append(el("p", null, isChange ? `Absence validée : ${cur}` : cur));
@@ -820,7 +841,11 @@
         d.open = true;
         d.append(el("summary", null, `Validation : ${approvalCount(prog)} sur ${prog.length}`), approvalsBlock(prog));
         card.append(d);
-        card.append(el("p", "muted ab-item-meta", "L'absence n'est validée que lorsque tous les validateurs concernés ont validé ; un seul refus suffit à la refuser."));
+        card.append(el("p", "muted ab-item-meta", a.stage === 2
+          ? "Les validateurs de la clinique ont validé : votre visa conclut la demande."
+          : "L'absence n'est validée que lorsque tous les validateurs concernés ont validé, puis visée par la direction ; un seul refus suffit à la refuser."));
+      } else if (a.stage === 2) {
+        card.append(el("p", "muted ab-item-meta", "Aucun validateur de clinique : votre visa conclut la demande."));
       }
       const w = warnBox(a.conflicts, "Attention : trop d'absences en même temps si vous validez");
       if (w) card.append(w);
@@ -835,12 +860,12 @@
         if (error) { b1.disabled = b2.disabled = false; return say(out, error.message, "error"); }
         mailer();
         say($("ab-todo-msg"), approve
-          ? (res === "requested" ? `${a.name} : votre validation est enregistrée ; il reste des validateurs à se prononcer.` : `${a.name} : accepté, l'usager est prévenu par e-mail.`)
+          ? (res === "requested" ? `${a.name} : votre validation est enregistrée ; il reste des validateurs ou le visa de la direction.` : `${a.name} : accepté, l'usager est prévenu par e-mail.`)
           : `${a.name} : refusé, l'usager est prévenu par e-mail.`, "ok");
         await afterChange();
       };
       const actions = el("div", "btn-row");
-      const yes = button(isChange ? "Accepter le changement" : "Valider", "btn", () => decide(true, yes, no));
+      const yes = button(isChange ? "Accepter le changement" : a.stage === 2 ? "Viser (valider)" : "Valider", "btn", () => decide(true, yes, no));
       const no = button(isChange ? "Refuser le changement" : "Refuser", "btn btn-outline", () => decide(false, yes, no));
       actions.append(yes, no);
       card.append(lab, out, actions);
@@ -992,8 +1017,40 @@
   }
 
   // ----- Onglets -----
+  // ----- Direction : absence saisie au nom d'un membre, validée d'office -----
+  function initDirection() {
+    const who = $("ab-dir-who");
+    who.replaceChildren();
+    const first = el("option", null, "Choisir un membre…"); first.value = ""; who.append(first);
+    state.people.filter((p) => !p.is_me || state.ctx.role === "admin").forEach((p) => {
+      const o = el("option", null, p.name + ((p.clinics || []).length ? " · " + p.clinics.join(", ") : "")); o.value = p.id; who.append(o);
+    });
+    const start = $("ab-dir-start"), end = $("ab-dir-end");
+    start.addEventListener("change", () => { if (!end.value || end.value < start.value) end.value = start.value; });
+    $("ab-dir-form").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const msg = $("ab-dir-msg"), warn = $("ab-dir-warn");
+      warn.replaceChildren();
+      if (!who.value) return say(msg, "Choisissez un membre.", "error");
+      if (!start.value || !end.value || end.value < start.value) return say(msg, "Vérifiez les dates.", "error");
+      const name = who.selectedOptions[0].textContent.split(" · ")[0];
+      if (!confirm(`Ajouter cette absence pour ${name}, validée d'office ? Le membre est prévenu et le formulaire part à la gestion des absences.`)) return;
+      const btn = ev.submitter || ev.target.querySelector("button[type=submit]");
+      btn.disabled = true;
+      const { data, error } = await sb.rpc("absence_direction_add", { p_user: who.value, p_kind: $("ab-dir-kind").value, p_note: $("ab-dir-note").value.trim(), p_start: start.value, p_end: end.value });
+      btn.disabled = false;
+      if (error) return say(msg, error.message, "error");
+      say(msg, `Absence enregistrée et validée pour ${name}.`, "ok");
+      const w = warnBox(data.conflicts, "Attention : trop d'absences en même temps");
+      if (w) warn.append(w);
+      $("ab-dir-note").value = ""; start.value = ""; end.value = "";
+      mailer();
+      await afterChange();
+    });
+  }
+
   function setTab(name) {
-    for (const t of ["plan", "mine", "todo"]) {
+    for (const t of ["plan", "mine", "todo", "dir"]) {
       const on = t === name;
       $("ab-t-" + t).setAttribute("aria-selected", String(on));
       $("ab-p-" + t).hidden = !on;
@@ -1012,6 +1069,7 @@
     const { data: ctx, error } = await sb.rpc("absence_context");
     if (error || !ctx) { $("ug-status").textContent = "Cet espace est réservé aux membres validés de The Hive."; return; }
     state.ctx = ctx;
+    state.isDir = ctx.role === "direction" || ctx.role === "admin";
     ctx.validates = ctx.validates || [];
     ctx.clinics = ctx.clinics || [];
     loadPrefs();
@@ -1093,17 +1151,22 @@
       subBtn.setAttribute("aria-expanded", String(open));
       if (open && !subBox.dataset.ready) { subBox.dataset.ready = "1"; subscribeBody(subBox); }
     });
-    if (ctx.validates.length) {
+    if (state.isDir) {
+      $("ab-t-dir").hidden = false;
+      $("ab-t-dir").addEventListener("click", () => setTab("dir"));
+      initDirection();
+    }
+    if (ctx.validates.length || state.isDir) {
       $("ab-t-todo").hidden = false;
       const who = $("ab-who");
       const me = el("option", null, "Moi"); me.value = ""; who.append(me);
-      state.people.filter((p) => !p.is_me && (ctx.role === "admin" || sharesClinic(p, ctx.validates))).forEach((p) => { const o = el("option", null, p.name); o.value = p.id; who.append(o); });
+      state.people.filter((p) => !p.is_me && (state.isDir || sharesClinic(p, ctx.validates))).forEach((p) => { const o = el("option", null, p.name); o.value = p.id; who.append(o); });
       who.addEventListener("change", () => { state.who = who.value; loadMine(); });
       $("ab-who-wrap").hidden = false;
       loadRejected();
     }
     await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending()]);
-    if (location.hash === "#todo" && ctx.validates.length) setTab("todo");
+    if (location.hash === "#todo" && (ctx.validates.length || state.isDir)) setTab("todo");
     else if (location.hash === "#mine") setTab("mine");
   })();
 })();

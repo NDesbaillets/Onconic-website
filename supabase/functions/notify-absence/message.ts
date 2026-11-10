@@ -1,6 +1,6 @@
 // Messages des absences (e-mail et push). Fonctions pures, testables hors Supabase.
 export type Lang = "fr" | "en";
-export type Kind = "to_validate" | "to_validate_change" | "approved" | "rejected" | "change_approved" | "change_rejected";
+export type Kind = "to_validate" | "to_validate_change" | "approved" | "rejected" | "change_approved" | "change_rejected" | "to_direction" | "direction_change";
 
 export type Abs = {
   id: number; kind: "vacances" | "congres" | "autre"; start_date: string; end_date: string; note: string | null;
@@ -8,7 +8,7 @@ export type Abs = {
   change_start: string | null; change_end: string | null;
 };
 export type Ctx = {
-  lang: Lang; kind: Kind; owner: string; by?: string | null; comment?: string | null; reminder?: boolean;
+  lang: Lang; kind: Kind; owner: string; by?: string | null; comment?: string | null; reminder?: boolean; action?: string | null;
   absences: Abs[]; validators: string[]; approvers: string[];
 };
 
@@ -26,6 +26,12 @@ const T = {
   fr: {
     toValidate: (who: string, n: number) => `${who} demande ${n > 1 ? `${n} absences` : "une absence"} à valider`,
     toValidateChange: (who: string, del: boolean) => `${who} demande ${del ? "la suppression" : "la modification"} d'une absence validée`,
+    toDirection: (who: string, n: number) => `${who} : ${n > 1 ? `${n} absences validées` : "absence validée"} par les cadres, visa de la direction requis`,
+    directionNeed: "Les validateurs de la clinique ont validé. Le visa de la direction conclut la demande.",
+    dirAdded: (by: string) => `${by} a ajouté une absence à votre nom`,
+    dirEdited: (by: string) => `${by} a modifié votre absence`,
+    dirCancelled: (by: string) => `${by} a annulé votre absence`,
+    dirNote: "La direction l'a enregistrée ou modifiée directement : elle est validée.",
     approved: "Votre absence est validée",
     approvedMany: "Votre demande d'absence est validée",
     rejected: "Votre demande d'absence a été refusée",
@@ -48,6 +54,12 @@ const T = {
   en: {
     toValidate: (who: string, n: number) => `${who} requests ${n > 1 ? `${n} absences` : "an absence"} for approval`,
     toValidateChange: (who: string, del: boolean) => `${who} asks to ${del ? "delete" : "change"} an approved absence`,
+    toDirection: (who: string, n: number) => `${who}: ${n > 1 ? `${n} absences approved` : "absence approved"} by the clinic validators, management sign-off needed`,
+    directionNeed: "The clinic validators approved. The management sign-off completes the request.",
+    dirAdded: (by: string) => `${by} added an absence in your name`,
+    dirEdited: (by: string) => `${by} changed your absence`,
+    dirCancelled: (by: string) => `${by} cancelled your absence`,
+    dirNote: "Management entered or changed it directly: it is approved.",
     approved: "Your absence is approved",
     approvedMany: "Your absence request is approved",
     rejected: "Your absence request was declined",
@@ -83,7 +95,7 @@ function line(l: Lang, a: Abs, withChange: boolean): string {
 export function buildEmail(c: Ctx) {
   const t = T[c.lang] ?? T.fr;
   const lang = c.lang === "en" ? "en" : "fr";
-  const toValidator = c.kind === "to_validate" || c.kind === "to_validate_change";
+  const toValidator = c.kind === "to_validate" || c.kind === "to_validate_change" || c.kind === "to_direction";
   const url = `${SITE}/app/absences.html#${toValidator ? "todo" : "mine"}`;
   const withChange = c.kind === "to_validate_change";
   const lines = c.absences.map((a) => line(lang, a, withChange));
@@ -94,6 +106,13 @@ export function buildEmail(c: Ctx) {
   switch (c.kind) {
     case "to_validate": subject = t.toValidate(c.owner, c.absences.length); extra.push(t.needAll(c.validators)); break;
     case "to_validate_change": subject = t.toValidateChange(c.owner, del); extra.push(t.needAll(c.validators)); break;
+    case "to_direction": subject = t.toDirection(c.owner, c.absences.length); extra.push(t.directionNeed); break;
+    case "direction_change": {
+      const by = c.by ?? "—";
+      subject = c.action === "cancelled" ? t.dirCancelled(by) : c.action === "edited" ? t.dirEdited(by) : t.dirAdded(by);
+      if (c.action !== "cancelled") extra.push(t.dirNote);
+      break;
+    }
     case "approved": subject = c.absences.length > 1 ? t.approvedMany : t.approved; extra.push(t.approvedBy(c.approvers)); break;
     case "rejected": subject = t.rejected; extra.push(t.rejectedBy(c.by ?? "—")); if (c.comment) extra.push(t.comment(c.comment)); extra.push(t.delHint); break;
     case "change_approved": subject = t.changeApproved; extra.push(t.approvedBy(c.approvers)); break;
@@ -119,15 +138,16 @@ ${extra.map((e) => `<p style="margin:0 0 8px">${esc(e)}</p>`).join("")}
 }
 
 // E-mail à la gestion des absences : le formulaire PDF (déjà signé électroniquement) est en pièce jointe. Français seulement.
-export type FormMail = { owner: string; roleLabel: string; absences: { kind: Abs["kind"]; start_date: string; end_date: string; note: string | null }[]; signers: { name: string; at: string }[]; file: string };
+export type FormMail = { owner: string; roleLabel: string; absences: { kind: Abs["kind"]; start_date: string; end_date: string; note: string | null }[]; signers: { name: string; at: string }[]; direction?: { name: string; at: string } | null; file: string };
 export function buildFormEmail(c: FormMail, stamp: (iso: string) => string) {
   const lines = c.absences.map((a) => `${period(a.start_date, a.end_date)} · ${KIND.fr[a.kind]}${a.note ? ` (précision : ${a.note})` : ""}`);
   const who = c.signers.map((s) => `${s.name} (${stamp(s.at)})`);
+  const visa = c.direction ? ` Visa de la direction : ${c.direction.name} (${stamp(c.direction.at)}).` : "";
   const congres = c.absences.some((a) => a.kind === "congres");
   const subject = `Demande d'absence validée : ${c.owner}`;
   const intro = `${c.owner} (${c.roleLabel}) : la demande d'absence ci-dessous est validée dans Onconic. Le formulaire pré-rempli est en pièce jointe (${c.file}).`;
   const extra = [
-    who.length ? `Validation électronique : ${who.join(", ")}.` : "Validation électronique dans Onconic.",
+    (who.length ? `Validation électronique : ${who.join(", ")}.` : "Validation électronique dans Onconic.") + visa,
     ...(congres ? ["La demande contient un congrès ou une formation : le formulaire ad' hoc doit être joint séparément."] : []),
     "Validation électronique simple (nom et horodatage), sans signature manuscrite ni tampon.",
   ];

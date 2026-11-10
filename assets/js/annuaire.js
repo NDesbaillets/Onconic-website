@@ -416,7 +416,7 @@
     $("an-form").addEventListener("submit", save);
     $("an-form").elements.name.addEventListener("input", similar);
     $("an-cancel").addEventListener("click", () => $("an-dialog").close());
-    if (state.role === "admin" || state.role === "pharmacist") setupAdmin();
+    if (state.role === "admin" || state.role === "pharmacist" || state.role === "direction") setupAdmin();
     render();
     const id = +new URLSearchParams(location.search).get("p");
     if (id) { const d = document.getElementById("pr-" + id); if (d) { d.open = true; d.scrollIntoView({ block: "center" }); } }

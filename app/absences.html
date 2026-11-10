@@ -77,6 +77,7 @@
             <button class="ab-tab" id="ab-t-plan" role="tab" aria-selected="true" aria-controls="ab-p-plan" type="button">Planning</button>
             <button class="ab-tab" id="ab-t-mine" role="tab" aria-selected="false" aria-controls="ab-p-mine" type="button">Mes absences</button>
             <button class="ab-tab" id="ab-t-todo" role="tab" aria-selected="false" aria-controls="ab-p-todo" type="button" hidden>À valider <span class="ab-count" id="ab-todo-n"></span></button>
+            <button class="ab-tab" id="ab-t-dir" role="tab" aria-selected="false" aria-controls="ab-p-dir" type="button" hidden>Direction</button>
           </div>
 
           <section id="ab-p-plan" role="tabpanel" aria-labelledby="ab-t-plan">
@@ -169,6 +170,24 @@
               <p class="muted">Vous pouvez les supprimer ; elles disparaissent d'elles-mêmes 14 jours après le refus.</p>
               <div id="ab-rej-list" class="ab-list"></div>
             </div>
+          </section>
+          <section id="ab-p-dir" role="tabpanel" aria-labelledby="ab-t-dir" hidden>
+            <h2>Absence au nom d'un membre</h2>
+            <p class="muted">Saisie par la direction : l'absence est validée d'office, le membre est prévenu par e-mail et le formulaire part à la gestion des absences. Pour modifier ou annuler une absence validée, choisissez le membre dans « Résumé de » (onglet Mes absences) : les boutons apparaissent sur chaque absence.</p>
+            <form class="card ab-new" id="ab-dir-form" novalidate>
+              <div class="ab-fields">
+                <label>Membre <select id="ab-dir-who" required></select></label>
+                <label>Motif
+                  <select id="ab-dir-kind"><option value="vacances">Vacances</option><option value="congres">Congrès</option><option value="autre">Autre</option></select>
+                </label>
+                <label class="ab-note">Précision <input id="ab-dir-note" type="text" maxlength="200" autocomplete="off"></label>
+                <label>Du <input id="ab-dir-start" type="date" required></label>
+                <label>Au (inclus) <input id="ab-dir-end" type="date" required></label>
+                <button class="btn" type="submit">Ajouter, validée d'office</button>
+              </div>
+              <p class="form-msg" id="ab-dir-msg" role="status" aria-live="polite"></p>
+              <div id="ab-dir-warn" role="alert"></div>
+            </form>
           </section>
         </div>
       </div>

@@ -742,7 +742,7 @@
     }
     f.elements.to_confirm.checked = !!src.to_confirm;
     // Congrès important : réservé à l'admin (une nouvelle édition ne reprend pas le signalement)
-    $("cg-abs-flag").hidden = state.role !== "admin";
+    $("cg-abs-flag").hidden = state.role !== "admin" && state.role !== "direction";
     f.elements.in_absence_calendar.checked = !!(e && e.in_absence_calendar);
     const box = $("cg-clinics");
     box.querySelectorAll("label").forEach((l) => l.remove());
@@ -795,7 +795,7 @@
       abstract_deadline: v("abstract_deadline"), early_deadline: v("early_deadline"), whatsapp_url: v("whatsapp_url"),
       to_confirm: f.elements.to_confirm.checked, clinics: [...f.querySelectorAll('input[name="clinics"]:checked')].map((i) => i.value)
     };
-    if (state.role === "admin") row.in_absence_calendar = f.elements.in_absence_calendar.checked;
+    if (state.role === "admin" || state.role === "direction") row.in_absence_calendar = f.elements.in_absence_calendar.checked;
     const err = (t) => { msg.className = "form-msg error"; msg.textContent = t; };
     if (!row.title || row.title.length < 3) return err("Le titre est obligatoire.");
     if (!row.start_date) return err("La date de début est obligatoire.");

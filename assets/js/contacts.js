@@ -447,7 +447,7 @@
     $("logout").addEventListener("click", async () => { await sb.auth.signOut(); location.href = "/fr/"; });
     const { data: profile } = await sb.from("profiles").select("role").eq("id", data.session.user.id).single();
     state.role = profile ? profile.role : "member";
-    state.admin = state.role === "admin";
+    state.admin = state.role === "admin" || state.role === "direction";
     state.me = { id: data.session.user.id };
     const { data: canUse } = await sb.rpc("has_tool", { p_tool: "contacts" });
     if (state.role !== "admin" && canUse !== true) {
@@ -465,7 +465,7 @@
     $("an-form").elements.first_name.addEventListener("input", similar);
     $("an-form").elements.last_name.addEventListener("input", similar);
     $("an-cancel").addEventListener("click", () => $("an-dialog").close());
-    if (state.role === "admin" || state.role === "pharmacist") setupAdmin();
+    if (state.role === "admin" || state.role === "pharmacist" || state.role === "direction") setupAdmin();
     render();
     const id = +new URLSearchParams(location.search).get("c");
     if (id) { const ent = state.entOf.get(id); const d = ent && document.getElementById("ct-" + ent.id); if (d) { d.open = true; d.scrollIntoView({ block: "center" }); } }
