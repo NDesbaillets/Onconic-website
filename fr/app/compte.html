@@ -21,7 +21,7 @@
   <script src="/assets/js/site.js?v=20261109a" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/account.js?v=20261110a" defer></script>
+  <script src="/assets/js/account.js?v=20261110b" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -97,6 +97,15 @@
             <p class="form-msg" id="clinics-msg" role="status" aria-live="polite"></p>
           </form>
           <div id="clinics-changes"></div>
+        </div>
+
+        <div class="card account-consent" id="absvis" hidden>
+          <h2>Visibilité dans le planning des absences</h2>
+          <p class="muted">Les collègues de vos cliniques se voient dans le planning des absences. En tant que médecin cadre, vous pouvez choisir de ne pas y figurer : vos validateurs et la direction vous voient toujours, les autres usagers ne vous voient plus.</p>
+          <form class="form" id="absvis-form" novalidate>
+            <label class="cg-check"><input type="checkbox" name="visible"> Apparaître dans le planning des absences de ma clinique</label>
+            <p class="form-msg" id="absvis-msg" role="status" aria-live="polite"></p>
+          </form>
         </div>
 
         <div class="card account-consent" id="ruche">
