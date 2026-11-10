@@ -126,8 +126,7 @@ begin
   return new;
 end;
 $$;
-drop trigger if exists events_absence_flag_guard on public.events;
-create trigger events_absence_flag_guard before insert or update on public.events
+create or replace trigger events_absence_flag_guard before insert or update on public.events
   for each row execute function public.events_absence_flag_guard();
 
 -- Agenda commun lu par le planning : entrées saisies ou importées, plus les congrès signalés (id négatif = événement)
