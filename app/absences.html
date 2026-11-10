@@ -15,11 +15,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261110e">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/absences.js?v=20261110e" defer></script>
+  <script src="/assets/js/absences.js?v=20261111a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -193,6 +193,12 @@
             <p class="muted">Demandes d'absence et demandes de modification ou de suppression des collaborateurs dont vous validez les absences.</p>
             <p class="form-msg" id="ab-todo-msg" role="status" aria-live="polite"></p>
             <div id="ab-todo-list" class="ab-list"></div>
+            <div id="ab-op-wrap" hidden>
+              <h3 class="ab-sub-title">Pré-avis de la direction (facultatif)</h3>
+              <p class="muted">Demandes en cours chez les validateurs de clinique. Votre pré-avis, favorable ou non, avec un commentaire, s'affiche avec la demande chez les validateurs comme aide à la décision. Il ne bloque rien : vous visez la demande ensuite, dans la liste ci-dessus, une fois les validateurs passés.</p>
+              <p class="form-msg" id="ab-op-msg" role="status" aria-live="polite"></p>
+              <div id="ab-op-list" class="ab-list"></div>
+            </div>
             <div id="ab-rej-wrap" hidden>
               <h3 class="ab-sub-title">Demandes refusées</h3>
               <p class="muted">Vous pouvez les supprimer ; elles disparaissent d'elles-mêmes 14 jours après le refus.</p>

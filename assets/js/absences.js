@@ -1141,6 +1141,89 @@
       change_start: a.change_start && String(a.change_start).slice(0, 10), change_end: a.change_end && String(a.change_end).slice(0, 10)
     }));
     renderTodo();
+    if (state.isDir) loadOpinions();
+  }
+
+  // Pré-avis de la direction : affichage chez les validateurs, saisie pour la direction (facultatif, non bloquant)
+  const OPINION = { favorable: "Favorable", defavorable: "Défavorable" };
+  function opinionsBlock(list, title) {
+    if (!list || !list.length) return null;
+    const box = el("div", "ab-opinions");
+    box.append(el("strong", null, title || "Pré-avis de la direction"));
+    list.forEach((o) => {
+      const p = el("p", "ab-opinion");
+      p.append(el("span", "ug-badge " + (o.opinion === "favorable" ? "ab-op-ok" : "ug-warn"), OPINION[o.opinion] || o.opinion),
+        document.createTextNode(` ${o.name}` + (o.at ? ` · ${fmtCH(o.at)}` : "") + (o.comment ? ` : « ${o.comment} »` : "")));
+      box.append(p);
+    });
+    return box;
+  }
+  async function loadOpinions() {
+    const { data, error } = await sb.rpc("absence_opinion_todo");
+    if (error) return;
+    const rows = (data || []).map((a) => Object.assign(a, {
+      start_date: String(a.start_date).slice(0, 10), end_date: String(a.end_date).slice(0, 10),
+      change_start: a.change_start && String(a.change_start).slice(0, 10), change_end: a.change_end && String(a.change_end).slice(0, 10)
+    }));
+    $("ab-op-wrap").hidden = false;
+    const box = $("ab-op-list");
+    box.replaceChildren();
+    if (!rows.length) { box.append(el("p", "muted", "Aucune demande en cours chez les validateurs de clinique.")); return; }
+    for (const a of rows) {
+      const card = el("article", "card ab-item ab-item-requested");
+      const head = el("div", "ab-item-head");
+      const isChange = !!a.change_type;
+      head.append(el("strong", null, a.name), el("span", "ug-badge", (a.clinics || []).join(", ") || "Sans clinique"),
+        el("span", "ug-badge ug-warn", isChange ? (a.change_type === "delete" ? "Suppression demandée" : "Modification demandée") : "Nouvelle demande"));
+      if (a.my_opinion) head.append(el("span", "ug-badge ab-op-ok", "Votre pré-avis : " + OPINION[a.my_opinion]));
+      card.append(head);
+      const cur = `${KINDS[a.kind][0]} · ${period(a.start_date, a.end_date)} · ${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}`;
+      card.append(el("p", null, isChange ? `Absence validée : ${cur}` : cur));
+      if (a.note) card.append(el("p", "muted", "Précision : " + a.note));
+      if (a.change_type === "modify") card.append(el("p", null, `Nouvelle période demandée : ${KINDS[a.change_kind][0]} · ${period(a.change_start, a.change_end)}${a.change_note ? " · " + a.change_note : ""}`));
+      const prog = a.progress || [];
+      if (prog.length) { const d = el("details", "ab-progress"); d.append(el("summary", null, `Validation par la clinique : ${approvalCount(prog)} sur ${prog.length}`), approvalsBlock(prog)); card.append(d); }
+      const w = warnBox(a.conflicts, "Attention : trop d'absences en même temps si la demande est validée");
+      if (w) card.append(w);
+      const others = opinionsBlock(a.opinions, "Autres pré-avis de la direction");
+      if (others) card.append(others);
+      const fs = el("fieldset", "ab-op-choice");
+      fs.append(el("legend", null, "Votre pré-avis"));
+      const radios = {};
+      for (const [v, label] of [["favorable", "Favorable"], ["defavorable", "Défavorable"]]) {
+        const lab = el("label", "cg-check");
+        const r = el("input"); r.type = "radio"; r.name = "op-" + a.id; r.value = v; r.checked = a.my_opinion === v;
+        radios[v] = r;
+        lab.append(r, " " + label);
+        fs.append(lab);
+      }
+      const comment = el("input"); comment.type = "text"; comment.maxLength = 500; comment.value = a.my_comment || "";
+      comment.placeholder = "Commentaire pour les validateurs (obligatoire si défavorable)";
+      const lab = el("label", "ab-comment", "Commentaire");
+      lab.append(comment);
+      const out = el("p", "form-msg"); out.setAttribute("role", "status");
+      const save = button(a.my_opinion ? "Mettre à jour mon pré-avis" : "Enregistrer mon pré-avis", "btn", async () => {
+        const choice = radios.favorable.checked ? "favorable" : radios.defavorable.checked ? "defavorable" : null;
+        if (!choice) return say(out, "Choisissez favorable ou défavorable.", "error");
+        if (choice === "defavorable" && comment.value.trim().length < 3) { comment.focus(); return say(out, "Un pré-avis défavorable demande un commentaire.", "error"); }
+        save.disabled = true;
+        const { error: e2 } = await sb.rpc("absence_opinion_set", { p_id: a.id, p_opinion: choice, p_comment: comment.value.trim() });
+        save.disabled = false;
+        if (e2) return say(out, e2.message, "error");
+        say($("ab-op-msg"), `${a.name} : pré-avis enregistré, il s'affiche chez les validateurs.`, "ok");
+        await loadOpinions();
+      });
+      const actions = el("div", "btn-row");
+      actions.append(save);
+      if (a.my_opinion) actions.append(button("Retirer mon pré-avis", "btn btn-outline", async () => {
+        const { error: e2 } = await sb.rpc("absence_opinion_set", { p_id: a.id, p_opinion: null, p_comment: null });
+        if (e2) return say(out, e2.message, "error");
+        say($("ab-op-msg"), `${a.name} : pré-avis retiré.`, "ok");
+        await loadOpinions();
+      }));
+      card.append(fs, lab, out, actions);
+      box.append(card);
+    }
   }
   async function loadRejected() {
     const { data, error } = await sb.rpc("absence_rejected_to_manage");
@@ -1198,6 +1281,8 @@
       } else if (a.stage === 2) {
         card.append(el("p", "muted ab-item-meta", "Aucun validateur de clinique : votre visa conclut la demande."));
       }
+      const ops = opinionsBlock(a.opinions);
+      if (ops) card.append(ops);
       const w = warnBox(a.conflicts, "Attention : trop d'absences en même temps si vous validez");
       if (w) card.append(w);
       const wantKind = a.change_type === "modify" ? a.change_kind : a.kind, wantStart = a.change_type === "modify" ? a.change_start : a.start_date, wantEnd = a.change_type === "modify" ? a.change_end : a.end_date;

@@ -1,6 +1,6 @@
 // Messages des absences (e-mail et push). Fonctions pures, testables hors Supabase.
 export type Lang = "fr" | "en";
-export type Kind = "to_validate" | "to_validate_change" | "approved" | "rejected" | "change_approved" | "change_rejected" | "to_direction" | "direction_change";
+export type Kind = "to_validate" | "to_validate_change" | "approved" | "rejected" | "change_approved" | "change_rejected" | "to_direction" | "direction_change" | "to_opinion";
 
 export type Abs = {
   id: number; kind: "vacances" | "congres" | "autre"; start_date: string; end_date: string; note: string | null;
@@ -28,6 +28,9 @@ const T = {
     toValidateChange: (who: string, del: boolean) => `${who} demande ${del ? "la suppression" : "la modification"} d'une absence validée`,
     toDirection: (who: string, n: number) => `${who} : ${n > 1 ? `${n} absences validées` : "absence validée"} par les cadres, visa de la direction requis`,
     directionNeed: "Les validateurs de la clinique ont validé. Le visa de la direction conclut la demande.",
+    toOpinion: (who: string, n: number) => `${who} demande ${n > 1 ? `${n} absences` : "une absence"} : pré-avis de la direction possible`,
+    toOpinionChange: (who: string, del: boolean) => `${who} demande ${del ? "la suppression" : "la modification"} d'une absence validée : pré-avis de la direction possible`,
+    opinionNeed: "Étape facultative, sans effet bloquant : votre pré-avis (favorable ou non, avec un commentaire) s'affiche avec la demande chez les validateurs de la clinique, comme aide à la décision. Vous viserez ensuite la demande une fois les validateurs passés.",
     dirAdded: (by: string) => `${by} a ajouté une absence à votre nom`,
     dirEdited: (by: string) => `${by} a modifié votre absence`,
     dirCancelled: (by: string) => `${by} a annulé votre absence`,
@@ -56,6 +59,9 @@ const T = {
     toValidateChange: (who: string, del: boolean) => `${who} asks to ${del ? "delete" : "change"} an approved absence`,
     toDirection: (who: string, n: number) => `${who}: ${n > 1 ? `${n} absences approved` : "absence approved"} by the clinic validators, management sign-off needed`,
     directionNeed: "The clinic validators approved. The management sign-off completes the request.",
+    toOpinion: (who: string, n: number) => `${who} requests ${n > 1 ? `${n} absences` : "an absence"}: management pre-opinion possible`,
+    toOpinionChange: (who: string, del: boolean) => `${who} asks to ${del ? "delete" : "change"} an approved absence: management pre-opinion possible`,
+    opinionNeed: "Optional, non-blocking step: your pre-opinion (favourable or not, with a comment) is shown with the request to the clinic validators as decision support. You will give the final sign-off once the validators have decided.",
     dirAdded: (by: string) => `${by} added an absence in your name`,
     dirEdited: (by: string) => `${by} changed your absence`,
     dirCancelled: (by: string) => `${by} cancelled your absence`,
@@ -95,9 +101,9 @@ function line(l: Lang, a: Abs, withChange: boolean): string {
 export function buildEmail(c: Ctx) {
   const t = T[c.lang] ?? T.fr;
   const lang = c.lang === "en" ? "en" : "fr";
-  const toValidator = c.kind === "to_validate" || c.kind === "to_validate_change" || c.kind === "to_direction";
+  const toValidator = c.kind === "to_validate" || c.kind === "to_validate_change" || c.kind === "to_direction" || c.kind === "to_opinion";
   const url = `${SITE}/app/absences.html#${toValidator ? "todo" : "mine"}`;
-  const withChange = c.kind === "to_validate_change";
+  const withChange = c.kind === "to_validate_change" || (c.kind === "to_opinion" && c.absences.some((a) => !!a.change_type));
   const lines = c.absences.map((a) => line(lang, a, withChange));
   const del = c.absences[0]?.change_type === "delete";
 
@@ -106,6 +112,7 @@ export function buildEmail(c: Ctx) {
   switch (c.kind) {
     case "to_validate": subject = t.toValidate(c.owner, c.absences.length); extra.push(t.needAll(c.validators)); break;
     case "to_validate_change": subject = t.toValidateChange(c.owner, del); extra.push(t.needAll(c.validators)); break;
+    case "to_opinion": subject = c.absences.some((a) => !!a.change_type) ? t.toOpinionChange(c.owner, c.absences[0]?.change_type === "delete") : t.toOpinion(c.owner, c.absences.length); extra.push(t.opinionNeed); break;
     case "to_direction": subject = t.toDirection(c.owner, c.absences.length); extra.push(t.directionNeed); break;
     case "direction_change": {
       const by = c.by ?? "—";
