@@ -11,11 +11,16 @@ Dépendances : `pdfplumber`, `numpy`, `Pillow` (déjà présents dans l'environn
 1. **PDF depuis Zotero.** Utilisateur `22512740`, collection `KeyTrials-queue` (clé `XTGEQGYX`).
    La clé API est injectée par le proxy de l'environnement : aucun en-tête d'authentification à ajouter.
    Chaque article porte le tag `KT:<nom de l'étude>` et son PMID dans le champ Extra (`PMID: …`).
+   **Ne pas lister la collection à la main** : elle compte plus de 370 articles (près de 750 entrées avec
+   les pièces jointes), un appel `limit=100` n'en voit qu'une fraction (cause de fiches faites sur abstract
+   alors que le PDF existait, nuit du 10.11.2026). Utiliser le script, qui pagine tout et cherche par tag ET par PMID :
    ```
-   curl -sS -H 'Zotero-API-Version: 3' 'https://api.zotero.org/users/22512740/collections/XTGEQGYX/items?limit=100'
-   curl -sS -L -o f.pdf 'https://api.zotero.org/users/22512740/items/<clé de la pièce jointe PDF>/file'
-   pdftotext -layout f.pdf f.txt        # texte intégral : méthodes, doses, tableaux, tolérance
+   python3 tools/zotero/zotero_pdfs.py --out DOSSIER_NEUF_HORS_DEPOT 'MARIPOSA' 'CheckMate 816' 36108662
+   pdftotext -layout DOSSIER_NEUF_HORS_DEPOT/<PMID>.pdf f.txt   # texte intégral : méthodes, doses, tableaux, tolérance
    ```
+   Sortie `OK` (PDF téléchargé) ou `ABSENT` (aucune entrée, ou entrées sans PDF). Ne jamais conclure « pas dans Zotero »
+   sans avoir lancé ce script ; ne jamais recréer un article déjà présent sans PDF (doublon).
+
 2. **Repérer les panneaux** : `python3 tools/km/kmextract.py probe f.pdf` affiche, pour chaque tracé
    coloré, la page, le panneau, la médiane et la survie à 12, 24, 36 et 60 mois.
 3. **Comparer au texte** : médiane à ±0,5 mois et taux publiés à ±2 points, sinon ne pas enregistrer la
