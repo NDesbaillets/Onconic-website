@@ -402,25 +402,99 @@ def build(data, subs, date, seed):
         sql.append("")
     if ins:
         sql.append("-- 3. Nouvelles posologies par indication ou forme galénique (brouillons)")
-        sql.append("insert into public.sl_rx (substance, product_line, indication, indication_match, sig, dose_levels, dose_note, source, status, position, strengths)")
         rows = []
         for i, (sub, pl, label, kw, sig, levels, note, src, stj) in enumerate(ins):
             rows.append(f"  ({sql_lit(sub)}, {sql_lit(pl)}, {sql_lit(label) if label else 'null'}, {sql_lit(kw) if kw else 'null'}, {sql_lit(sig)}, {sql_lit(levels)}::jsonb, {sql_lit(note)}, {sql_lit(src)}, 'draft', {100 + i}, "
                         f"{sql_lit(stj)}::jsonb)")
-        sql.append("values\n" + ",\n".join(rows))
+        # Relançable : pas de nouvelle variante si un texte (même corrigé, validé ou renommé) existe déjà pour cette présentation et cette dose
+        sql.append("select v.* from (values\n" + ",\n".join(rows) + "\n) as v(substance, product_line, indication, indication_match, sig, dose_levels, dose_note, source, status, position, strengths)\n"
+                   "where not exists (select 1 from public.sl_rx e where e.substance = v.substance and e.product_line = v.product_line and split_part(e.sig, ' ', 2) = split_part(v.sig, ' ', 2))")
+        sql[-1] = sql[-1].replace("select v.* from (values", "insert into public.sl_rx (substance, product_line, indication, indication_match, sig, dose_levels, dose_note, source, status, position, strengths)\nselect v.* from (values", 1)
         sql.append("on conflict (substance, product_line, (coalesce(indication, ''))) do nothing;")
     return "\n".join(sql) + "\n", "\n".join(rep) + "\n"
 
 
+AIPS_URL = "https://download.swissmedicinfo.ch/"
+
+
+def download(out_dir):
+    """Télécharge le fichier AIPS (conditions d'utilisation Refdata acceptées par le titulaire du site le 10.11.2026) et retourne le chemin du XML."""
+    import zipfile, urllib.parse, http.cookiejar
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    page = op.open(urllib.request.Request(AIPS_URL, headers={"User-Agent": "onconic-aips/1.0"}), timeout=60).read().decode("utf-8", "replace")
+    form = {k: html.unescape(re.search(r'id="%s" value="([^"]*)"' % k, page).group(1)) for k in ("__VIEWSTATE", "__VIEWSTATEGENERATOR", "__EVENTVALIDATION")}
+    form["ctl00$MainContent$BtnYes"] = "Yes"
+    r = op.open(urllib.request.Request(AIPS_URL, data=urllib.parse.urlencode(form).encode(), headers={"User-Agent": "onconic-aips/1.0"}), timeout=300)
+    data = r.read()
+    if not data.startswith(b"PK"):
+        raise SystemExit("Téléchargement AIPS impossible : la réponse n'est pas un zip (page de conditions modifiée ?)")
+    z = Path(out_dir, "aips.zip")
+    z.write_bytes(data)
+    with zipfile.ZipFile(z) as zf:
+        name = next(n for n in zf.namelist() if n.lower().endswith(".xml"))
+        zf.extract(name, out_dir)
+    return str(Path(out_dir, name))
+
+
+def fingerprint(sel):
+    import hashlib
+    items = sorted(f"{k}|{u}" for k, docs in sel.items() for _, u in docs)
+    return hashlib.sha256("\n".join(items).encode()).hexdigest()
+
+
+def summary(data):
+    """Résumé comparable d'un run : par substance, dosages et régimes du RCP de référence."""
+    out = {}
+    for k, docs in data.items():
+        docs = [d for d in docs if d["strengths"] or d["regimens"]]
+        if not docs:
+            continue
+        ref = docs[0]
+        out[k] = {"strengths": [f"{s['form']} {s['dose']}" for s in ref["strengths"]],
+                  "regimens": sorted({f"{r['dose']} {r['unit']} {r['freq']} ({r['head'][:40]})" for r in ref["regimens"]})}
+    return out
+
+
+def diff_summary(old, new):
+    lines = []
+    for k in sorted(set(old) | set(new)):
+        o, n = old.get(k), new.get(k)
+        if o is None:
+            lines.append(f"- **{k}** : nouveau RCP exploitable")
+        elif n is None:
+            lines.append(f"- **{k}** : RCP plus exploitable")
+        else:
+            for f, lab in (("strengths", "dosages"), ("regimens", "posologies")):
+                add, rem = sorted(set(n[f]) - set(o[f])), sorted(set(o[f]) - set(n[f]))
+                if add or rem:
+                    lines.append(f"- **{k}** ({lab}) : " + "; ".join([f"+ {x}" for x in add] + [f"- {x}" for x in rem]))
+    return lines
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["fetch", "build"])
-    ap.add_argument("xml")
-    ap.add_argument("--cache", required=True)
+    ap.add_argument("cmd", choices=["download", "check", "fetch", "build"])
+    ap.add_argument("xml", help="fichier AIPS (XML) ; pour « download », le dossier de destination")
+    ap.add_argument("--cache")
+    ap.add_argument("--state", help="état du dernier run (tools/compendium/state.json)")
     ap.add_argument("--sql")
     ap.add_argument("--report")
     ap.add_argument("--only")
     a = ap.parse_args()
+    if a.cmd == "download":
+        print(download(a.xml))
+        return
+    if a.cmd == "check":
+        # code 0 : aucun RCP des substances suivies n'a changé depuis le dernier run ; 10 : mise à jour (ou premier run)
+        sel = select(a.xml)
+        fp = fingerprint(sel)
+        old = json.loads(Path(a.state).read_text(encoding="utf-8")) if a.state and Path(a.state).exists() else {}
+        changed = old.get("fingerprint") != fp
+        print(json.dumps({"changed": changed, "fingerprint": fp, "previous": old.get("aips_date")}))
+        sys.exit(10 if changed else 0)
+    if not a.cache:
+        ap.error("--cache est nécessaire")
     Path(a.cache).mkdir(parents=True, exist_ok=True)
     sel = select(a.xml)
     data = {}
@@ -439,6 +513,13 @@ def main():
         sql, rep = build(data, load_substances(), date, seed_rows())
         if a.sql:
             Path(a.sql).write_text(sql, encoding="utf-8")
+        new_sum = summary(data)
+        if a.state:
+            sp = Path(a.state)
+            old = json.loads(sp.read_text(encoding="utf-8")) if sp.exists() else {}
+            ch = diff_summary(old.get("summary", {}), new_sum) if old else ["- premier run : aucun état précédent"]
+            rep += "\n## Changements depuis le dernier run (" + str(old.get("aips_date", "-")) + ")\n" + ("\n".join(ch) if ch else "Aucun changement de dosage ni de posologie.") + "\n"
+            sp.write_text(json.dumps({"aips_date": date, "fingerprint": fingerprint(sel), "summary": new_sum}, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8")
         if a.report:
             Path(a.report).write_text(rep, encoding="utf-8")
         print(rep)

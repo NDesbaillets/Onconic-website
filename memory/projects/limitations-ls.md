@@ -28,3 +28,8 @@
 - Posologies par indication : une variante brouillon par régime distinct du RCP (ex. sunitinib GIST/RCC 50 mg 4/2 vs pNET 37,5 mg continu, cabozantinib 60 mg vs 40 mg avec nivolumab, capécitabine 1250/1000/625 mg/m², talazoparib seul vs avec enzalutamide, ribociclib 400 vs 600 mg). Badge « Extrait du Compendium » dans l'admin ; à relire puis valider.
 - Sans RCP trouvé : dacomitinib, pralsétinib, sotorasib, adagrasib (noms commerciaux à ajouter dans `substances.json`).
 - Mise à jour : télécharger le nouveau fichier AIPS et relancer le script.
+
+## Mise à jour automatique du Compendium (10.11.2026)
+- Tâche programmée le 1er et le 15 de chaque mois : télécharge le fichier AIPS, compare l'empreinte des RCP suivis (`tools/compendium/state.json`), et si un RCP a changé régénère `supabase/sl_rx_auto.sql`, ouvre une PR, la merge et exécute le SQL (voir `tools/compendium/README.md`).
+- Les textes validés ne sont jamais modifiés par la tâche ; ceux dont le RCP a changé sont signalés dans le compte rendu.
+- Hors périmètre : l'import de la LS de l'OFSP (Excel) reste manuel dans l'admin de `/app/limitations.html`.

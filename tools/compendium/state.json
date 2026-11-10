@@ -1,0 +1,426 @@
+{
+ "aips_date": "10.11.2026",
+ "fingerprint": "0fbc50ec237b663c8d52dd7b13dcd00bbd74a3fd007c990a8ca45ae93b9c1081",
+ "summary": {
+  "abemaciclib": {
+   "regimens": [
+    "150 mg 2x/j (Hormonothérapie)",
+    "200 mg 2x/j (Verzenios en monothérapie)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 50 mg",
+    "comprimé pelliculé 100 mg",
+    "comprimé pelliculé 150 mg",
+    "comprimé pelliculé 200 mg"
+   ]
+  },
+  "abirateron": {
+   "regimens": [
+    "1000 mg 1x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 500 mg",
+    "comprimé pelliculé 1000 mg"
+   ]
+  },
+  "afatinib": {
+   "regimens": [
+    "40 mg 1x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 20 mg",
+    "comprimé pelliculé 30 mg",
+    "comprimé pelliculé 40 mg",
+    "comprimé pelliculé 50 mg"
+   ]
+  },
+  "alectinib": {
+   "regimens": [
+    "600 mg 2x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "gélule 150 mg"
+   ]
+  },
+  "alpelisib": {
+   "regimens": [
+    "300 mg 1x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 50 mg",
+    "comprimé pelliculé 150 mg",
+    "comprimé pelliculé 200 mg"
+   ]
+  },
+  "apalutamid": {
+   "regimens": [
+    "240 mg 1x/j (Posologie)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 60 mg",
+    "comprimé pelliculé 240 mg"
+   ]
+  },
+  "axitinib": {
+   "regimens": [
+    "5 mg 2x/j ()"
+   ],
+   "strengths": [
+    "comprimé pelliculé 1 mg",
+    "comprimé pelliculé 3 mg",
+    "comprimé pelliculé 5 mg",
+    "comprimé pelliculé 7 mg"
+   ]
+  },
+  "binimetinib": {
+   "regimens": [
+    "45 mg 2x/j (Posologie)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 15 mg",
+    "comprimé pelliculé 45 mg"
+   ]
+  },
+  "brigatinib": {
+   "regimens": [],
+   "strengths": [
+    "comprimé pelliculé 30 mg",
+    "comprimé pelliculé 90 mg",
+    "comprimé pelliculé 180 mg"
+   ]
+  },
+  "cabozantinib": {
+   "regimens": [
+    "40 mg 1x/j (CABOMETYX en association avec le nivolum)",
+    "60 mg 1x/j (CABOMETYX en monothérapie)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 20 mg",
+    "comprimé pelliculé 40 mg",
+    "comprimé pelliculé 60 mg"
+   ]
+  },
+  "capecitabine": {
+   "regimens": [
+    "1000 mg/m² 2x/j (En combinaison avec l'oxaliplatine)",
+    "1000 mg/m² 2x/j (En combinaison avec la vinorelbine)",
+    "1250 mg/m² 2x/j (En combinaison avec le docétaxel)",
+    "1250 mg/m² 2x/j (Monothérapie (6 mois))",
+    "1250 mg/m² 2x/j (Monothérapie)",
+    "625 mg/m² 2x/j (En combinaison avec l'oxaliplatine et l')"
+   ],
+   "strengths": [
+    "comprimé pelliculé 150 mg",
+    "comprimé pelliculé 500 mg"
+   ]
+  },
+  "capivasertib": {
+   "regimens": [
+    "400 mg 2x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 160 mg",
+    "comprimé pelliculé 200 mg"
+   ]
+  },
+  "capmatinib": {
+   "regimens": [
+    "400 mg 2x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 150 mg",
+    "comprimé pelliculé 200 mg"
+   ]
+  },
+  "cobimetinib": {
+   "regimens": [
+    "60 mg 1x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 20 mg"
+   ]
+  },
+  "crizotinib": {
+   "regimens": [
+    "250 mg 2x/j (Patients adultes présentant un NSCLC ALK)"
+   ],
+   "strengths": [
+    "granulé 20 mg",
+    "granulé 50 mg",
+    "granulé 150 mg",
+    "gélule 200 mg",
+    "gélule 250 mg"
+   ]
+  },
+  "dabrafenib": {
+   "regimens": [
+    "150 mg 2x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé dispersible 10 mg",
+    "gélule 50 mg",
+    "gélule 75 mg"
+   ]
+  },
+  "darolutamid": {
+   "regimens": [
+    "600 mg 2x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 300 mg"
+   ]
+  },
+  "encorafenib": {
+   "regimens": [
+    "450 mg 1x/j (Mélanome et NSCLC)"
+   ],
+   "strengths": [
+    "gélule 50 mg",
+    "gélule 75 mg"
+   ]
+  },
+  "entrectinib": {
+   "regimens": [
+    "600 mg 1x/j (Adultes)"
+   ],
+   "strengths": [
+    "gélule 100 mg",
+    "gélule 200 mg"
+   ]
+  },
+  "enzalutamid": {
+   "regimens": [
+    "160 mg 1x/j ()"
+   ],
+   "strengths": [
+    "comprimé 40 mg",
+    "comprimé 80 mg"
+   ]
+  },
+  "erlotinib": {
+   "regimens": [
+    "150 mg 1x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 25 mg",
+    "comprimé pelliculé 100 mg",
+    "comprimé pelliculé 150 mg"
+   ]
+  },
+  "everolimus": {
+   "regimens": [
+    "10 mg 1x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé 2,5 mg",
+    "comprimé 5 mg",
+    "comprimé 10 mg"
+   ]
+  },
+  "gefitinib": {
+   "regimens": [],
+   "strengths": [
+    "comprimé pelliculé 250 mg"
+   ]
+  },
+  "larotrectinib": {
+   "regimens": [
+    "100 mg 2x/j (Posologie)"
+   ],
+   "strengths": [
+    "gélule 25 mg",
+    "gélule 100 mg"
+   ]
+  },
+  "lazertinib": {
+   "regimens": [
+    "240 mg 1x/j (Adultes (≥18 ans))"
+   ],
+   "strengths": [
+    "comprimé pelliculé 80 mg",
+    "comprimé pelliculé 240 mg"
+   ]
+  },
+  "lorlatinib": {
+   "regimens": [
+    "100 mg 1x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 25 mg",
+    "comprimé pelliculé 100 mg"
+   ]
+  },
+  "neratinib": {
+   "regimens": [
+    "240 mg 1x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 40 mg"
+   ]
+  },
+  "olaparib": {
+   "regimens": [
+    "300 mg 2x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 100 mg",
+    "comprimé pelliculé 150 mg"
+   ]
+  },
+  "osimertinib": {
+   "regimens": [
+    "80 mg 1x/j (Monothérapie)",
+    "80 mg 1x/j (Traitement combiné)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 40 mg",
+    "comprimé pelliculé 80 mg"
+   ]
+  },
+  "palbociclib": {
+   "regimens": [
+    "125 mg 1x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 75 mg",
+    "comprimé pelliculé 100 mg",
+    "comprimé pelliculé 125 mg",
+    "gélule 75 mg",
+    "gélule 100 mg",
+    "gélule 125 mg"
+   ]
+  },
+  "pazopanib": {
+   "regimens": [
+    "800 mg 1x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 200 mg",
+    "comprimé pelliculé 400 mg"
+   ]
+  },
+  "regorafenib": {
+   "regimens": [
+    "160 mg 1x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 40 mg"
+   ]
+  },
+  "ribociclib": {
+   "regimens": [
+    "400 mg 1x/j (Cancer du sein au stade précoce)",
+    "600 mg 1x/j (Cancer du sein avancé ou métastatique)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 200 mg"
+   ]
+  },
+  "selpercatinib": {
+   "regimens": [],
+   "strengths": [
+    "comprimé pelliculé 40 mg",
+    "comprimé pelliculé 80 mg",
+    "gélule 40 mg",
+    "gélule 80 mg"
+   ]
+  },
+  "sorafenib": {
+   "regimens": [
+    "400 mg 2x/j ()"
+   ],
+   "strengths": [
+    "comprimé pelliculé 200 mg"
+   ]
+  },
+  "sunitinib": {
+   "regimens": [
+    "37,5 mg 1x/j (Pancreatic NET)",
+    "50 mg 1x/j (GIST et RCC)"
+   ],
+   "strengths": [
+    "gélule 12,5 mg",
+    "gélule 25 mg",
+    "gélule 50 mg"
+   ]
+  },
+  "talazoparib": {
+   "regimens": [
+    "0,5 mg 1x/j (Talzenna en association avec l'enzalutam)",
+    "1 mg 1x/j (Monothérapie par Talzenna (cancer du sei)"
+   ],
+   "strengths": [
+    "gélule 0,1 mg",
+    "gélule 0,25 mg",
+    "gélule 0,35 mg",
+    "gélule 0,5 mg",
+    "gélule 1 mg"
+   ]
+  },
+  "temozolomid": {
+   "regimens": [
+    "150 mg/m² 1x/j (Glioblastomes multiformes nouvellement d)",
+    "200 mg/m² 1x/j (Glioblastomes multiformes nouvellement d)"
+   ],
+   "strengths": [
+    "gélule 5 mg",
+    "gélule 20 mg",
+    "gélule 100 mg",
+    "gélule 140 mg",
+    "gélule 180 mg",
+    "gélule 250 mg"
+   ]
+  },
+  "tepotinib": {
+   "regimens": [
+    "450 mg 1x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 225 mg"
+   ]
+  },
+  "trametinib": {
+   "regimens": [],
+   "strengths": [
+    "comprimé pelliculé 0,5 mg",
+    "comprimé pelliculé 2 mg",
+    "poudre 4,7 mg"
+   ]
+  },
+  "trifluridin": {
+   "regimens": [
+    "35 mg/m² 2x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 15 mg/6,14 mg",
+    "comprimé pelliculé 20 mg/8,19 mg"
+   ]
+  },
+  "tucatinib": {
+   "regimens": [
+    "300 mg 2x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 50 mg",
+    "comprimé pelliculé 150 mg"
+   ]
+  },
+  "vemurafenib": {
+   "regimens": [
+    "960 mg 2x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 240 mg"
+   ]
+  },
+  "vorasidenib": {
+   "regimens": [
+    "40 mg 1x/j (Posologie usuelle)"
+   ],
+   "strengths": [
+    "comprimé pelliculé 10 mg",
+    "comprimé pelliculé 40 mg"
+   ]
+  }
+ }
+}
