@@ -55,6 +55,12 @@
 - Même personne en 1re et 2e ligne possible (direction désignée validatrice d'une clinique) : rien ne l'interdit.
 - **Mise en service** : exécuter `admin_direction.sql` en dernier, déployer `notify-absence` (fichiers `index.ts`, `message.ts`, `form.ts`), puis donner le rôle à la personne concernée dans Membres et accès. Dès l'exécution du SQL, toute demande validée par les cadres attend un visa (direction, à défaut admin).
 
+## Exports Excel de secours et de support (10.11.2026, `supabase/absences_export.sql`)
+- Onglet « Export » de la page Absences, pour les admins, la direction (tous les membres) et les validateurs (les membres de leurs cliniques, selon `can_validate_absence` aux dates de chaque absence). Fenêtre au choix, par défaut le mois précédent et les 12 mois à venir (800 jours au plus).
+- **Absences (Excel)** : une ligne par absence avec motif, précision, dates, jours ouvrables, état coloré (validée, en cours chez les validateurs, en cours en attente du visa de la direction, validée avec modification ou suppression demandée, refusée, annulée), validateurs et horodatages, visa de la direction. Brouillons exclus (`absence_export`).
+- **Synthèse par personne (Excel)** : demandes acceptées (avec jours ouvrables dans la fenêtre, par motif), en attente, refusées, annulées, changements acceptés ou refusés, plus la feuille « Décisions » (`absence_decisions`). Les refus viennent du **journal `absence_decision_log`** (déclencheur sur `absences`, rempli à la mise en service depuis les absences déjà décidées) : une demande refusée est effacée 14 jours après le refus, le journal garde la décision. Les refus purgés avant la mise en service ne sont pas récupérables.
+- Fichiers générés dans le navigateur (ExcelJS 4.4.0 via jsDelivr, comme l'annuaire des prestataires).
+
 ## Limites
 - Pas de soldes de vacances. L'e-mail dépend du secret `SMTP_PASSWORD` (comme le formulaire de contact) : sans lui, les messages restent dans `absence_outbox` (5 essais) et seul le push éventuel part.
 

@@ -78,6 +78,7 @@
             <button class="ab-tab" id="ab-t-mine" role="tab" aria-selected="false" aria-controls="ab-p-mine" type="button">Mes absences</button>
             <button class="ab-tab" id="ab-t-todo" role="tab" aria-selected="false" aria-controls="ab-p-todo" type="button" hidden>À valider <span class="ab-count" id="ab-todo-n"></span></button>
             <button class="ab-tab" id="ab-t-dir" role="tab" aria-selected="false" aria-controls="ab-p-dir" type="button" hidden>Direction</button>
+            <button class="ab-tab" id="ab-t-exp" role="tab" aria-selected="false" aria-controls="ab-p-exp" type="button" hidden>Export</button>
           </div>
 
           <section id="ab-p-plan" role="tabpanel" aria-labelledby="ab-t-plan">
@@ -171,6 +172,24 @@
               <div id="ab-rej-list" class="ab-list"></div>
             </div>
           </section>
+          <section id="ab-p-exp" role="tabpanel" aria-labelledby="ab-t-exp" hidden>
+            <h2>Exports Excel</h2>
+            <p class="muted" id="ab-exp-scope"></p>
+            <form class="card ab-new" id="ab-exp-form" novalidate>
+              <div class="ab-fields">
+                <label>Du <input id="ab-exp-from" type="date" required></label>
+                <label>Au (inclus) <input id="ab-exp-to" type="date" required></label>
+                <button class="btn btn-outline" type="button" id="ab-exp-reset">Mois précédent et 12 mois à venir</button>
+              </div>
+              <div class="btn-row">
+                <button class="btn" type="button" id="ab-exp-abs">Télécharger les absences (Excel)</button>
+                <button class="btn btn-outline" type="button" id="ab-exp-sum">Télécharger la synthèse par personne (Excel)</button>
+              </div>
+              <p class="form-msg" id="ab-exp-msg" role="status" aria-live="polite"></p>
+            </form>
+            <p class="muted">Absences : une ligne par absence (vacances, congrès, autre) avec son état (validée, en cours, visa de la direction, refusée, annulée, modification ou suppression demandée), les validateurs et leurs horodatages. Synthèse : par personne, demandes acceptées (avec jours ouvrables), refusées, en attente et annulées, plus le détail des décisions. Les jours ouvrables excluent les week-ends et les fériés vaudois et sont comptés dans la fenêtre choisie. Les demandes refusées sont retirées de la liste 14 jours après le refus, mais leur décision reste dans le journal de la synthèse depuis la mise en service de l'export.</p>
+          </section>
+
           <section id="ab-p-dir" role="tabpanel" aria-labelledby="ab-t-dir" hidden>
             <h2>Absence au nom d'un membre</h2>
             <p class="muted">Saisie par la direction : l'absence est validée d'office, le membre est prévenu par e-mail et le formulaire part à la gestion des absences. Pour modifier ou annuler une absence validée, choisissez le membre dans « Résumé de » (onglet Mes absences) : les boutons apparaissent sur chaque absence.</p>
