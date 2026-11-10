@@ -1261,3 +1261,26 @@ details:not(.ug-card) > summary { padding-block: 10px; }
 .aa-sync p { margin: 0; max-width: none; }
 .aa-sync .btn { justify-self: start; }
 .ug-badge.cg-abs-badge { background: var(--white); color: var(--navy-800); border: 1px solid var(--navy-800); }
+/* Absences : ordre d'affichage des personnes */
+.ab-order { display: grid; gap: var(--space-2); border-top: 1px solid var(--navy-100); padding-top: var(--space-3); }
+.ab-order p { margin: 0; max-width: none; }
+.ab-order-title { margin: 0; font-size: 1rem; font-weight: 500; color: var(--navy-800); }
+.ab-order-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 360px; overflow: auto; }
+.ab-ord-item { display: flex; align-items: center; gap: var(--space-2); padding: 4px 8px; background: var(--white); border: 1px solid var(--navy-100); }
+.ab-ord-item.dragging { opacity: .5; }
+.ab-ord-item.over { border-color: var(--amber-500); box-shadow: inset 0 2px 0 var(--amber-500); }
+.ab-ord-grip { color: var(--ink-400); cursor: grab; user-select: none; }
+.ab-ord-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ab-ord-item .btn { min-height: 36px; min-width: 40px; padding: 4px 10px; }
+.ab-order-reset { justify-self: start; }
+.account-clinic-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px var(--space-3); border: 0; padding: 0; margin: 0; }
+.account-clinic-list legend { font-weight: 500; color: var(--navy-800); margin-bottom: 6px; padding: 0; }
+/* Membres : changements de cliniques programmés */
+.am-changes { display: grid; gap: var(--space-2); border-top: 1px dashed var(--navy-100); padding-top: var(--space-2); }
+.am-changes-title { margin: 0; font-weight: 500; color: var(--navy-800); font-size: .92rem; }
+.am-change { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); justify-content: space-between; background: var(--mist); padding: 6px 10px; }
+.am-change-add summary { cursor: pointer; color: var(--navy-800); font-weight: 500; }
+.am-change-form { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
+.am-change-form label { display: grid; gap: 4px; max-width: 220px; font-size: .9rem; }
+.am-change-form input[type="date"] { font: inherit; min-height: 40px; padding: 6px 10px; border: 1px solid var(--navy-200); border-radius: 0; }
+.am-change-form .btn { justify-self: start; }

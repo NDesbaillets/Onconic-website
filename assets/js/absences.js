@@ -14,7 +14,7 @@
 
   const $ = (id) => document.getElementById(id);
   const state = {
-    ctx: null, people: [], clinics: [], month: null, cache: new Map(), prefs: { scope: "mine", ids: [], rows: 20 },
+    ctx: null, people: [], clinics: [], month: null, cache: new Map(), prefs: { scope: "mine", ids: [], rows: 20, order: [] },
     mine: [], mineWarn: null, todo: [], rejected: [], who: "", drafts: [], approvals: new Map(), whoApprovals: new Map()
   };
 
@@ -83,6 +83,7 @@
       if (p && typeof p === "object") {
         if (typeof p.scope === "string") state.prefs.scope = p.scope;
         if (Array.isArray(p.ids)) state.prefs.ids = p.ids.filter((x) => typeof x === "string");
+        if (Array.isArray(p.order)) state.prefs.order = p.order.filter((x) => typeof x === "string");
         if ([0, 5, 10, 15, 20, 30, 50].includes(Number(p.rows))) state.prefs.rows = Number(p.rows);
       }
     } catch (e) { /* préférences par défaut */ }
@@ -151,7 +152,48 @@
       const mine = state.ctx.clinics || [];
       list = state.people.filter((p) => p.is_me || sharesClinic(p, mine));
     } else list = state.people.filter((p) => (p.clinics || []).includes(scope));
-    return list.sort((a, b) => (b.is_me - a.is_me) || a.name.localeCompare(b.name, "fr"));
+    // Ordre choisi par le membre (« Ordre d'affichage »), puis moi en tête et ordre alphabétique
+    const rank = new Map(state.prefs.order.map((id, i) => [id, i]));
+    const r = (p) => (rank.has(p.id) ? rank.get(p.id) : Infinity);
+    return list.sort((a, b) => (r(a) - r(b)) || (b.is_me - a.is_me) || a.name.localeCompare(b.name, "fr"));
+  }
+
+  // ----- Ordre d'affichage des personnes sélectionnées -----
+  function setOrder(ids) { state.prefs.order = ids; savePrefs(); renderGrid(); renderOrder(); }
+  function move(id, to) {
+    const ids = selection().map((p) => p.id);
+    const from = ids.indexOf(id);
+    if (from < 0 || to < 0 || to >= ids.length || to === from) return;
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    setOrder(ids);
+    const btn = document.querySelector(`#ab-order-list [data-id="${id}"] .ab-ord-up`) || document.querySelector(`#ab-order-list [data-id="${id}"] .ab-ord-down`);
+    if (btn) btn.focus();
+  }
+  function renderOrder() {
+    const box = $("ab-order-list");
+    if (!box) return;
+    const list = selection();
+    box.replaceChildren();
+    $("ab-order-reset").hidden = !state.prefs.order.length;
+    if (!list.length) { box.append(el("li", "muted", "Aucune personne sélectionnée.")); return; }
+    list.forEach((p, i) => {
+      const li = el("li", "ab-ord-item");
+      li.dataset.id = p.id;
+      li.draggable = true;
+      li.append(el("span", "ab-ord-grip", "⋮⋮"), el("span", "ab-ord-name", p.name + (p.is_me ? " (moi)" : "")));
+      const up = button("↑", "btn btn-outline ab-ord-up", () => move(p.id, i - 1));
+      up.disabled = i === 0; up.setAttribute("aria-label", `Monter ${p.name}`);
+      const down = button("↓", "btn btn-outline ab-ord-down", () => move(p.id, i + 1));
+      down.disabled = i === list.length - 1; down.setAttribute("aria-label", `Descendre ${p.name}`);
+      li.append(up, down);
+      // Glisser-déposer (ordinateur) ; les flèches restent disponibles au clavier et sur mobile
+      li.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", p.id); li.classList.add("dragging"); });
+      li.addEventListener("dragend", () => li.classList.remove("dragging"));
+      li.addEventListener("dragover", (e) => { e.preventDefault(); li.classList.add("over"); });
+      li.addEventListener("dragleave", () => li.classList.remove("over"));
+      li.addEventListener("drop", (e) => { e.preventDefault(); li.classList.remove("over"); move(e.dataTransfer.getData("text/plain"), i); });
+      box.append(li);
+    });
   }
   function fillScope() {
     const sel = $("ab-scope");
@@ -330,6 +372,7 @@
       list.append(lab);
     }
     if (!list.children.length) list.append(el("p", "muted", "Aucune personne trouvée."));
+    renderOrder();
   }
   function setCustom(ids) {
     state.prefs.scope = "custom"; state.prefs.ids = ids;
@@ -960,7 +1003,7 @@
     $("ab-start").addEventListener("change", () => { if (!$("ab-end").value || $("ab-end").value < $("ab-start").value) $("ab-end").value = $("ab-start").value; updateDays(); });
     if (!ctx.clinics.length && ctx.role !== "admin") {
       say($("ab-msg"), ["clinician", "cdc", "cadre"].includes(ctx.role)
-        ? "Aucune clinique de rattachement n'est enregistrée pour vous : seul l'administrateur validera vos demandes. Demandez-lui de renseigner vos cliniques."
+        ? "Aucune clinique de rattachement n'est enregistrée pour vous : seul l'administrateur validera vos demandes. Renseignez vos cliniques dans Mon compte."
         : "", "");
     }
 
@@ -987,6 +1030,7 @@
       setCustom([...ids]); renderPicker();
     });
     $("ab-pick-none").addEventListener("click", () => { setCustom([]); renderPicker(); });
+    $("ab-order-reset").addEventListener("click", () => setOrder([]));
     const open = (td) => { if (td.dataset.cal) showCalDetail(td.dataset.cal); else if (td.dataset.id) showDetail(td.dataset.user, td.dataset.id); };
     $("ab-scroll").addEventListener("click", (e) => { const td = e.target.closest("td[data-id], td[data-cal]"); if (td) open(td); });
     $("ab-scroll").addEventListener("keydown", (e) => {

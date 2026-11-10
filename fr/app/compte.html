@@ -17,11 +17,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261109d">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261110c">
   <script src="/assets/js/site.js?v=20261109a" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/account.js?v=20261106e" defer></script>
+  <script src="/assets/js/account.js?v=20261110a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -86,6 +86,17 @@
               </form>
             </div>
           </div>
+        </div>
+
+        <div class="card account-consent account-clinics" id="clinics" hidden>
+          <h2>Mes cliniques</h2>
+          <p class="muted">Vos cliniques de rattachement actuelles : elles déterminent les collègues affichés par défaut dans le planning des absences et les médecins cadres qui valident vos demandes. L'administration peut aussi les modifier et programmer un changement de bloc.</p>
+          <form class="form" id="clinics-form" novalidate>
+            <fieldset class="account-clinic-list" id="clinics-list"><legend>Cliniques actuelles</legend></fieldset>
+            <button class="btn" type="submit">Enregistrer</button>
+            <p class="form-msg" id="clinics-msg" role="status" aria-live="polite"></p>
+          </form>
+          <div id="clinics-changes"></div>
         </div>
 
         <div class="card account-consent" id="ruche">

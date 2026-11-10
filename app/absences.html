@@ -15,11 +15,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261110b">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261110c">
   <script src="/assets/js/site.js?v=20261109a" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/absences.js?v=20261110b" defer></script>
+  <script src="/assets/js/absences.js?v=20261110c" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -113,6 +113,12 @@
                 <button class="btn btn-outline" id="ab-pick-none" type="button">Tout décocher</button>
               </div>
               <div class="ab-pick-list" id="ab-pick-list"></div>
+              <div class="ab-order">
+                <h3 class="ab-order-title">Ordre d'affichage</h3>
+                <p class="muted">Glissez les noms ou utilisez les flèches. L'ordre est gardé dans ce navigateur.</p>
+                <ol class="ab-order-list" id="ab-order-list"></ol>
+                <button class="btn btn-outline ab-order-reset" id="ab-order-reset" type="button" hidden>Revenir à l'ordre alphabétique</button>
+              </div>
             </div>
 
             <ul class="ab-legend" aria-label="Légende">

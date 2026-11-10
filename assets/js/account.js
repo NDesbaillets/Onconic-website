@@ -102,6 +102,41 @@
       if (h.has("ruche")) $("ruche").scrollIntoView();
     }
 
+    // Mes cliniques (médecins) : cliniques actuelles modifiables, changements programmés par l'admin en lecture seule
+    if ($("clinics")) {
+      const { data: mc } = await sb.rpc("my_clinics");
+      if (mc && mc.editable) {
+        const box = $("clinics-list");
+        const mine = new Set(mc.clinics || []);
+        for (const c of mc.options || []) {
+          const lab = document.createElement("label");
+          lab.className = "cg-check";
+          const cb = document.createElement("input");
+          cb.type = "checkbox"; cb.name = "clinic"; cb.value = c; cb.checked = mine.has(c);
+          lab.append(cb, " " + c);
+          box.append(lab);
+        }
+        const eu = (d) => String(d).slice(0, 10).split("-").reverse().join(".");
+        const ch = $("clinics-changes");
+        for (const x of mc.changes || []) {
+          const p = document.createElement("p");
+          p.className = "muted";
+          p.textContent = (fr ? "Changement programmé par l'administration : à partir du " : "Change scheduled by the administration: from ") + eu(x.valid_from) + ", " +
+            ((x.clinics || []).length ? x.clinics.join(", ") : (fr ? "aucune clinique" : "no clinic")) + ".";
+          ch.append(p);
+        }
+        $("clinics-form").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const out = $("clinics-msg");
+          const chosen = [...box.querySelectorAll('input[name="clinic"]:checked')].map((i) => i.value);
+          const { error } = await sb.rpc("my_set_clinics", { p_clinics: chosen });
+          msg(out, error ? T.error : (fr ? "Cliniques enregistrées." : "Clinics saved."), error ? "error" : "ok");
+        });
+        $("clinics").hidden = false;
+        if (h.has("cliniques")) $("clinics").scrollIntoView();
+      }
+    }
+
     // Notifications push : « un autre membre participe au même congrès que moi » (réglage par appareil)
     const nf = $("notify-form");
     if (nf) (async () => {
