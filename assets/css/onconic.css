@@ -1330,3 +1330,21 @@ details:not(.ug-card) > summary { padding-block: 10px; }
 .ab-bal-neg { background: var(--amber-50); }
 .ab-bal-bad { color: #9c2b2b; }
 .ab-bal-in { width: 6.5rem; }
+
+/* ---------- Sélecteur rapide de mois ---------- */
+.mp-host { position: relative; }
+.cg-month-btn, .ab-title-btn { font: inherit; font-weight: inherit; text-transform: inherit; color: var(--navy-800); background: none; border: 0; border-bottom: 2px solid var(--amber-500); border-radius: 0; cursor: pointer; padding: 4px 6px; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; }
+.cg-month-btn::after, .ab-title-btn::after { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--navy-800); border-bottom: 2px solid var(--navy-800); transform: translateY(-2px) rotate(45deg); }
+.cg-month-btn:hover, .ab-title-btn:hover, .cg-month-btn[aria-expanded="true"], .ab-title-btn[aria-expanded="true"] { background: var(--amber-50); }
+.ab-title-wrap { font-size: 1.1rem; font-weight: 500; }
+.mp-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; width: min(320px, calc(100vw - 32px)); background: var(--white); border: 1px solid var(--navy-200); border-top: 3px solid var(--amber-500); padding: 12px; color: var(--ink-900); font-size: 1rem; font-weight: 400; text-transform: none; }
+.mp-years { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+.mp-year { font: inherit; width: 7ch; min-height: 44px; text-align: center; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); color: var(--navy-800); font-weight: 500; padding: 4px; }
+.mp-step, .mp-m, .mp-today, .mp-close { font: inherit; min-height: 44px; cursor: pointer; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); color: var(--navy-800); }
+.mp-step { width: 44px; font-size: 1.2rem; }
+.mp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.mp-m:hover, .mp-step:hover, .mp-today:hover, .mp-close:hover { border-color: var(--navy-800); }
+.mp-m.now { border-color: var(--amber-500); border-width: 2px; font-weight: 600; }
+.mp-m[aria-pressed="true"] { background: var(--navy-800); border-color: var(--navy-800); color: var(--white); }
+.mp-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.mp-today, .mp-close { padding: 0 14px; }

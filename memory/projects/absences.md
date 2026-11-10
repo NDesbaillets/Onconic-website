@@ -76,3 +76,6 @@
 1. Exécuter `supabase/absences.sql`, puis `cadre_medecin.sql`, `cadre_validateur.sql` et `absences_validation.sql`.
 2. Déployer `notify-absence` (JWT vérifié, secret `SMTP_PASSWORD`) et `absence-feed` (sans JWT).
 3. Fusionner la PR, puis dans `/admin/membres.html` : rôle Cadre aux cadres, cliniques aux médecins, et `/admin/absences.html` pour les valideurs.
+
+## Sélecteur rapide de mois (10.11.2026)
+`window.monthPicker` dans `assets/js/site.js` : un clic sur le mois affiché (planning des absences, calendrier Congrès) ouvre l'année (flèches ou saisie) et les 12 mois, avec « Aujourd'hui » ; Échap, clic extérieur, focus rendu au bouton. À brancher sur tout nouvel agenda : `monthPicker(bouton, { get: () => ({ y, m }), onPick: (y, m) => … })`.

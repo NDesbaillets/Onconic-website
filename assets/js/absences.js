@@ -1389,6 +1389,7 @@
     $("ab-scope").addEventListener("change", (e) => { state.prefs.scope = e.target.value; savePrefs(); fillScope(); renderGrid(); if (!$("ab-pick").hidden) renderPicker(); });
     $("ab-rows").addEventListener("change", (e) => { state.prefs.rows = Number(e.target.value); savePrefs(); renderGrid(); });
     const shift = (n) => { const d = new Date(Date.UTC(state.month.y, state.month.m + n, 1)); state.month = { y: d.getUTCFullYear(), m: d.getUTCMonth() }; renderGrid(); };
+    if (window.monthPicker) window.monthPicker($("ab-title"), { get: () => ({ y: state.month.y, m: state.month.m }), onPick: (y, m) => { state.month = { y, m }; renderGrid(); } });
     $("ab-prev").addEventListener("click", () => shift(-1));
     $("ab-next").addEventListener("click", () => shift(1));
     $("ab-today").addEventListener("click", () => { state.month = { y: t.getFullYear(), m: t.getMonth() }; renderGrid(); });
