@@ -246,10 +246,11 @@
 
   function rxBlock(g, limits, cancer) {
     const wrap = el("div", "ls-rx");
-    const tpls = state.rx.filter((r) => r.status === "validated" && g.key.includes(r._k));
+    // Textes validés et brouillons : tous visibles des utilisateurs de l'outil ; un brouillon porte un avertissement
+    const tpls = state.rx.filter((r) => g.key.includes(r._k));
     wrap.append(el("h4", null, "Ordonnance (per os)"));
     if (!tpls.length) {
-      wrap.append(el("p", "muted", "Aucun texte d'ordonnance validé pour cette substance."));
+      wrap.append(el("p", "muted", "Aucun texte d'ordonnance pour cette substance."));
       return wrap;
     }
     // Avertissement affiché avant la génération, sans validation à cocher ; hors du texte copié (copie et panier) : seul `text` est copié
@@ -305,6 +306,7 @@
       ? "[choisir la situation clinique pour afficher la posologie]"
       : [line, t.sig].concat(lim ? [lim.ind_code ? `Code d'indication : ${lim.ind_code}` : `Limitation : ${lim.lim_code}`]
         : limits.length ? ["Code d'indication : [choisir la limitation ci-dessus]"] : []).join("\n");
+    if (t && t.status !== "validated") wrap.append(el("p", "ls-unvalidated", "Ordonnance pas encore validée par le/la pharmacien.ne : vérifiez la posologie avant de prescrire."));
     wrap.append(el("pre", "ls-rx-text", text));
     const row = el("div", "btn-row");
     const copyBtn = button("Copier l'ordonnance", "btn ug-copy", (e) => copy(e.target, text, "Copier l'ordonnance"));
@@ -313,7 +315,7 @@
     const missingCode = !lim && limits.length > 0;
     const inCart = !choose && state.cart.some((c) => c.id === t.id && c.text === text);
     const add = button(inCart ? "Dans le panier" : "Ajouter au panier", "btn btn-outline ug-copy", () => {
-      addToCart({ id: t.id, grp: g.key, label: line, indication: t.indication || "", text });
+      addToCart({ id: t.id, grp: g.key, label: line, indication: t.indication || "", unvalidated: t.status !== "validated", text });
       add.textContent = "Dans le panier"; add.disabled = true;
     });
     add.disabled = missingCode || choose || inCart;
@@ -382,6 +384,7 @@
     $("ls-cart-list").replaceChildren(...state.cart.map((c, i) => {
       const li = el("li");
       if (c.indication) li.append(el("p", "muted ls-note", "Indication : " + c.indication));
+      if (c.unvalidated) li.append(el("p", "ls-unvalidated", "Pas encore validée par le/la pharmacien.ne"));
       li.append(el("pre", "ls-rx-text", c.text));
       const row = el("div", "btn-row");
       if (i > 0) row.append(button("Monter", "btn btn-outline ug-copy", () => { const [x] = state.cart.splice(i, 1); state.cart.splice(i - 1, 0, x); saveCart(); renderCart(); }));

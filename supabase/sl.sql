@@ -86,7 +86,7 @@ create policy "sl_changes: clinicians read" on public.sl_changes for select to a
 
 drop policy if exists "sl_rx: read" on public.sl_rx;
 create policy "sl_rx: read" on public.sl_rx for select to authenticated
-  using ((select public.is_app_admin('limitations')) or ((select public.has_tool('limitations')) and status = 'validated'));
+  using ((select public.is_app_admin('limitations')) or (select public.has_tool('limitations')));
 drop policy if exists "sl_rx: admin write" on public.sl_rx;
 create policy "sl_rx: admin write" on public.sl_rx for all to authenticated
   using ((select public.is_app_admin('limitations'))) with check ((select public.is_app_admin('limitations')));
