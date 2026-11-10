@@ -1320,3 +1320,13 @@ details:not(.ug-card) > summary { padding-block: 10px; }
 @media (max-width: 1099px) {
   .kt-detail { display: none; }
 }
+
+/* Soldes de vacances et de congrès */
+.ab-balance { margin: var(--space-3) 0; }
+.ab-balance p { margin: 4px 0; max-width: none; }
+.ab-bal-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.ab-bal-table th, .ab-bal-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line, #d9dde5); vertical-align: middle; }
+.ab-bal-table th { color: var(--slate-600, #5a6478); font-weight: 500; }
+.ab-bal-neg { background: var(--amber-50); }
+.ab-bal-bad { color: #9c2b2b; }
+.ab-bal-in { width: 6.5rem; }
