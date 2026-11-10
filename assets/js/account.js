@@ -137,6 +137,22 @@
       }
     }
 
+    // Visibilité dans le planning des absences (médecins cadres) : enregistrée à chaque clic
+    if ($("absvis")) {
+      const { data: av } = await sb.rpc("my_absence_visibility");
+      if (av && av.editable) {
+        const box = $("absvis-form").visible;
+        box.checked = av.visible !== false;
+        box.addEventListener("change", async () => {
+          const out = $("absvis-msg");
+          const { error } = await sb.rpc("my_set_absence_visible", { p_visible: box.checked });
+          if (error) box.checked = !box.checked;
+          msg(out, error ? T.error : (fr ? "Réglage enregistré." : "Setting saved."), error ? "error" : "ok");
+        });
+        $("absvis").hidden = false;
+      }
+    }
+
     // Notifications push : « un autre membre participe au même congrès que moi » (réglage par appareil)
     const nf = $("notify-form");
     if (nf) (async () => {
