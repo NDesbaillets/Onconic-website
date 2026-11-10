@@ -21,3 +21,11 @@ Remplit `public.sl_rx` pour les médicaments per os à partir des RCP du Compend
 - Les régimes de titration (brigatinib), au poids (selpercatinib) ou à cycles évolutifs (témozolomide : `no_variants`) ne sont pas dérivés ; les textes préparés à la main restent la référence.
 - Les paliers de réduction ne sont pas extraits : un brouillon créé n'a que la dose initiale.
 - Substances sans RCP trouvé (nom commercial absent de `substances.json`) : signalées à l'exécution.
+
+## Mise à jour automatique (2 fois par mois)
+Une tâche programmée (1er et 15 du mois) exécute :
+1. `aips_rx.py download DOSSIER` : télécharge le fichier AIPS et retourne le chemin du XML (le fichier est régénéré chaque jour, d'où l'étape suivante).
+2. `aips_rx.py check XML --state tools/compendium/state.json` : compare l'empreinte des RCP suivis (URL des documents, qui changent à chaque nouvelle version) à celle du dernier run. Code de sortie 0 = rien de nouveau, 10 = au moins un RCP a changé.
+3. Si changement : `build XML --cache DOSSIER --sql supabase/sl_rx_auto.sql --report rapport.md --state tools/compendium/state.json`, qui régénère le SQL, liste les changements de dosages et de posologies, et met à jour `state.json`.
+4. PR, merge, puis exécution du SQL (relançable : jamais de texte existant écrasé, validé ou non ; une variante n'est créée que si aucun texte n'existe déjà pour cette présentation et cette dose).
+Les textes déjà validés dont le RCP a changé ne sont pas modifiés : ils sont listés dans le compte rendu pour relecture.
