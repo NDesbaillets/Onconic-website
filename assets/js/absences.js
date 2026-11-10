@@ -4,6 +4,7 @@
   const cfg = window.ONCONIC_CONFIG || {};
   const sb = window.supabase && cfg.supabaseUrl ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
   const DOCX = "https://cdn.jsdelivr.net/npm/docx@9.5.1/dist/index.iife.js";
+  const EXCELJS = "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js";
   const PREFS_KEY = "onconic.absences.v1";
 
   const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
@@ -940,7 +941,7 @@
     return new Promise((ok, ko) => {
       if (window[global]) return ok();
       const s = document.createElement("script");
-      s.src = src; s.onload = ok; s.onerror = () => ko(new Error("Chargement de la bibliothèque Word impossible."));
+      s.src = src; s.onload = ok; s.onerror = () => ko(new Error("Chargement de la bibliothèque impossible."));
       document.head.append(s);
     });
   }
@@ -1017,6 +1018,120 @@
   }
 
   // ----- Onglets -----
+  // ----- Exports Excel (admin, direction : tous les membres ; validateurs : leurs cliniques) -----
+  const DATE_FMT = "dd.mm.yyyy", DT_FMT = new Intl.DateTimeFormat("fr-CH", { timeZone: "Europe/Zurich", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const ROLE_NAME = { clinician: "Médecin assistant", cdc: "CDC", cadre: "Médecin cadre", assistant: "Assistante médicale", pharmacist: "Pharmacien·ne", direction: "Admin de direction", admin: "Administrateur" };
+  const xDT = (s) => (s ? DT_FMT.format(new Date(s)).replace(",", "") : "");
+  const xDate = (s) => (s ? pd(s) : null);
+  const FILL = { approved: "FFE3F1E4", requested: "FFFFF3D6", direction: "FFFCE4C8", rejected: "FFF9DADA", cancelled: "FFE6E8EC", change: "FFDDE8F7" };
+  function statusLabel(r) {
+    if (r.status === "approved") return r.change_type === "delete" ? "Validée, suppression demandée" : r.change_type === "modify" ? "Validée, modification demandée" : "Validée";
+    if (r.status === "requested") return r.stage === 2 ? "En cours : visa de la direction" : "En cours : chez les validateurs";
+    return r.status === "rejected" ? "Refusée" : r.status === "cancelled" ? "Annulée" : r.status;
+  }
+  const statusFill = (r) => (r.status === "approved" ? (r.change_type ? FILL.change : FILL.approved) : r.status === "requested" ? (r.stage === 2 ? FILL.direction : FILL.requested) : FILL[r.status]);
+  const DECISION_LABEL = { approved: "Acceptée", rejected: "Refusée", change_approved: "Changement accepté", change_rejected: "Changement refusé" };
+  function exportWindow() {
+    const from = $("ab-exp-from").value, to = $("ab-exp-to").value;
+    if (!from || !to || to < from) { say($("ab-exp-msg"), "Vérifiez la fenêtre : la fin doit suivre le début.", "error"); return null; }
+    if ((pd(to) - pd(from)) / 864e5 > 800) { say($("ab-exp-msg"), "Fenêtre trop longue (800 jours au plus).", "error"); return null; }
+    return { from, to };
+  }
+  function saveXlsx(buffer, name) {
+    const url = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    const a = el("a"); a.href = url; a.download = name;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+  function styleSheet(ws, widths) {
+    ws.columns = ws.columns.map((c, i) => Object.assign(c, { width: widths[i] || 16 }));
+    ws.getRow(1).font = { bold: true };
+    ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF001B4D" } };
+    ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    ws.views = [{ state: "frozen", ySplit: 1 }];
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } };
+  }
+  async function runExport(kind) {
+    const w = exportWindow();
+    if (!w) return;
+    const msg = $("ab-exp-msg");
+    say(msg, "Préparation du fichier…");
+    const [abs, dec] = await Promise.all([sb.rpc("absence_export", { p_from: w.from, p_to: w.to }), kind === "sum" ? sb.rpc("absence_decisions", { p_from: w.from, p_to: w.to }) : Promise.resolve({ data: [] })]);
+    if (abs.error || dec.error) return say(msg, (abs.error || dec.error).message, "error");
+    const rows = (abs.data || []).map((r) => Object.assign(r, { start_date: String(r.start_date).slice(0, 10), end_date: String(r.end_date).slice(0, 10) }));
+    const decisions = (dec.data || []).map((r) => Object.assign(r, { start_date: String(r.start_date).slice(0, 10), end_date: String(r.end_date).slice(0, 10) }));
+    try { await loadScript(EXCELJS, "ExcelJS"); } catch (e) { return say(msg, e.message, "error"); }
+    const wb = new window.ExcelJS.Workbook();
+    const stamp = `${w.from}_${w.to}`;
+    if (kind === "abs") {
+      const ws = wb.addWorksheet("Absences");
+      ws.columns = ["Nom", "Rôle", "Cliniques", "Motif", "Précision", "Début", "Fin", "Jours ouvrables", "État", "Changement demandé", "Envoyée le", "Validée par (1re ligne)", "Visa de la direction", "Décision par", "Décision le", "Commentaire"].map((header) => ({ header }));
+      for (const r of rows) {
+        const chg = r.change_type === "delete" ? "Suppression" : r.change_type === "modify" ? `Modification : ${KINDS[r.change_kind] ? KINDS[r.change_kind][0] : r.change_kind}, ${period(String(r.change_start).slice(0, 10), String(r.change_end).slice(0, 10))}${r.change_note ? " (" + r.change_note + ")" : ""}` : "";
+        const row = ws.addRow([r.name, ROLE_NAME[r.role] || r.role, (r.clinics || []).join(", "), KINDS[r.kind][0], r.note || "", xDate(r.start_date), xDate(r.end_date), workdays(r.start_date, r.end_date),
+          statusLabel(r), chg, xDT(r.submitted_at), r.approvers || "", r.direction_name ? `${r.direction_name} (${xDT(r.direction_at)})` : "", r.decided_by_name || "", xDT(r.decided_at), r.decision_comment || ""]);
+        row.getCell(6).numFmt = DATE_FMT; row.getCell(7).numFmt = DATE_FMT;
+        row.eachCell((c) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: statusFill(r) } }; });
+      }
+      styleSheet(ws, [26, 18, 24, 12, 28, 12, 12, 10, 32, 36, 18, 44, 36, 24, 18, 36]);
+      const lg = wb.addWorksheet("Légende");
+      lg.columns = [{ header: "Couleur", width: 14 }, { header: "État", width: 40 }];
+      [["Validée", FILL.approved], ["En cours : chez les validateurs", FILL.requested], ["En cours : visa de la direction", FILL.direction], ["Validée, modification ou suppression demandée", FILL.change], ["Refusée", FILL.rejected], ["Annulée", FILL.cancelled]]
+        .forEach(([t, c]) => { const r = lg.addRow(["", t]); r.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: c } }; });
+      lg.getRow(1).font = { bold: true };
+      lg.addRow([]); lg.addRow(["", `Fenêtre : du ${fmtCH(w.from)} au ${fmtCH(w.to)} (absences qui chevauchent la fenêtre). Les brouillons ne sont pas exportés. Jours ouvrables : lundi à vendredi, fériés vaudois déduits.`]);
+      saveXlsx(await wb.xlsx.writeBuffer(), `absences_${stamp}.xlsx`);
+      return say(msg, `${plur(rows.length, "absence exportée", "absences exportées")}.`, "ok");
+    }
+    // Synthèse par personne
+    const people = new Map();
+    const get = (id, name, role, clinics) => { if (!people.has(id)) people.set(id, { name, role, clinics: clinics || [], ok: 0, days: { vacances: 0, congres: 0, autre: 0 }, pending: 0, changePending: 0, rejected: 0, cancelled: 0, chOk: 0, chKo: 0 }); return people.get(id); };
+    for (const r of rows) {
+      const p = get(r.user_id, r.name, r.role, r.clinics);
+      if (r.status === "approved") { p.ok++; p.days[r.kind] += workdays(r.start_date, r.end_date, w.from, w.to); if (r.change_type) p.changePending++; }
+      else if (r.status === "requested") p.pending++;
+      else if (r.status === "cancelled") p.cancelled++;
+    }
+    for (const d of decisions) {
+      const p = get(d.user_id, d.name, d.role, d.clinics);
+      if (d.decision === "rejected") p.rejected++; else if (d.decision === "change_approved") p.chOk++; else if (d.decision === "change_rejected") p.chKo++;
+    }
+    const ws = wb.addWorksheet("Synthèse");
+    ws.columns = ["Nom", "Rôle", "Cliniques", "Demandes acceptées", "Jours ouvrables acceptés", "dont vacances", "dont congrès", "dont autre", "En attente", "Validées avec changement en attente", "Refusées", "Annulées", "Changements acceptés", "Changements refusés"].map((header) => ({ header }));
+    [...people.values()].sort((a, b) => a.name.localeCompare(b.name, "fr")).forEach((p) => {
+      ws.addRow([p.name, ROLE_NAME[p.role] || p.role, (p.clinics || []).join(", "), p.ok, p.days.vacances + p.days.congres + p.days.autre, p.days.vacances, p.days.congres, p.days.autre, p.pending, p.changePending, p.rejected, p.cancelled, p.chOk, p.chKo]);
+    });
+    styleSheet(ws, [26, 18, 24, 12, 14, 10, 10, 10, 10, 16, 10, 10, 14, 14]);
+    ws.addRow([]);
+    ws.addRow([`Fenêtre : du ${fmtCH(w.from)} au ${fmtCH(w.to)}. Jours ouvrables comptés dans la fenêtre (week-ends et fériés vaudois exclus). Les refus sont tirés du journal des décisions : ceux d'avant la mise en service de l'export ne sont pas conservés au-delà des 14 jours de visibilité.`]);
+    const wd = wb.addWorksheet("Décisions");
+    wd.columns = ["Nom", "Décision", "Motif", "Précision", "Début", "Fin", "Décidée le", "Par", "Commentaire"].map((header) => ({ header }));
+    for (const d of decisions) {
+      const r = wd.addRow([d.name, DECISION_LABEL[d.decision] || d.decision, KINDS[d.kind] ? KINDS[d.kind][0] : d.kind, d.note || "", xDate(d.start_date), xDate(d.end_date), xDT(d.decided_at), d.decided_by_name || "", d.comment || ""]);
+      r.getCell(5).numFmt = DATE_FMT; r.getCell(6).numFmt = DATE_FMT;
+    }
+    styleSheet(wd, [26, 20, 12, 28, 12, 12, 18, 24, 40]);
+    saveXlsx(await wb.xlsx.writeBuffer(), `synthese-absences_${stamp}.xlsx`);
+    say(msg, `Synthèse de ${plur(people.size, "personne", "personnes")}, ${plur(decisions.length, "décision", "décisions")}.`, "ok");
+  }
+  function initExport() {
+    const t = new Date();
+    const defaults = () => { $("ab-exp-from").value = monthStart(t.getFullYear(), t.getMonth() - 1); $("ab-exp-to").value = monthEnd(t.getFullYear(), t.getMonth() + 12); };
+    defaults();
+    $("ab-exp-scope").textContent = state.isDir
+      ? "Tous les membres. Choisissez la fenêtre (par défaut : le mois précédent et les 12 mois à venir)."
+      : `Les membres de ${state.ctx.validates.length > 1 ? "vos cliniques" : "votre clinique"} (${state.ctx.validates.join(", ")}). Choisissez la fenêtre (par défaut : le mois précédent et les 12 mois à venir).`;
+    $("ab-exp-reset").addEventListener("click", defaults);
+    $("ab-exp-form").addEventListener("submit", (e) => e.preventDefault());
+    for (const [id, kind] of [["ab-exp-abs", "abs"], ["ab-exp-sum", "sum"]]) {
+      $(id).addEventListener("click", async (e) => {
+        const b = e.currentTarget; b.disabled = true;
+        try { await runExport(kind); } catch (err) { say($("ab-exp-msg"), "Export impossible : " + err.message, "error"); }
+        b.disabled = false;
+      });
+    }
+  }
+
   // ----- Direction : absence saisie au nom d'un membre, validée d'office -----
   function initDirection() {
     const who = $("ab-dir-who");
@@ -1050,7 +1165,7 @@
   }
 
   function setTab(name) {
-    for (const t of ["plan", "mine", "todo", "dir"]) {
+    for (const t of ["plan", "mine", "todo", "dir", "exp"]) {
       const on = t === name;
       $("ab-t-" + t).setAttribute("aria-selected", String(on));
       $("ab-p-" + t).hidden = !on;
@@ -1151,6 +1266,11 @@
       subBtn.setAttribute("aria-expanded", String(open));
       if (open && !subBox.dataset.ready) { subBox.dataset.ready = "1"; subscribeBody(subBox); }
     });
+    if (state.isDir || ctx.validates.length) {
+      $("ab-t-exp").hidden = false;
+      $("ab-t-exp").addEventListener("click", () => setTab("exp"));
+      initExport();
+    }
     if (state.isDir) {
       $("ab-t-dir").hidden = false;
       $("ab-t-dir").addEventListener("click", () => setTab("dir"));
