@@ -20,3 +20,6 @@ Lien privé `.../functions/v1/calendar-feed?t=<jeton 64 caractères>`. Jeton dan
 - Un jeton divulgué donne accès en lecture à l'agenda du membre jusqu'à son renouvellement.
 - Les heures de présentation sont « flottantes » (heure locale du lieu, sans fuseau).
 - Un membre dont l'accès Congrès est retiré voit son flux se vider.
+
+## Agenda combiné (10.11.2026)
+Fonction `agenda-feed` (sans JWT, même jeton) : fusionne `calendar_feed` et `absence_calendar_feed` en un seul flux « Onconic · Mon agenda ». Proposé sous les liens séparés dans les pages Congrès et Absences, avec la consigne de ne pas cumuler combiné et séparés (doublons). Renouveler le jeton coupe les trois flux ; avertissement affiché sur les deux pages. Les fichiers `agenda-feed/congres.ts` et `absences.ts` sont des copies des `ics.ts` des deux autres fonctions : les garder identiques.
