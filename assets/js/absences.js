@@ -237,13 +237,16 @@
     $("ab-detail").hidden = true;
   }
 
-  // Entrées de l'agenda commun pour un jour : férié vaudois (calculé), événements et vacances scolaires (saisis par l'admin)
-  const CAL_LETTER = { ferie: "F", evenement: "É", vacances_scolaires: "S" };
+  // Entrées de l'agenda commun pour un jour : férié vaudois (calculé), événements, congrès signalés dans Congrès,
+  // vacances scolaires (saisies par l'admin ou importées)
+  const CAL_LETTER = { ferie: "F", evenement: "É", congres: "★", vacances_scolaires: "S" };
+  const CAL_KIND = { ferie: "Férié", evenement: "Événement", congres: "Congrès", vacances_scolaires: "Vacances scolaires" };
   function calEntries(day, cal) {
     const out = [];
     const h = holidayOf(day);
     if (h) out.push({ kind: "ferie", label: h + " (férié vaudois)", start: day, end: day });
-    cal.filter((c) => c.kind === "evenement" && c.start_date <= day && day <= c.end_date).forEach((c) => out.push({ kind: "evenement", label: c.label, start: c.start_date, end: c.end_date }));
+    for (const kind of ["evenement", "congres"])
+      cal.filter((c) => c.kind === kind && c.start_date <= day && day <= c.end_date).forEach((c) => out.push({ kind, label: c.label, start: c.start_date, end: c.end_date }));
     cal.filter((c) => c.kind === "vacances_scolaires" && c.start_date <= day && day <= c.end_date).forEach((c) => out.push({ kind: "vacances_scolaires", label: c.label, start: c.start_date, end: c.end_date }));
     return out;
   }
@@ -279,7 +282,7 @@
     box.append(el("strong", null, fmtCH(day)));
     calEntries(day, cal).forEach((x) => {
       const row = el("p");
-      row.append(el("span", "ug-badge", { ferie: "Férié", evenement: "Événement", vacances_scolaires: "Vacances scolaires" }[x.kind]), document.createTextNode(" " + x.label + (x.kind === "ferie" ? "" : ` · ${period(x.start, x.end)}`)));
+      row.append(el("span", "ug-badge", CAL_KIND[x.kind]), document.createTextNode(" " + x.label + (x.kind === "ferie" ? "" : ` · ${period(x.start, x.end)}`)));
       box.append(row);
     });
     box.hidden = false;

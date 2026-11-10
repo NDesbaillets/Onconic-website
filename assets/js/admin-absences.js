@@ -81,8 +81,36 @@
   const CAL_KIND = { vacances_scolaires: "Vacances scolaires", evenement: "Événement" };
   const fmtCH = (d) => String(d).slice(0, 10).split("-").reverse().join(".");
   function calSay(text, kind) { const m = $("aa-cal-msg"); m.className = "form-msg" + (kind ? " " + kind : ""); m.textContent = text; }
+  // Import des vacances scolaires (OpenHolidays) : état du dernier import, écarts à vérifier, import à la demande
+  async function loadSync() {
+    const box = $("aa-sync");
+    const { data } = await sb.rpc("admin_calendar_sync_status");
+    box.replaceChildren();
+    const r = data && data.result;
+    box.append(el("p", null, data && data.last_run
+      ? `Dernier import des vacances scolaires : ${new Date(data.last_run).toLocaleString("fr-CH")} · ${r.ajoutees} ajoutée(s), ${r.mises_a_jour} mise(s) à jour, ${r.identiques} identique(s).`
+      : "Aucun import des vacances scolaires pour l'instant."));
+    for (const g of (r && r.ecarts) || []) {
+      box.append(el("p", "form-msg error", `Écart à vérifier : « ${g.label} » saisi du ${fmtCH(g.saisi[0])} au ${fmtCH(g.saisi[1])}, OpenHolidays indique du ${fmtCH(g.source[0])} au ${fmtCH(g.source[1])}.`));
+    }
+    const go = el("button", "btn btn-outline", "Importer maintenant");
+    go.type = "button";
+    go.addEventListener("click", async () => {
+      go.disabled = true; calSay("Import en cours…");
+      const { error } = await sb.functions.invoke("holidays-sync", { body: {} });
+      go.disabled = false;
+      if (error) {
+        let m = error.message;
+        try { const b = await error.context.json(); if (b && b.error) m = b.error; } catch (x) { /* message générique */ }
+        calSay("Import impossible : " + m, "error");
+      } else calSay("Import terminé.", "ok");
+      await loadCal();
+    });
+    box.append(go);
+  }
   async function loadCal() {
-    const { data, error } = await sb.rpc("absence_calendar", { p_from: "2000-01-01", p_to: "2100-12-31" });
+    loadSync();
+    const { data, error } = await sb.rpc("admin_calendar_list");
     if (error) return calSay("Chargement impossible : " + error.message, "error");
     const list = $("aa-cal-list");
     list.replaceChildren();
@@ -91,6 +119,18 @@
       const row = el("div", "aa-cal-item");
       const a = fmtCH(c.start_date), b = fmtCH(c.end_date);
       row.append(el("span", "aa-cal-when", a === b ? a : `${a} – ${b}`), el("span", "ug-badge", CAL_KIND[c.kind]), el("span", "aa-cal-label", c.label));
+      if (c.source === "openholidays") row.append(el("span", "ug-badge" + (c.to_confirm ? " ug-warn" : ""), c.to_confirm ? "Importé, à confirmer" : "Importé, confirmé"));
+      if (c.to_confirm) {
+        const ok = el("button", "btn", "Confirmer");
+        ok.type = "button";
+        ok.addEventListener("click", async () => {
+          const { error: e3 } = await sb.rpc("admin_calendar_confirm", { p_id: c.id });
+          if (e3) return calSay("Refusé : " + e3.message, "error");
+          calSay("Période confirmée.", "ok");
+          await loadCal();
+        });
+        row.append(ok);
+      }
       const del = el("button", "btn btn-outline lt-danger", "Supprimer");
       del.type = "button";
       del.addEventListener("click", async () => {

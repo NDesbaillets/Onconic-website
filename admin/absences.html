@@ -15,11 +15,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261109d">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261110b">
   <script src="/assets/js/site.js?v=20261109a" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/admin-absences.js?v=20261106f" defer></script>
+  <script src="/assets/js/admin-absences.js?v=20261110a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -51,7 +51,8 @@
 
           <section class="aa-cal" aria-labelledby="aa-cal-title">
             <h2 id="aa-cal-title">Agenda commun</h2>
-            <p class="muted">S'affiche en première ligne du planning des absences, pour tous. Les jours fériés vaudois sont calculés automatiquement. Les vacances scolaires vaudoises 2026-2027 sont préremplies d'après des sources tierces : à confirmer sur <a href="https://www.vd.ch/vacances" rel="noopener">vd.ch/vacances</a>. Ajoutez les années suivantes et les événements importants (retraite de service, fermeture, congrès de la clinique).</p>
+            <p class="muted">S'affiche en première ligne du planning des absences, pour tous. Les jours fériés vaudois sont calculés automatiquement. Les vacances scolaires vaudoises sont importées chaque mois depuis OpenHolidays et restent « à confirmer » jusqu'à votre validation (vérifiez sur <a href="https://www.vd.ch/vacances" rel="noopener">vd.ch/vacances</a>). Les congrès importants se signalent dans l'app Congrès (case « Afficher dans l'agenda des absences »). Ajoutez ici les autres événements (retraite de service, fermeture).</p>
+            <div class="card aa-sync" id="aa-sync"></div>
             <form class="card aa-cal-form" id="aa-cal-form" novalidate>
               <label>Type
                 <select id="aa-cal-kind">

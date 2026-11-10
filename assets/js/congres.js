@@ -184,6 +184,7 @@
     meta.append(badge(e.kind));
     if (e.format !== "présentiel") meta.append(badge(e.format));
     if (e.to_confirm) meta.append(badge("Dates à confirmer", "ug-warn"));
+    if (e.in_absence_calendar) meta.append(badge("Agenda des absences", "cg-abs-badge"));
     (e.clinics || []).forEach((c) => meta.append(badge(c === ALL ? "Toutes cliniques" : c, "cg-clinic-badge")));
     head.append(meta);
     head.append(el("p", "cg-when", [range(e), [e.city, e.country].filter(Boolean).join(", ")].filter(Boolean).join(" · ")));
@@ -725,6 +726,7 @@
     c.start_date = bump(e.start_date); c.end_date = bump(e.end_date);
     c.abstract_deadline = null; c.early_deadline = null; c.whatsapp_url = null;
     c.to_confirm = true;
+    c.in_absence_calendar = false;
     return c;
   }
 
@@ -739,6 +741,9 @@
       if (f.elements[k] && src[k] != null) f.elements[k].value = src[k];
     }
     f.elements.to_confirm.checked = !!src.to_confirm;
+    // Congrès important : réservé à l'admin (une nouvelle édition ne reprend pas le signalement)
+    $("cg-abs-flag").hidden = state.role !== "admin";
+    f.elements.in_absence_calendar.checked = !!(e && e.in_absence_calendar);
     const box = $("cg-clinics");
     box.querySelectorAll("label").forEach((l) => l.remove());
     for (const c of [ALL].concat(BLOCS.flatMap(([, l]) => l))) {
@@ -790,6 +795,7 @@
       abstract_deadline: v("abstract_deadline"), early_deadline: v("early_deadline"), whatsapp_url: v("whatsapp_url"),
       to_confirm: f.elements.to_confirm.checked, clinics: [...f.querySelectorAll('input[name="clinics"]:checked')].map((i) => i.value)
     };
+    if (state.role === "admin") row.in_absence_calendar = f.elements.in_absence_calendar.checked;
     const err = (t) => { msg.className = "form-msg error"; msg.textContent = t; };
     if (!row.title || row.title.length < 3) return err("Le titre est obligatoire.");
     if (!row.start_date) return err("La date de début est obligatoire.");
