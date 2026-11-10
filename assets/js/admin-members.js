@@ -11,7 +11,7 @@
     ["limitations", "Limitations LS"], ["duree", "Durée de traitement"], ["absences", "Absences"], ["medletters", "Lettres médicales"]];
   const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome", "Lower GI", "Upper GI", "ORL", "Sarcomes", "Rad-Inter", "ION", "UTOH"];
   const ABS_CLINICS = CLINICS.concat(["Plateforme"]); // cliniques de rattachement pour les absences (Key trials garde CLINICS)
-  const state = { rows: [], me: null };
+  const state = { rows: [], me: null, changes: new Map() };
 
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   function el(tag, cls, txt) {
@@ -25,7 +25,13 @@
   const nameOf = (r) => [r.first_name, r.last_name].filter(Boolean).join(" ") || r.full_name || "(sans nom)";
 
   async function load() {
-    const { data, error } = await sb.rpc("admin_members");
+    const [{ data, error }, chRes] = await Promise.all([sb.rpc("admin_members"), sb.rpc("admin_clinic_changes")]);
+    // Changements de cliniques programmés, par membre
+    state.changes = new Map();
+    for (const x of (chRes && chRes.data) || []) {
+      if (!state.changes.has(x.user_id)) state.changes.set(x.user_id, []);
+      state.changes.get(x.user_id).push(x);
+    }
     if (error) throw error;
     state.rows = data || [];
   }
@@ -38,6 +44,65 @@
     const pending = state.rows.filter((r) => r.role === "member").length;
     $("am-count").textContent = `${plur(rows.length, "membre affiché", "membres affichés")} sur ${state.rows.length}` + (pending ? ` · ${pending} en attente de validation` : "");
     $("am-list").replaceChildren(...rows.map(card));
+  }
+
+  // Changements de bloc programmés : « à partir du …, cliniques … ». Les absences qui tombent après cette date
+  // sont validées par les cadres des nouvelles cliniques ; le changement devient les cliniques actuelles le jour venu.
+  const eu = (d) => String(d).slice(0, 10).split("-").reverse().join(".");
+  function plannedChanges(r) {
+    const box = el("div", "am-changes");
+    box.append(el("p", "am-changes-title", "Changements de cliniques programmés"));
+    const list = state.changes.get(r.id) || [];
+    if (!list.length) box.append(el("p", "muted am-note", "Aucun changement programmé."));
+    for (const x of list) {
+      const row = el("div", "am-change");
+      row.append(el("span", null, `À partir du ${eu(x.valid_from)} : ${(x.clinics || []).length ? x.clinics.join(", ") : "aucune clinique"}`));
+      const del = el("button", "btn btn-outline lt-danger", "Retirer");
+      del.type = "button";
+      del.addEventListener("click", async () => {
+        if (!confirm(`Retirer le changement du ${eu(x.valid_from)} pour ${nameOf(r)} ?`)) return;
+        const { error } = await sb.rpc("admin_clinic_change_delete", { p_user: r.id, p_from: String(x.valid_from).slice(0, 10) });
+        if (error) return say("Refusé : " + error.message, "error");
+        say(`${nameOf(r)} : changement du ${eu(x.valid_from)} retiré.`, "ok");
+        await refresh();
+      });
+      row.append(del);
+      box.append(row);
+    }
+    const add = el("details", "am-change-add");
+    add.append(el("summary", null, "Programmer un changement de bloc"));
+    const form = el("form", "am-change-form");
+    form.noValidate = true;
+    const dl = el("label", null, "À partir du");
+    const date = el("input");
+    date.type = "date"; date.required = true;
+    const t = new Date(); t.setDate(t.getDate() + 1);
+    date.min = t.toISOString().slice(0, 10);
+    dl.append(date);
+    const fs = el("fieldset", "am-tools am-clinics");
+    fs.append(el("legend", null, "Nouvelles cliniques"));
+    for (const cl of ABS_CLINICS) {
+      const lab = el("label", "cg-check am-tool");
+      const cb = el("input");
+      cb.type = "checkbox"; cb.value = cl;
+      lab.append(cb, el("span", null, cl));
+      fs.append(lab);
+    }
+    const go = el("button", "btn", "Programmer");
+    go.type = "submit";
+    form.append(dl, fs, go);
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!date.value) return say("Choisissez la date du changement.", "error");
+      const chosen = [...fs.querySelectorAll("input:checked")].map((i) => i.value);
+      const { error } = await sb.rpc("admin_clinic_change_save", { p_user: r.id, p_from: date.value, p_clinics: chosen });
+      if (error) return say("Refusé : " + error.message, "error");
+      say(`${nameOf(r)} : à partir du ${eu(date.value)}, ${chosen.length ? chosen.join(", ") : "aucune clinique"}.`, "ok");
+      await refresh();
+    });
+    add.append(form);
+    box.append(add);
+    return box;
   }
 
   function card(r) {
@@ -119,6 +184,7 @@
       }
       c.append(fs);
       if (!mine.size) c.append(el("p", "muted am-note", "Aucune clinique de rattachement : ce médecin ne voit pas de collègues par défaut dans le planning des absences et ses demandes iront à l'administrateur."));
+      c.append(plannedChanges(r));
     }
     if (r.role === "cdc" || r.role === "cadre") {
       const fs = el("fieldset", "am-tools am-clinics");
