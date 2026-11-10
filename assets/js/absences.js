@@ -639,7 +639,7 @@
       state.mineWarn = warnBox(data.conflicts, "Attention : trop d'absences en même temps");
       say($("ab-mine-msg"), mode === "change" ? "Demande de modification envoyée aux validateurs : l'absence reste validée aux anciennes dates jusqu'à leur décision (tous doivent l'accepter)." : "Demande modifiée : elle repasse en brouillon, envoyez-la pour relancer la validation.", "ok");
       if (mode === "direction") {
-        say($("ab-mine-msg"), "Absence modifiée par la direction : le membre est prévenu.", "ok"); mailer();
+        say($("ab-mine-msg"), a.user_id === state.ctx.me ? "Absence modifiée." : "Absence modifiée par la direction : le membre est prévenu.", "ok"); mailer();
         const bw = (data.balance || []).map((x) => `Solde ${x.kind === "vacances" ? "de vacances" : "de congrès"} ${x.year} dépassé (après : ${fmtD(x.remaining_after)} j).`);
         if (bw.length) {
           const w = el("div", "ab-warn"); w.append(el("strong", null, "Attention : solde insuffisant (la modification n'est pas bloquée)")); bw.forEach((t) => w.append(el("p", null, t)));
@@ -804,6 +804,17 @@
           const { error } = await sb.rpc("absence_delete_rejected", { p_id: a.id });
           if (error) return say($("ab-mine-msg"), error.message, "error");
           say($("ab-mine-msg"), "Demande refusée supprimée.", "ok");
+          await afterChange();
+        }));
+    } else if (a.status === "approved" && !a.change_type && state.isDir) {
+      // La direction modifie ou annule ses propres absences directement : pas de validation
+      actions.append(
+        button("Modifier", "btn btn-outline", () => swap(editForm(a, "direction"))),
+        button("Annuler cette absence", "btn btn-outline lt-danger", async () => {
+          if (!confirm(`Annuler votre absence (${period(a.start_date, a.end_date)}) ?`)) return;
+          const { error } = await sb.rpc("absence_direction_cancel", { p_id: a.id });
+          if (error) return say($("ab-mine-msg"), error.message, "error");
+          say($("ab-mine-msg"), "Absence annulée.", "ok");
           await afterChange();
         }));
     } else if (a.status === "approved" && !a.change_type) {
@@ -1246,7 +1257,7 @@
       const { data, error } = await sb.rpc("absence_manageable_members");
       who.replaceChildren();
       const first = el("option", null, error ? "Liste indisponible" : "Choisir un membre du CHUV…"); first.value = ""; who.append(first);
-      (data || []).filter((p) => p.id !== state.ctx.me || state.ctx.role === "admin").forEach((p) => {
+      (data || []).forEach((p) => {
         const o = el("option", null, p.name + ((p.clinics || []).length ? " · " + p.clinics.join(", ") : "")); o.value = p.id; who.append(o);
       });
     })();
@@ -1258,13 +1269,13 @@
       if (!start.value || !end.value || end.value < start.value) return say(msg, "Vérifiez les dates.", "error");
       if (kind.value === "autre" && note.value.trim().length < 2) return say(msg, "Indiquez le type d'absence.", "error");
       const name = who.selectedOptions[0].textContent.split(" · ")[0];
-      if (!confirm(`Ajouter cette absence pour ${name}, validée d'office ? Le membre est prévenu${kind.value === "autre" && conf.checked ? "" : " et le formulaire part à la gestion des absences"}.`)) return;
+      if (!confirm(`Ajouter cette absence pour ${name} ? Elle est enregistrée sans validation ni formulaire PDF${who.value === state.ctx.me ? "" : ", et le membre est prévenu par e-mail"}.`)) return;
       const btn = ev.submitter || ev.target.querySelector("button[type=submit]");
       btn.disabled = true;
       const { data, error } = await sb.rpc("absence_direction_add", { p_user: who.value, p_kind: kind.value, p_note: note.value.trim(), p_start: start.value, p_end: end.value, p_confidential: kind.value === "autre" && conf.checked });
       btn.disabled = false;
       if (error) return say(msg, error.message, "error");
-      say(msg, `Absence enregistrée et validée pour ${name}.`, "ok");
+      say(msg, `Absence enregistrée pour ${name} (sans validation ni formulaire).`, "ok");
       const w = warnBox(data.conflicts, "Attention : trop d'absences en même temps");
       if (w) warn.append(w);
       for (const x of data.balance || []) {
@@ -1343,7 +1354,7 @@
     if (!data.session) return (location.href = "/fr/the-hive.html");
     $("logout").addEventListener("click", async () => { await sb.auth.signOut(); location.href = "/fr/"; });
     const { data: ctx, error } = await sb.rpc("absence_context");
-    if (error || !ctx) { $("ug-status").textContent = "Cet espace est réservé aux membres validés de The Hive."; return; }
+    if (error || !ctx) { $("ug-status").textContent = "L'outil Absences est réservé aux membres de l'institution CHUV (et aux administrateurs). Contactez l'administration si votre compte devrait y avoir accès."; return; }
     state.ctx = ctx;
     state.isDir = ctx.role === "direction" || ctx.role === "admin";
     ctx.validates = ctx.validates || [];

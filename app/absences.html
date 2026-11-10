@@ -193,7 +193,7 @@
 
           <section id="ab-p-dir" role="tabpanel" aria-labelledby="ab-t-dir" hidden>
             <h2>Absence au nom d'un membre</h2>
-            <p class="muted">Saisie par la direction : l'absence est validée d'office, le membre est prévenu par e-mail et le formulaire part à la gestion des absences. Pour modifier ou annuler une absence validée, choisissez le membre dans « Résumé de » (onglet Mes absences) : les boutons apparaissent sur chaque absence.</p>
+            <p class="muted">Saisie directe par la direction, pour la visualisation et la planification : aucune validation, aucun formulaire PDF. Le membre concerné est prévenu par e-mail (pas pour vos propres absences). Pour modifier ou annuler une absence, choisissez le membre dans « Résumé de » (onglet Mes absences) : les boutons apparaissent sur chaque absence.</p>
             <form class="card ab-new" id="ab-dir-form" novalidate>
               <div class="ab-fields">
                 <label>Membre <select id="ab-dir-who" required></select></label>
@@ -207,7 +207,7 @@
                 </datalist>
                 <label>Du <input id="ab-dir-start" type="date" required></label>
                 <label>Au (inclus) <input id="ab-dir-end" type="date" required></label>
-                <button class="btn" type="submit">Ajouter, validée d'office</button>
+                <button class="btn" type="submit">Ajouter (sans validation)</button>
               </div>
               <label class="cg-check" id="ab-dir-conf-wrap" hidden><input type="checkbox" id="ab-dir-conf"> Confidentiel : seuls la personne et la direction voient le type (les autres, y compris les validateurs, voient « Autre »)</label>
               <p class="form-msg" id="ab-dir-msg" role="status" aria-live="polite"></p>

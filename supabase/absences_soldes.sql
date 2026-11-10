@@ -9,8 +9,10 @@
 --    (as_of) : seuls les jours posés après cette date sont déduits ; une case vide revient au droit par défaut.
 -- Absences « autres » : le type est un texte libre (maladie, congé maternité, service militaire, RTT, rendez-vous médical...), affiché
 --    « Autre » aux autres membres ; absences.confidential cache aussi le texte aux validateurs (maladie, accident, maternité, médical).
---    Une absence confidentielle saisie par la direction ne génère pas de formulaire PDF.
+-- Saisie directe de la direction : aucune validation, aucun formulaire PDF (visualisation et planification), pour tout membre CHUV
+--    y compris la direction elle-même ; le membre concerné est prévenu par e-mail (sauf s'il s'agit de la direction elle-même).
 -- Périmètre : la direction gère les membres de l'institution CHUV ; l'admin n'est pas limité.
+-- Accès à l'outil Absences : institution CHUV uniquement (profiles.institution = 'CHUV'), sauf pour l'administrateur.
 
 -- ===== 1. Colonnes et table =====
 alter table public.absences add column if not exists confidential boolean not null default false;
@@ -206,14 +208,13 @@ begin
     raise exception 'Membre introuvable ou sans accès à Absences.';
   end if;
   if public.current_role_name() = 'direction' and not public.absence_is_chuv(p_user) then raise exception 'Seuls les membres de l''institution CHUV se gèrent ici.' using errcode = '42501'; end if;
-  if p_user = uid and public.current_role_name() <> 'admin' then raise exception 'Vous ne pouvez pas valider vos propres absences.' using errcode = '42501'; end if;
   perform public.absence_check(p_user, null, p_kind, n, p_start, p_end);
+  -- Saisie directe de la direction : aucune validation, aucun formulaire PDF (visualisation et planification)
   insert into public.absences (user_id, kind, note, start_date, end_date, status, submitted_at, decision, decided_by, decided_at, direction_by, direction_at, stage, confidential, form_queued_at)
-    values (p_user, p_kind, n, p_start, p_end, 'approved', now(), 'approved', uid, now(), uid, now(), 1, conf, case when conf then now() end) returning id into new_id;
+    values (p_user, p_kind, n, p_start, p_end, 'approved', now(), 'approved', uid, now(), uid, now(), 1, conf, now()) returning id into new_id;
   if p_user <> uid then
     perform public.absence_enqueue('direction_change', p_user, array[new_id], jsonb_build_object('action', 'added', 'by', public.member_name(uid)));
   end if;
-  perform public.absence_form_after(new_id);
   return jsonb_build_object('id', new_id, 'conflicts', public.absence_conflicts_json(p_user, p_start, p_end),
                             'balance', public.absence_balance_check(p_user, p_kind, p_start, p_end, new_id));
 end;
@@ -230,7 +231,6 @@ begin
   if not found then raise exception 'Absence introuvable.'; end if;
   if a.status <> 'approved' then raise exception 'Seule une absence validée se modifie ici (une demande en cours se décide dans « À valider »).'; end if;
   if public.current_role_name() = 'direction' and not public.absence_is_chuv(a.user_id) then raise exception 'Seuls les membres de l''institution CHUV se gèrent ici.' using errcode = '42501'; end if;
-  if a.user_id = uid and public.current_role_name() <> 'admin' then raise exception 'Vous ne pouvez pas modifier vos propres absences validées.' using errcode = '42501'; end if;
   perform public.absence_check(a.user_id, p_id, p_kind, n, p_start, p_end);
   conf := case when p_kind <> 'autre' then false else coalesce(p_confidential, a.confidential) end;
   update public.absences set kind = p_kind, note = n, start_date = p_start, end_date = p_end, confidential = conf,
@@ -254,13 +254,40 @@ begin
   select * into a from public.absences where id = p_id for update;
   if not found or a.status not in ('approved', 'requested') then raise exception 'Absence introuvable ou déjà décidée.'; end if;
   if public.current_role_name() = 'direction' and not public.absence_is_chuv(a.user_id) then raise exception 'Seuls les membres de l''institution CHUV se gèrent ici.' using errcode = '42501'; end if;
-  if a.user_id = uid and public.current_role_name() <> 'admin' then raise exception 'Vous annulez vos propres absences par la demande de suppression.' using errcode = '42501'; end if;
   update public.absences set status = 'cancelled', change_type = null, change_kind = null, change_note = null, change_start = null, change_end = null,
     change_requested_at = null, stage = 1 where id = p_id;
   update public.absence_approvals set decision = 'skipped' where absence_id = p_id and decision = 'pending';
   if a.user_id <> uid then
     perform public.absence_enqueue('direction_change', a.user_id, array[p_id], jsonb_build_object('action', 'cancelled', 'by', public.member_name(uid)));
   end if;
+end;
+$$;
+
+create or replace function public.tool_allowed(p_user uuid, p_tool text)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+declare r text; i text; m boolean; o boolean;
+begin
+  select role, institution, med_plus into r, i, m from public.profiles where id = p_user;
+  if r is null or r = 'member' then return false; end if;
+  if r = 'admin' then return true; end if;
+  -- Absences : réservé à l'institution CHUV (même avec une exception d'accès), sauf pour l'administrateur
+  if p_tool = 'absences' and coalesce(i, '') <> 'CHUV' then return false; end if;
+  if r = 'direction' then return p_tool in ('absences', 'congres', 'formation', 'annuaire', 'contacts'); end if;
+  if p_tool = 'medletters' then return r in ('clinician', 'cdc', 'cadre', 'pharmacist') and coalesce(m, false); end if;
+  select allowed into o from public.tool_access where user_id = p_user and tool = p_tool;
+  if found then return o; end if;
+  i := coalesce(i, '');
+  return case p_tool
+    when 'absences' then r in ('clinician', 'cdc', 'cadre', 'assistant', 'pharmacist')
+    when 'congres' then r in ('clinician', 'cdc', 'cadre', 'assistant', 'pharmacist')
+    when 'trials' then r in ('clinician', 'cdc', 'cadre', 'assistant', 'pharmacist')
+    when 'formation' then r in ('clinician', 'cdc', 'cadre', 'assistant', 'pharmacist')
+    when 'annuaire' then r in ('clinician', 'cdc', 'cadre', 'assistant', 'pharmacist') and i = 'CHUV'
+    when 'contacts' then r in ('clinician', 'cdc', 'cadre', 'assistant', 'pharmacist') and i = 'CHUV'
+    when 'lettres' then r = 'pharmacist' or (r in ('clinician', 'cdc', 'cadre', 'assistant') and i = 'CHUV')
+    when 'limitations' then r in ('clinician', 'cdc', 'cadre', 'pharmacist')
+    when 'duree' then r = 'pharmacist' or (r in ('assistant', 'clinician', 'cdc', 'cadre') and i = 'CHUV')
+    else false end;
 end;
 $$;
 
