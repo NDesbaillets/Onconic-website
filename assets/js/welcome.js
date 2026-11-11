@@ -53,6 +53,21 @@
     const sync = () => { f.contactable.disabled = !f.show_in_events.checked; if (!f.show_in_events.checked) f.contactable.checked = false; };
     sync();
     f.show_in_events.addEventListener("change", sync);
+    const { data: clinicSetup } = await sb.rpc("my_clinics");
+    let clinicFields = null;
+    if (clinicSetup && clinicSetup.editable && clinicSetup.initial) {
+      clinicFields = document.createElement("fieldset");
+      clinicFields.className = "account-clinic-list";
+      const legend = document.createElement("legend");
+      legend.textContent = fr ? "Mes cliniques" : "My clinics";
+      clinicFields.append(legend);
+      for (const name of clinicSetup.options || []) {
+        const label = document.createElement("label"); label.className = "cg-check";
+        const input = document.createElement("input"); input.type = "checkbox"; input.value = name;
+        label.append(input, " " + name); clinicFields.append(label);
+      }
+      f.querySelector('button[type="submit"]').before(clinicFields);
+    }
     status.hidden = true;
     f.hidden = false;
     f.password.focus();
@@ -76,6 +91,11 @@
         show_in_events: f.show_in_events.checked, contactable: f.contactable.checked
       }).eq("id", user.id);
       if (error) { btn.disabled = false; return msg(out, T.error, "error"); }
+      if (clinicFields) {
+        const clinics = [...clinicFields.querySelectorAll("input:checked")].map((x) => x.value);
+        const { error: clinicError } = await sb.rpc("my_set_clinics", { p_clinics: clinics });
+        if (clinicError) { btn.disabled = false; return msg(out, clinicError.message || T.error, "error"); }
+      }
       msg(out, T.done, "ok");
       setTimeout(() => (location.href = base + "/app/"), 1200);
     });

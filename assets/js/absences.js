@@ -110,8 +110,18 @@
 
   // ----- Notifications push (fonction notify-absence) : sans effet visible si elles échouent -----
   // La base dépose les messages (e-mail et push) dans une boîte d'envoi ; cette fonction les expédie (sans effet visible si elle échoue)
-  function mailer() {
-    try { sb.functions.invoke("notify-absence", { body: {} }).catch(() => {}); } catch (e) { /* facultatif */ }
+  async function notificationStatus() {
+    let panel = $("ab-notifications");
+    if (!panel) { panel = el("p", "muted"); panel.id = "ab-notifications"; panel.setAttribute("role", "status"); $("ab-tool").prepend(panel); }
+    try {
+      const { data, error } = await sb.rpc("absence_notification_status");
+      panel.textContent = error || !data ? "État des notifications indisponible. Les demandes enregistrées restent consultables." :
+        `Notifications : ${data.pending} en attente, ${data.failed} en échec, ${data.sent} remises au serveur d’envoi.`;
+    } catch (_) { panel.textContent = "État des notifications indisponible."; }
+  }
+  async function mailer() {
+    try { await sb.functions.invoke("notify-absence", { body: {} }); } catch (_) { /* le traitement périodique reprend les messages */ }
+    await notificationStatus();
   }
 
   // ----- Données -----
@@ -760,7 +770,7 @@
       mailer();
       $("sd-confirm").hidden = true; $("sd-done").hidden = false;
       const who = (data.validators || []).length ? names(data.validators) : "l'administration";
-      $("sd-done-text").textContent = `${plur(data.count, "demande envoyée", "demandes envoyées")}. ${who} ${(data.validators || []).length > 1 ? "sont prévenus" : "est prévenu·e"} par e-mail. Vous serez prévenu·e par e-mail dès que tout est validé, ou dès qu'un validateur refuse.`;
+      $("sd-done-text").textContent = `${plur(data.count, "demande envoyée", "demandes envoyées")}. ${who} ${(data.validators || []).length > 1 ? "seront prévenus" : "sera prévenu·e"} par e-mail. Vous serez prévenu·e par e-mail dès que tout est validé, ou dès qu'un validateur refuse.`;
       say($("sd-confirm-msg"), "");
       await afterChange();
     } finally { btn.disabled = false; }
@@ -897,7 +907,7 @@
       state.mineWarn = warnBox(data.conflicts, "Attention : trop d'absences en même temps");
       say($("ab-mine-msg"), mode === "change" ? "Demande de modification envoyée aux validateurs : l'absence reste validée aux anciennes dates jusqu'à leur décision (tous doivent l'accepter)." : "Demande modifiée : elle repasse en brouillon, envoyez-la pour relancer la validation.", "ok");
       if (mode === "direction") {
-        say($("ab-mine-msg"), a.user_id === state.ctx.me ? "Absence modifiée." : "Absence modifiée par la direction : le membre est prévenu.", "ok"); mailer();
+        say($("ab-mine-msg"), a.user_id === state.ctx.me ? "Absence modifiée." : "Absence modifiée par la direction : notification mise en file.", "ok"); mailer();
         const bw = (data.balance || []).map((x) => `Solde ${x.kind === "vacances" ? "de vacances" : "de congrès"} ${x.year} dépassé (après : ${fmtD(x.remaining_after)} j).`);
         if (bw.length) {
           const w = el("div", "ab-warn"); w.append(el("strong", null, "Attention : solde insuffisant (la modification n'est pas bloquée)")); bw.forEach((t) => w.append(el("p", null, t)));
@@ -915,7 +925,7 @@
     const box = el("div", "ab-appr");
     if (!rows.length) { box.append(el("p", "muted", "Aucun validateur désigné : l'administration décide.")); return box; }
     const ul = el("ul", "ab-appr-list");
-    const LABEL = { approved: "a validé", pending: "en attente", rejected: "a refusé", skipped: "n'a pas eu à se prononcer (demande déjà refusée)" };
+    const LABEL = { approved: "a validé", pending: "en attente", rejected: "a refusé", skipped: "étape close sans décision individuelle" };
     rows.forEach((r) => {
       const li = el("li", "ab-appr-" + r.decision);
       li.append(el("strong", null, r.validator_name || r.name),
@@ -941,11 +951,11 @@
 
   // ----- Formulaire papier du département (PDF pré-rempli, signé électroniquement) -----
   // Un formulaire couvre toutes les absences validées du même envoi (même membre, même date d'envoi).
-  async function downloadForm(a) {
+  async function downloadForm(a, documentId) {
     const msg = $("ab-mine-msg");
-    const ids = state.mine.filter((x) => x.status === "approved" && x.user_id === a.user_id && x.submitted_at === a.submitted_at).map((x) => x.id);
+    const ids = [a.id];
     say(msg, "Préparation du formulaire…");
-    const { data, error } = await sb.functions.invoke("notify-absence", { body: { action: "form", ids } });
+    const { data, error } = await sb.functions.invoke("notify-absence", { body: documentId ? { action: "form", document_id: documentId } : { action: "form", ids } });
     if (error || !data || !data.pdf) {
       let code = "";
       try { code = (await error.context.json()).error; } catch (e) { /* message générique */ }
@@ -964,8 +974,39 @@
     return button("Télécharger le formulaire (PDF)", "btn btn-outline", () => downloadForm(a));
   }
 
+  function historyPanel(a, own) {
+    const details = el("details", "ab-progress");
+    details.append(el("summary", null, "Historique et versions des documents"));
+    let loaded = false;
+    details.addEventListener("toggle", async () => {
+      if (!details.open || loaded) return;
+      loaded = true;
+      try {
+        if (own || ["admin", "direction"].includes(state.ctx.role)) {
+          const { data, error } = await sb.rpc("absence_history", { p_id: a.id });
+          if (error) throw error;
+          for (const event of data || []) {
+            const before = event.before_data || {}, after = event.after_data || {};
+            const row = after.id ? after : before;
+            const action = event.action === "BASELINE" ? "État à la mise en service de l’historique" : event.entity === "absences" ? ({ INSERT: "Demande créée", UPDATE: "Demande mise à jour", DELETE: "Demande retirée" }[event.action] || event.action) : "Tour de validation : " + (after.decision || before.decision || after.opinion || before.opinion || "en attente");
+            details.append(el("p", "muted", `${fmtDT(event.at)} · ${event.actor_name || "Système"} · ${action}${row.start_date ? " · " + period(row.start_date, row.end_date) : ""}${before.start_date && after.start_date && (before.start_date !== after.start_date || before.end_date !== after.end_date) ? " (avant : " + period(before.start_date, before.end_date) + ")" : ""}`));
+          }
+        }
+        const { data: docs, error } = await sb.rpc("absence_document_versions", { p_id: a.id });
+        if (error) throw error;
+        for (const doc of docs || []) {
+          const labels = { approved: "Formulaire", modified: "Rectificatif", modified_direct: "Rectificatif direction", cancelled: "Annulation", cancelled_direct: "Annulation direction", legacy_snapshot: "État repris à la mise en service" };
+          details.append(button(`${labels[doc.action] || "Document"} D${doc.id} · ${fmtDT(doc.at)}`, "btn btn-outline", () => downloadForm(a, doc.id)));
+        }
+        if (!docs?.length) details.append(el("p", "muted", "Aucun document disponible."));
+      } catch (_) { details.append(el("p", "form-msg error", "Historique indisponible. Refermez puis réessayez.")); loaded = false; }
+    });
+    return details;
+  }
+
   function absenceCard(a, own) {
     const card = el("article", `card ab-item ab-item-${a.status}`);
+    if (a.status !== "draft") card.append(historyPanel(a, own));
     const head = el("div", "ab-item-head");
     head.append(el("strong", null, period(a.start_date, a.end_date)), el("span", "ug-badge", KINDS[a.kind][0]),
       el("span", `ug-badge ab-st ab-st-${a.status}`, STATUS[a.status]));
@@ -1015,14 +1056,14 @@
       const row = el("div", "btn-row ab-actions");
       const fb = formButton(a, false);
       if (fb) row.append(fb);
-      // La direction modifie ou annule au nom du membre (le membre est prévenu par e-mail)
+      // La direction modifie ou annule au nom du membre (une notification sera envoyée au membre)
       if (state.isDir && state.who && (a.status === "approved" || a.status === "requested")) {
         if (a.status === "approved") row.append(button("Modifier (direction)", "btn btn-outline", () => row.replaceWith(editForm(a, "direction"))));
         row.append(button("Annuler cette absence (direction)", "btn btn-outline lt-danger", async () => {
-          if (!confirm(`Annuler l'absence de ${$("ab-who").selectedOptions[0].textContent} (${period(a.start_date, a.end_date)}) ? Le membre est prévenu par e-mail.`)) return;
+          if (!confirm(`Annuler l'absence de ${$("ab-who").selectedOptions[0].textContent} (${period(a.start_date, a.end_date)}) ? Une notification sera envoyée au membre.`)) return;
           const { error } = await sb.rpc("absence_direction_cancel", { p_id: a.id });
           if (error) return say($("ab-mine-msg"), error.message, "error");
-          say($("ab-mine-msg"), "Absence annulée par la direction : le membre est prévenu.", "ok");
+          say($("ab-mine-msg"), "Absence annulée par la direction : notification mise en file.", "ok");
           mailer();
           await afterChange();
         }));
@@ -1309,8 +1350,8 @@
         if (error) { b1.disabled = b2.disabled = false; return say(out, error.message, "error"); }
         mailer();
         say($("ab-todo-msg"), approve
-          ? (res === "requested" ? `${a.name} : votre validation est enregistrée ; il reste des validateurs ou le visa de la direction.` : `${a.name} : accepté, l'usager est prévenu par e-mail.`)
-          : `${a.name} : refusé, l'usager est prévenu par e-mail.`, "ok");
+          ? (res === "requested" ? `${a.name} : votre validation est enregistrée ; il reste des validateurs ou le visa de la direction.` : `${a.name} : accepté, la notification est mise en file.`)
+          : `${a.name} : refusé, la notification est mise en file.`, "ok");
         await afterChange();
       };
       const actions = el("div", "btn-row");
@@ -1612,7 +1653,7 @@
       if (!start.value || !end.value || end.value < start.value) return say(msg, "Vérifiez les dates.", "error");
       if (kind.value === "autre" && note.value.trim().length < 2) return say(msg, "Indiquez le type d'absence.", "error");
       const name = who.selectedOptions[0].textContent.split(" · ")[0];
-      if (!confirm(`Ajouter cette absence pour ${name} ? Elle est enregistrée sans validation ni formulaire PDF${who.value === state.ctx.me ? "" : ", et le membre est prévenu par e-mail"}.`)) return;
+      if (!confirm(`Ajouter cette absence pour ${name} ? Elle est enregistrée sans validation ni formulaire PDF${who.value === state.ctx.me ? "" : ", et une notification sera envoyée au membre"}.`)) return;
       const btn = ev.submitter || ev.target.querySelector("button[type=submit]");
       btn.disabled = true;
       const { data, error } = await sb.rpc("absence_direction_add", { p_user: who.value, p_kind: kind.value, p_note: note.value.trim(), p_start: start.value, p_end: end.value, p_confidential: kind.value === "autre" && conf.checked });
@@ -1713,6 +1754,7 @@
     } catch (e) { $("ug-status").textContent = "Chargement impossible : " + e.message; return; }
     $("ug-status").hidden = true;
     $("ab-tool").hidden = false;
+    notificationStatus();
 
     // Formulaire
     const today = todayIso();

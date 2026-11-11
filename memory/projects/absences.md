@@ -95,3 +95,12 @@
 - Les **e-mails destinés à la direction** vont à l'adresse du secret `ABSENCE_FORMS_TO` (la même que les formulaires PDF ; plusieurs adresses possibles, séparées par une virgule), **un seul message par événement** même s'il y a plusieurs membres « direction » : visa requis (`to_direction`), pré-avis (`to_opinion`) et messages de validation (`to_validate`, `to_validate_change`) reçus par un membre dont le rôle est « direction ». Le push éventuel reste individuel. Sans le secret, repli sur l'adresse de chaque membre.
 - Les messages personnels (absence validée ou refusée, ajout ou modification par la direction) vont toujours à la personne concernée, même si elle est de la direction.
 - Fonction `notify-absence` v8 (`index.ts`), déployée le 11.11.2026.
+
+## Durcissement du circuit (11.11.2026, préparé, déploiement à effectuer)
+
+Migration `supabase/migrations/202611110001_absence_hardening.sql` : choix initial des cliniques libre, puis demandes à accepter/refuser par admin/direction ; lots de notifications filtrés ; worker périodique avec suivi des échecs ; journal des versions et tours ; documents figés et rectificatifs ; textes libres réservés à l'application. Voir `supabase/migrations/README.md` pour le déploiement et les limites de reprise. Les nouveaux écrans ont besoin de cette migration. Les vérifications locales ne prouvent pas une installation en production.
+
+### Déploiement effectué (11.11.2026)
+- Migrations 202611110001 (corrigée : les 9 droits de colonnes de `profiles` sont rétablis après le `revoke update`) et 202611110002 (`absence_worker_verify`) appliquées ; sauvegarde dans le schéma `onconic_backup`.
+- `notify-absence` v9 déployée sans vérification JWT de la passerelle ; le traitement autonome (pg_cron, tâche `absence-outbox`) s'authentifie par le jeton du Vault `absence_worker_token`, vérifié côté base. Aucun secret affiché ni commité.
+- Contrôle : `absence_worker_health()` renvoie `scheduled` et `configured` à vrai ; l'appel cron renvoie 200.

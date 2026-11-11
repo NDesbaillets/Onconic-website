@@ -105,9 +105,28 @@
     // Mes cliniques (médecins) : cliniques actuelles modifiables, changements programmés par l'admin en lecture seule
     if ($("clinics")) {
       const { data: mc } = await sb.rpc("my_clinics");
-      if (mc && mc.editable) {
+      if (mc && mc.editable && typeof mc.initial !== "boolean") {
+        $("clinics").hidden = false;
+        $("clinics-form").querySelector("button").disabled = true;
+        $("clinics-list").hidden = true;
+        msg($("clinics-msg"), fr ? "Le circuit de validation des cliniques doit être mis à jour par l’administration." : "The clinic approval workflow needs an administrator update.", "error");
+      }
+      if (mc && mc.editable && typeof mc.initial === "boolean") {
         const box = $("clinics-list");
-        const mine = new Set(mc.clinics || []);
+        const mine = new Set(mc.pending ? mc.pending.clinics : mc.clinics || []);
+        const submit = $("clinics-form").querySelector('button[type="submit"]');
+        const info = document.createElement("p");
+        info.className = "muted";
+        box.before(info);
+        function clinicStatus(data) {
+          info.textContent = (fr ? "Cliniques en vigueur : " : "Current clinics: ") + (data.clinics || []).join(", ") +
+            (data.pending ? (fr ? ". Modification en attente de validation : " : ". Change awaiting approval: ") + data.pending.clinics.join(", ") : "");
+          if (!data.pending && data.last_request && ["approved", "rejected"].includes(data.last_request.status)) {
+            info.textContent += data.last_request.status === "approved" ? (fr ? ". Dernière demande acceptée." : ". Last request approved.") : (fr ? ". Dernière demande refusée : " : ". Last request declined: ") + (data.last_request.comment || "");
+          }
+          submit.textContent = data.initial ? (fr ? "Enregistrer mes cliniques" : "Save my clinics") : (fr ? "Demander la modification" : "Request a change");
+        }
+        clinicStatus(mc);
         for (const c of mc.options || []) {
           const lab = document.createElement("label");
           lab.className = "cg-check";
@@ -129,8 +148,16 @@
           e.preventDefault();
           const out = $("clinics-msg");
           const chosen = [...box.querySelectorAll('input[name="clinic"]:checked')].map((i) => i.value);
-          const { error } = await sb.rpc("my_set_clinics", { p_clinics: chosen });
-          msg(out, error ? T.error : (fr ? "Cliniques enregistrées." : "Clinics saved."), error ? "error" : "ok");
+          submit.disabled = true;
+          try {
+            const { error } = await sb.rpc("my_set_clinics", { p_clinics: chosen });
+            if (error) return msg(out, error.message || T.error, "error");
+            const { data: latest, error: readError } = await sb.rpc("my_clinics");
+            if (readError || !latest) return msg(out, T.error, "error");
+            clinicStatus(latest);
+            msg(out, latest.pending ? (fr ? "Demande enregistrée. Vos cliniques actuelles restent en vigueur jusqu’à validation par l’admin ou la direction." : "Request saved. Your current clinics remain in effect until approved by an administrator or management.") : (fr ? "Cliniques enregistrées." : "Clinics saved."), "ok");
+          } catch (_) { msg(out, T.error, "error"); }
+          finally { submit.disabled = false; }
         });
         $("clinics").hidden = false;
         if (h.has("cliniques")) $("clinics").scrollIntoView();

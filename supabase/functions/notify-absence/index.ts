@@ -6,6 +6,8 @@
 // E-mail : boîte noreply@onconic.ch (secret SMTP_PASSWORD, comme contact-request). Push : abonnements de notify-event-join.
 // Messages destinés à la direction (visa, pré-avis, et messages de validation reçus par un membre « direction ») : un seul e-mail
 // par message, à la boîte commune (secret ABSENCE_FORMS_TO, comme les formulaires) ; à défaut du secret, à l'adresse de chaque membre.
+import { externalAbsence, sendSharedOnce, workerAuthorized } from "./delivery.ts";
+import { Buffer } from "node:buffer";
 import nodemailer from "npm:nodemailer@6.9.16";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import webpush from "npm:web-push@3.6.7";
@@ -41,25 +43,25 @@ async function vapidKeys() {
   return row!;
 }
 
-type Row = { id: number; kind: Kind | "form"; recipient: string | null; absence_ids: number[]; payload: { owner?: string; by?: string; comment?: string; reminder?: boolean; action?: string } };
+type Row = { id: number; kind: Kind | "form"; recipient: string | null; absence_ids: number[]; payload: { owner?: string; by?: string; comment?: string; reminder?: boolean; action?: string; document_id?: number; absences?: (Abs & { user_id: string })[] } };
 
 const ROLE_LABEL: Record<string, string> = { clinician: "médecin assistant", cdc: "chef de clinique", cadre: "médecin cadre" };
 const slug = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "membre";
 
 // Formulaire PDF d'un envoi d'absences validées (données lues en base, jamais dans la requête)
-async function renderForm(ids: number[]) {
-  const { data: d } = await admin.rpc("absence_form_data", { p_ids: ids });
+async function renderForm(ids: number[], documentId?: number) {
+  const { data: d } = documentId ? await admin.rpc("absence_document_data", { p_document: documentId }) : await admin.rpc("absence_form_data", { p_ids: ids });
   if (!d) return { error: "not_found" as const };
   if (d.no_form) return { error: "no_form" as const };
   let logo: Uint8Array | null = null;
   try { const f = await admin.storage.from("absence-forms").download("logo.png"); if (f.data) logo = new Uint8Array(await f.data.arrayBuffer()); } catch (_) { /* logo facultatif */ }
-  const now = new Date().toISOString();
+  const now = d.generated_at ?? new Date().toISOString();
   const form: FormData = {
-    role: d.role, owner: d.owner, clinics: d.clinics ?? [], requestedAt: d.requested_at ?? now, absences: d.absences, signers: d.signers ?? [], direction: d.direction ?? null,
-    generatedAt: now, ref: `OC-ABS-${ids.join("-")}`,
+    role: d.role, owner: d.owner, clinics: d.clinics ?? [], requestedAt: d.requested_at ?? now, absences: d.absences.map((a: Abs) => externalAbsence(a)), signers: (d.signers ?? []).map((s: { name: string; at: string }) => ({ name: s.name, at: s.at })), direction: d.direction ?? null,
+    generatedAt: now, ref: `OC-ABS-D${d.document_id}`, action: d.action,
   };
   const bytes = await buildAbsenceForm(form, logo);
-  const file = `Demande_absence_${FILE_LABEL[d.role as keyof typeof FILE_LABEL]}_${slug(d.owner)}_${now.slice(0, 10).replaceAll("-", "")}.pdf`;
+  const file = `${d.action === "cancelled" || d.action === "cancelled_direct" ? "Annulation" : d.action === "modified" || d.action === "modified_direct" ? "Rectificatif" : "Demande"}_D${d.document_id}_absence_${FILE_LABEL[d.role as keyof typeof FILE_LABEL]}_${slug(d.owner)}_${now.slice(0, 10).replaceAll("-", "")}.pdf`;
   return { bytes, file, form };
 }
 
@@ -68,12 +70,12 @@ async function sendForm(row: Row, transport: ReturnType<typeof nodemailer.create
   const to = (Deno.env.get("ABSENCE_FORMS_TO") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   if (!to.length) return "ABSENCE_FORMS_TO manquant";
   if (!transport) return "SMTP_PASSWORD manquant";
-  const r = await renderForm(row.absence_ids);
-  if ("error" in r) return null; // absence supprimée ou rôle sans formulaire : rien à envoyer
-  const m = buildFormEmail({ owner: r.form.owner, roleLabel: ROLE_LABEL[r.form.role] ?? r.form.role, absences: r.form.absences, signers: r.form.signers, direction: r.form.direction, file: r.file }, stamp);
+  const r = await renderForm(row.absence_ids, row.payload.document_id);
+  if ("error" in r) return "__skip__"; // absence supprimée ou rôle sans formulaire : rien à envoyer
+  const m = buildFormEmail({ owner: r.form.owner, roleLabel: ROLE_LABEL[r.form.role] ?? r.form.role, absences: r.form.absences, signers: r.form.signers, direction: r.form.direction, file: r.file, action: r.form.action }, stamp);
   try {
     await transport.sendMail({ from: `Onconic <${SMTP_USER}>`, to, subject: m.subject, text: m.text, html: m.html,
-      attachments: [{ filename: r.file, content: r.bytes, contentType: "application/pdf" }] });
+      attachments: [{ filename: r.file, content: Buffer.from(r.bytes), contentType: "application/pdf" }] });
     return null;
   } catch (e) {
     return String((e as Error).message ?? e).slice(0, 250);
@@ -92,11 +94,16 @@ const VALIDATE_KINDS = ["to_validate", "to_validate_change"];
 
 async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createTransport> | null, sentShared: Set<string>): Promise<string | null> {
   if (row.kind === "form") return await sendForm(row, transport);
-  if (!row.recipient) return null;
-  const { data: absences } = await admin.from("absences")
-    .select("id, user_id, kind, start_date, end_date, note, change_type, change_kind, change_note, change_start, change_end")
-    .in("id", row.absence_ids).order("start_date");
-  if (!absences?.length) return null; // absence supprimée entre-temps : rien à envoyer
+  if (!row.recipient) return "__skip__";
+  const { data: allowed, error: scopeError } = await admin.rpc("absence_notification_ids", { p_recipient: row.recipient, p_ids: row.absence_ids, p_kind: row.kind });
+  if (scopeError) return "notification_scope";
+  if (!allowed?.length) return "__skip__"; // demande retirée, déjà décidée ou habilitation retirée
+  const { data: rawAbsences, error: readError } = await admin.from("absences")
+    .select("id, user_id, kind, start_date, end_date, change_type, change_kind, change_start, change_end")
+    .in("id", allowed).order("start_date");
+  if (readError) return "notification_read";
+  const absences = (row.payload.absences ?? rawAbsences ?? []).filter((a) => allowed.includes(a.id)).map((a) => externalAbsence(a as Abs & { user_id: string }));
+  if (!absences.length) return "__skip__"; // absence supprimée entre-temps : rien à envoyer
 
   const { data: prof } = await admin.from("profiles").select("lang, notify_events, role").eq("id", row.recipient).maybeSingle();
   const lang: Lang = prof?.lang === "en" ? "en" : "fr";
@@ -108,7 +115,7 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
   const approvers = await names((appr ?? []).filter((a) => a.decision === "approved").map((a) => a.validator_id));
 
   const msg = buildEmail({
-    lang, kind: row.kind, owner: row.payload.owner ?? (ownerName as string) ?? "Un membre", by: row.payload.by, comment: row.payload.comment, reminder: row.payload.reminder, action: row.payload.action,
+    lang, kind: row.kind, owner: row.payload.owner ?? (ownerName as string) ?? "Un membre", by: row.payload.by, comment: null, reminder: row.payload.reminder, action: row.payload.action,
     absences: absences as unknown as Abs[], validators, approvers,
   });
 
@@ -134,19 +141,19 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
   const box = toDirection ? sharedBox() : [];
   let to: string | string[] | undefined;
   if (box.length) {
-    const key = `${row.kind}|${row.absence_ids.join(",")}|${row.payload.reminder ? "r" : ""}`;
-    if (sentShared.has(key)) return null; // déjà envoyé à la boîte commune pour un autre membre de la direction
     if (!transport) return "SMTP_PASSWORD manquant";
-    sentShared.add(key);
+
     to = box;
   } else {
     const { data: u } = await admin.auth.admin.getUserById(row.recipient);
     to = u?.user?.email ?? undefined;
   }
-  if (!to) return null; // pas d'adresse : rien à envoyer
+  if (!to) return "recipient_email_missing"; // pas d'adresse : rien à envoyer
   if (!transport) return "SMTP_PASSWORD manquant";
   try {
-    await transport.sendMail({ from: `Onconic <${SMTP_USER}>`, to, subject: msg.subject, text: msg.text, html: msg.html });
+    const send = () => transport.sendMail({ from: `Onconic <${SMTP_USER}>`, to, subject: msg.subject, text: msg.text, html: msg.html });
+    if (box.length) await sendSharedOnce(sentShared, `${row.kind}|${allowed.join(",")}|${row.payload.reminder ? "r" : ""}`, send);
+    else await send();
     return null;
   } catch (e) {
     return String((e as Error).message ?? e).slice(0, 250);
@@ -158,12 +165,26 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json(req, 405, { error: "method_not_allowed" });
 
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  const { data: auth } = await admin.auth.getUser(token);
-  if (!auth?.user) return json(req, 401, { error: "unauthorized" });
+  // Traitement autonome (pg_cron) : jeton comparé au secret Edge s'il existe, sinon au secret Vault par la base (jamais affiché)
+  const provided = req.headers.get("x-absence-worker");
+  const worker = (await workerAuthorized(provided, Deno.env.get("ABSENCE_WORKER_TOKEN")))
+    || (!!provided && provided.length >= 32 && (await admin.rpc("absence_worker_verify", { p_token: provided })).data === true);
+  if (!worker && !token) return json(req, 401, { error: "unauthorized" });
+  const auth = worker ? null : (await admin.auth.getUser(token)).data;
+  if (!worker && !auth?.user) return json(req, 401, { error: "unauthorized" });
 
   // Téléchargement d'un formulaire par un membre autorisé (l'intéressé, ses validateurs, un admin) : { action: "form", ids: [..] }
   const body = await req.json().catch(() => ({}));
   if (body?.action === "form") {
+    if (!auth?.user || worker) return json(req, 403, { error: "forbidden" });
+    const documentId = Number.isSafeInteger(body.document_id) && body.document_id > 0 ? body.document_id : undefined;
+    if (documentId) {
+      const { data: ok } = await admin.rpc("absence_document_access", { p_caller: auth.user.id, p_document: documentId });
+      if (!ok) return json(req, 403, { error: "forbidden" });
+      const r = await renderForm([], documentId);
+      if ("error" in r) return json(req, 404, { error: r.error });
+      return json(req, 200, { file: r.file, pdf: b64(r.bytes) });
+    }
     const ids = Array.isArray(body.ids) ? body.ids.map(Number).filter((n: number) => Number.isInteger(n) && n > 0).slice(0, 50) : [];
     if (!ids.length) return json(req, 400, { error: "ids" });
     const { data: ok } = await admin.rpc("absence_form_access", { p_caller: auth.user.id, p_ids: ids });
@@ -179,14 +200,18 @@ Deno.serve(async (req) => {
   if (!rows?.length) return json(req, 200, { processed: 0, sent: 0, failed: 0 });
 
   const pass = Deno.env.get("SMTP_PASSWORD");
-  const transport = pass ? nodemailer.createTransport({ host: "mail.infomaniak.com", port: 465, secure: true, auth: { user: SMTP_USER, pass } }) : null;
-  let sent = 0, failed = 0;
+  const transport = pass ? nodemailer.createTransport({ host: "mail.infomaniak.com", port: 465, secure: true, connectionTimeout: 10000, socketTimeout: 15000, auth: { user: SMTP_USER, pass } }) : null;
+  let sent = 0, failed = 0, skipped = 0;
   const sentShared = new Set<string>();
   for (const row of rows as Row[]) {
     let err: string | null;
     try { err = await sendOne(row, transport, sentShared); } catch (e) { err = String((e as Error).message ?? e).slice(0, 250); }
-    await admin.rpc("absence_outbox_done", { p_id: row.id, p_error: err });
-    err ? failed++ : sent++;
+    if (err === "__skip__") {
+      await admin.rpc("absence_outbox_skip", { p_id: row.id }); skipped++;
+    } else {
+      await admin.rpc("absence_outbox_done", { p_id: row.id, p_error: err });
+      err ? failed++ : sent++;
+    }
   }
-  return json(req, 200, { processed: rows.length, sent, failed });
+  return json(req, 200, { processed: rows.length, sent, failed, skipped });
 });

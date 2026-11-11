@@ -37,7 +37,39 @@
     state.rows = data || [];
   }
 
+  async function renderClinicRequests() {
+    let box = $("am-clinic-requests");
+    if (!box) { box = el("section", "card"); box.id = "am-clinic-requests"; $("am-tool").prepend(box); }
+    box.replaceChildren(el("h2", null, "Demandes de changement de cliniques"));
+    const { data, error } = await sb.rpc("admin_clinic_requests");
+    if (error) { box.append(el("p", "form-msg error", "Chargement impossible : " + error.message)); return; }
+    if (!data.length) box.append(el("p", "muted", "Aucune demande en attente."));
+    for (const r of data) {
+      const item = el("article", "card");
+      item.append(el("h3", null, r.name), el("p", null, `Actuellement : ${r.current.join(", ") || "aucune"}. Demandé : ${r.clinics.join(", ") || "aucune"}.`));
+      const label = el("label", null, "Commentaire (obligatoire pour refuser)");
+      const comment = el("input"); comment.type = "text"; comment.maxLength = 500; label.append(comment); item.append(label);
+      const actions = el("div", "btn-row"); const buttons = [];
+      for (const approve of [true, false]) {
+        const b = el("button", approve ? "btn" : "btn btn-outline", approve ? "Accepter" : "Refuser"); b.type = "button"; buttons.push(b);
+        b.disabled = r.user_id === state.me;
+        b.addEventListener("click", async () => {
+          buttons.forEach((x) => { x.disabled = true; });
+          try {
+            const { error } = await sb.rpc("admin_clinic_request_decide", { p_id: r.id, p_approve: approve, p_comment: comment.value.trim() });
+            if (error) { say(error.message, "error"); return; }
+            say(approve ? "Changement accepté." : "Changement refusé.", "ok");
+            await refresh();
+          } catch (_) { say("Connexion interrompue. Réessayez.", "error"); }
+          finally { buttons.forEach((x) => { x.disabled = r.user_id === state.me; }); }
+        }); actions.append(b);
+      }
+      item.append(actions); box.append(item);
+    }
+  }
+
   function render() {
+    renderClinicRequests();
     const q = norm($("am-q").value);
     const role = $("am-role").value;
     const rows = state.rows.filter((r) => (!role || r.role === role)

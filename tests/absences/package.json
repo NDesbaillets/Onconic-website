@@ -1,0 +1,20 @@
+{
+  "name": "onconic-absence-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test *.test.mjs",
+    "check": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
+    "@supabase/supabase-js": "2.57.4",
+    "@types/node": "24.10.0",
+    "@types/nodemailer": "6.4.21",
+    "@types/web-push": "3.6.4",
+    "nodemailer": "6.9.16",
+    "pdf-lib": "1.17.1",
+    "typescript": "5.9.3",
+    "web-push": "3.6.7"
+  }
+}

@@ -26,8 +26,8 @@ const T = {
   fr: {
     toValidate: (who: string, n: number) => `${who} demande ${n > 1 ? `${n} absences` : "une absence"} à valider`,
     toValidateChange: (who: string, del: boolean) => `${who} demande ${del ? "la suppression" : "la modification"} d'une absence validée`,
-    toDirection: (who: string, n: number) => `${who} : ${n > 1 ? `${n} absences validées` : "absence validée"} par les cadres, visa de la direction requis`,
-    directionNeed: "Les validateurs de la clinique ont validé. Le visa de la direction conclut la demande.",
+    toDirection: (who: string, n: number) => `${who} : ${n > 1 ? `${n} demandes` : "demande"}, visa de la direction requis`,
+    directionNeed: "Le visa de la direction conclut la demande. Le circuit et les décisions sont consultables dans l’application.",
     toOpinion: (who: string, n: number) => `${who} demande ${n > 1 ? `${n} absences` : "une absence"} : pré-avis de la direction possible`,
     toOpinionChange: (who: string, del: boolean) => `${who} demande ${del ? "la suppression" : "la modification"} d'une absence validée : pré-avis de la direction possible`,
     opinionNeed: "Étape facultative, sans effet bloquant : votre pré-avis (favorable ou non, avec un commentaire) s'affiche avec la demande chez les validateurs de la clinique, comme aide à la décision. Vous viserez ensuite la demande une fois les validateurs passés.",
@@ -57,8 +57,8 @@ const T = {
   en: {
     toValidate: (who: string, n: number) => `${who} requests ${n > 1 ? `${n} absences` : "an absence"} for approval`,
     toValidateChange: (who: string, del: boolean) => `${who} asks to ${del ? "delete" : "change"} an approved absence`,
-    toDirection: (who: string, n: number) => `${who}: ${n > 1 ? `${n} absences approved` : "absence approved"} by the clinic validators, management sign-off needed`,
-    directionNeed: "The clinic validators approved. The management sign-off completes the request.",
+    toDirection: (who: string, n: number) => `${who}: ${n > 1 ? `${n} requests` : "request"}, management sign-off needed`,
+    directionNeed: "Management sign-off completes the request. The approval chain and decisions are available in the app.",
     toOpinion: (who: string, n: number) => `${who} requests ${n > 1 ? `${n} absences` : "an absence"}: management pre-opinion possible`,
     toOpinionChange: (who: string, del: boolean) => `${who} asks to ${del ? "delete" : "change"} an approved absence: management pre-opinion possible`,
     opinionNeed: "Optional, non-blocking step: your pre-opinion (favourable or not, with a comment) is shown with the request to the clinic validators as decision support. You will give the final sign-off once the validators have decided.",
@@ -90,7 +90,7 @@ const T = {
 function line(l: Lang, a: Abs, withChange: boolean): string {
   const t = T[l];
   let s = `${period(a.start_date, a.end_date)} · ${KIND[l][a.kind]}`;
-  if (a.note) s += ` (${t.note.toLowerCase()} : ${a.note})`;
+  // Les précisions et commentaires se consultent uniquement dans l’application authentifiée.
   if (withChange && a.change_type === "delete") s += ` · ${t.deletion}`;
   if (withChange && a.change_type === "modify" && a.change_start && a.change_end) {
     s += ` → ${t.wasChange} ${period(a.change_start, a.change_end)}${a.change_kind ? " · " + (KIND[l][a.change_kind as keyof typeof KIND.fr] ?? a.change_kind) : ""}`;
@@ -103,7 +103,7 @@ export function buildEmail(c: Ctx) {
   const lang = c.lang === "en" ? "en" : "fr";
   const toValidator = c.kind === "to_validate" || c.kind === "to_validate_change" || c.kind === "to_direction" || c.kind === "to_opinion";
   const url = `${SITE}/app/absences.html#${toValidator ? "todo" : "mine"}`;
-  const withChange = c.kind === "to_validate_change" || (c.kind === "to_opinion" && c.absences.some((a) => !!a.change_type));
+  const withChange = toValidator && c.absences.some((a) => !!a.change_type);
   const lines = c.absences.map((a) => line(lang, a, withChange));
   const del = c.absences[0]?.change_type === "delete";
 
@@ -121,9 +121,9 @@ export function buildEmail(c: Ctx) {
       break;
     }
     case "approved": subject = c.absences.length > 1 ? t.approvedMany : t.approved; extra.push(t.approvedBy(c.approvers)); break;
-    case "rejected": subject = t.rejected; extra.push(t.rejectedBy(c.by ?? "—")); if (c.comment) extra.push(t.comment(c.comment)); extra.push(t.delHint); break;
+    case "rejected": subject = t.rejected; extra.push(t.rejectedBy(c.by ?? "—")); extra.push(lang === "fr" ? "Le motif est consultable dans l’application." : "The reason is available in the app."); extra.push(t.delHint); break;
     case "change_approved": subject = t.changeApproved; extra.push(t.approvedBy(c.approvers)); break;
-    case "change_rejected": subject = t.changeRejected; extra.push(t.rejectedBy(c.by ?? "—")); if (c.comment) extra.push(t.comment(c.comment)); extra.push(t.stays); break;
+    case "change_rejected": subject = t.changeRejected; extra.push(t.rejectedBy(c.by ?? "—")); extra.push(lang === "fr" ? "Le motif est consultable dans l’application." : "The reason is available in the app."); extra.push(t.stays); break;
   }
   if (c.reminder && toValidator) { subject = `${t.remind}${lang === "fr" ? " : " : ": "}${subject}`; extra.unshift(t.remindText); }
   intro = subject + ".";
@@ -145,14 +145,15 @@ ${extra.map((e) => `<p style="margin:0 0 8px">${esc(e)}</p>`).join("")}
 }
 
 // E-mail à la gestion des absences : le formulaire PDF (déjà signé électroniquement) est en pièce jointe. Français seulement.
-export type FormMail = { owner: string; roleLabel: string; absences: { kind: Abs["kind"]; start_date: string; end_date: string; note: string | null }[]; signers: { name: string; at: string }[]; direction?: { name: string; at: string } | null; file: string };
+export type FormMail = { owner: string; roleLabel: string; absences: { kind: Abs["kind"]; start_date: string; end_date: string; note: string | null }[]; signers: { name: string; at: string }[]; direction?: { name: string; at: string } | null; file: string; action?: string };
 export function buildFormEmail(c: FormMail, stamp: (iso: string) => string) {
-  const lines = c.absences.map((a) => `${period(a.start_date, a.end_date)} · ${KIND.fr[a.kind]}${a.note ? ` (précision : ${a.note})` : ""}`);
+  const lines = c.absences.map((a) => `${period(a.start_date, a.end_date)} · ${KIND.fr[a.kind]}`);
   const who = c.signers.map((s) => `${s.name} (${stamp(s.at)})`);
   const visa = c.direction ? ` Visa de la direction : ${c.direction.name} (${stamp(c.direction.at)}).` : "";
   const congres = c.absences.some((a) => a.kind === "congres");
-  const subject = `Demande d'absence validée : ${c.owner}`;
-  const intro = `${c.owner} (${c.roleLabel}) : la demande d'absence ci-dessous est validée dans Onconic. Le formulaire pré-rempli est en pièce jointe (${c.file}).`;
+  const label = c.action?.startsWith("cancelled") ? "Annulation d'absence" : c.action?.startsWith("modified") ? "Rectificatif d'absence" : "Demande d'absence validée";
+  const subject = `${label} : ${c.owner}`;
+  const intro = `${c.owner} (${c.roleLabel}) : ${c.action?.startsWith("cancelled") ? "l’absence ci-dessous est annulée dans Onconic" : c.action?.startsWith("modified") ? "ce rectificatif remplace les dates précédemment autorisées" : "la demande d’absence ci-dessous est validée dans Onconic"}. Le formulaire pré-rempli est en pièce jointe (${c.file}).`;
   const extra = [
     (who.length ? `Validation électronique : ${who.join(", ")}.` : "Validation électronique dans Onconic.") + visa,
     ...(congres ? ["La demande contient un congrès ou une formation : le formulaire ad' hoc doit être joint séparément."] : []),

@@ -9,3 +9,6 @@ __pycache__/
 # PDF d'éditeurs : ne jamais commiter (droits d'auteur)
 tools/km/**/*.pdf
 tools/km/tmp/
+
+# Dépendances des tests locaux
+node_modules/
