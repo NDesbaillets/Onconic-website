@@ -9,7 +9,7 @@ export type FormAbsence = { kind: "vacances" | "congres" | "autre"; start_date: 
 export type FormSigner = { name: string; at: string; comment?: string | null };
 export type FormData = {
   role: FormRole; owner: string; clinics: string[]; requestedAt: string; absences: FormAbsence[]; signers: FormSigner[]; direction?: { name: string; at: string } | null;
-  generatedAt: string; ref: string;
+  generatedAt: string; ref: string; action?: string;
 };
 
 const TITLE: Record<FormRole, string> = {
@@ -45,7 +45,8 @@ const W = 595.28, H = 841.89, ML = 56, MR = 56, CW = W - ML - MR;
 
 export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  pdf.setTitle(`${TITLE[d.role]} – ${safe(d.owner)}`);
+  const actionLabel = d.action?.startsWith("cancelled") ? "ANNULATION" : d.action?.startsWith("modified") ? "RECTIFICATIF" : "";
+  pdf.setTitle(`${actionLabel ? actionLabel + " – " : ""}${TITLE[d.role]} – ${safe(d.owner)}`);
   pdf.setProducer("Onconic");
   pdf.setCreator("Onconic");
   const reg = await pdf.embedFont(StandardFonts.Helvetica);
@@ -108,6 +109,7 @@ export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): P
   // Dates et type d'absence
   const heading = d.role === "cadre" ? "DATES DE CONGÉS DÉSIRÉS ET MOTIFS :" : "DATES et type d’absence (vacances, formation, mariage, enfant .... etc.) :";
   text(heading, ML, bold, 10); y -= 17;
+  if (actionLabel) para(`${actionLabel} — ${actionLabel === "ANNULATION" ? "Cette absence est annulée." : "Remplace les dates précédemment autorisées."}`, ML, CW, bold, 11, SIGN);
   const abs = [...d.absences].sort((a, b) => a.start_date.localeCompare(b.start_date));
   abs.forEach((a, i) => {
     const lead = d.role === "cadre" ? `${i + 1}.` : "•";

@@ -14,6 +14,28 @@
   function say(text, kind) { const m = $("aa-msg"); m.className = "form-msg" + (kind ? " " + kind : ""); m.textContent = text; }
   const plur = (n, one, many) => `${n} ${n > 1 ? many : one}`;
 
+  async function notifications() {
+    let box = $("aa-notifications");
+    if (!box) { box = el("section", "card"); box.id = "aa-notifications"; $("aa-tool").prepend(box); }
+    box.replaceChildren(el("h2", null, "Suivi des notifications"));
+    const [status, failures, health] = await Promise.all([sb.rpc("absence_notification_status"), sb.rpc("absence_notification_failures"), sb.rpc("absence_worker_health")]);
+    if (status.error || failures.error || health.error) { box.append(el("p", "form-msg error", "Suivi indisponible : vérifiez la migration du module Absences.")); return; }
+    const s = status.data;
+    box.append(el("p", null, `${s.pending} en attente · ${s.failed} en échec · ${s.sent} remises au serveur d’envoi.`));
+    if (!health.data.scheduled || !health.data.configured) box.append(el("p", "form-msg error", "L’envoi automatique n’est pas configuré. Les notifications dépendent encore des actions dans l’application."));
+    for (const row of failures.data || []) {
+      const line = el("p", null, `Notification ${row.id} · ${{ to_validate: "Demande à valider", to_validate_change: "Changement à valider", to_direction: "Visa de la direction", to_opinion: "Pré-avis", approved: "Acceptation", rejected: "Refus", change_approved: "Changement accepté", change_rejected: "Changement refusé", direction_change: "Saisie de la direction", form: "Formulaire PDF" }[row.kind] || "Absence"} · ${row.attempts} tentatives. `);
+      const retry = el("button", "btn btn-outline", "Réessayer"); retry.type = "button";
+      retry.addEventListener("click", async () => {
+        retry.disabled = true;
+        const { error } = await sb.rpc("absence_notification_retry", { p_id: row.id });
+        if (error) { retry.disabled = false; return say(error.message, "error"); }
+        await notifications();
+      }); line.append(retry); box.append(line);
+    }
+    const refresh = el("button", "btn btn-outline", "Actualiser"); refresh.type = "button"; refresh.addEventListener("click", notifications); box.append(refresh);
+  }
+
   async function load() {
     const { data, error } = await sb.rpc("admin_absence_config");
     if (error) throw error;
@@ -169,5 +191,6 @@
     $("aa-tool").hidden = false;
     $("aa-list").replaceChildren(...state.clinics.map(card));
     await initCal();
+    await notifications();
   })();
 })();

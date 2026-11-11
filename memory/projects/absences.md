@@ -95,3 +95,7 @@
 - Les **e-mails destinés à la direction** vont à l'adresse du secret `ABSENCE_FORMS_TO` (la même que les formulaires PDF ; plusieurs adresses possibles, séparées par une virgule), **un seul message par événement** même s'il y a plusieurs membres « direction » : visa requis (`to_direction`), pré-avis (`to_opinion`) et messages de validation (`to_validate`, `to_validate_change`) reçus par un membre dont le rôle est « direction ». Le push éventuel reste individuel. Sans le secret, repli sur l'adresse de chaque membre.
 - Les messages personnels (absence validée ou refusée, ajout ou modification par la direction) vont toujours à la personne concernée, même si elle est de la direction.
 - Fonction `notify-absence` v8 (`index.ts`), déployée le 11.11.2026.
+
+## Durcissement du circuit (11.11.2026, préparé, déploiement à effectuer)
+
+Migration `supabase/migrations/202611110001_absence_hardening.sql` : choix initial des cliniques libre, puis demandes à accepter/refuser par admin/direction ; lots de notifications filtrés ; worker périodique avec suivi des échecs ; journal des versions et tours ; documents figés et rectificatifs ; textes libres réservés à l'application. Voir `supabase/migrations/README.md` pour le déploiement et les limites de reprise. Les nouveaux écrans ont besoin de cette migration. Les vérifications locales ne prouvent pas une installation en production.

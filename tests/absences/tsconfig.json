@@ -1,0 +1,14 @@
+{
+ "compilerOptions": {
+  "target":"ES2022", "module":"ESNext", "moduleResolution":"bundler", "strict":true,
+  "noEmit":true,"allowImportingTsExtensions":true,"esModuleInterop":true,"skipLibCheck":true,
+  "baseUrl":".",
+  "paths": {
+   "npm:nodemailer@6.9.16":["node_modules/@types/nodemailer"],
+   "npm:web-push@3.6.7":["node_modules/@types/web-push"],
+   "npm:@supabase/supabase-js@2.57.4":["node_modules/@supabase/supabase-js"],
+   "npm:pdf-lib@1.17.1":["node_modules/pdf-lib"]
+  }
+ },
+ "include":["deno-env.d.ts","../../supabase/functions/notify-absence/*.ts"]
+}
