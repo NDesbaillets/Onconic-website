@@ -31,6 +31,13 @@ test('PostgreSQL : migrations, permissions et parcours complets',async(t)=>{
   // Reproduire les permissions de profils usuelles ; le durcissement doit aussi retirer un éventuel grant large.
   await db.exec('grant select,update on profiles to authenticated;');
   await db.exec(await read(migration));
+  await t.test('droits de profils : colonnes de réglages conservées, affectations et rôle verrouillés',async()=>{
+   for(const c of ['first_name','last_name','username','full_name','phone','lang','show_in_events','contactable','notify_events'])
+    assert.equal(await scalar("select has_column_privilege('authenticated','public.profiles',$1,'UPDATE')",[c]),true,c);
+   for(const c of ['clinics','clinics_initialized','role','cdc_clinics','absence_validator','institution'])
+    assert.equal(await scalar("select has_column_privilege('authenticated','public.profiles',$1,'UPDATE')",[c]),false,c);
+   assert.equal(await scalar("select has_column_privilege('anon','public.profiles','first_name','UPDATE')"),false);
+  });
   await as(1); await rpc('admin_set_absence_validators',['Thoracique',[uid(5)]]); await rpc('admin_set_absence_validators',['Urologie',[uid(6)]]);
   await t.test('sélection initiale immédiate, changements soumis, refus et acceptation',async()=>{
    await as(3); assert.equal((await rpc('my_clinics')).initial,true);

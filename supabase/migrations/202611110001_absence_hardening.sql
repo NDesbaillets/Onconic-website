@@ -95,6 +95,9 @@ end $$;
 -- Les champs d'affectation ne sont jamais modifiables directement via l'API de profils.
 revoke update on public.profiles from authenticated,anon;
 revoke update(clinics,clinics_initialized) on public.profiles from authenticated,anon;
+-- La révocation au niveau de la table retire aussi les droits par colonne : rétablir ceux que les pages utilisent déjà
+-- (Mon compte, Bienvenue, consentements, notifications push, langue). Constat sur la base réelle avant déploiement.
+grant update (first_name,last_name,username,full_name,phone,lang,show_in_events,contactable,notify_events) on public.profiles to authenticated;
 
 -- Cliniques historiques + rotations futures ; les rotations appliquées ne sont plus perdues.
 create or replace function public.member_clinics(p_user uuid,p_from date,p_to date) returns text[] language sql stable security definer set search_path=public as $$

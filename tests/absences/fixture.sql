@@ -4,7 +4,7 @@ create schema auth; create schema storage;
 create table auth.users(id uuid primary key,email text,last_sign_in_at timestamptz,created_at timestamptz default now(),raw_user_meta_data jsonb default '{}');
 create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('test.uid',true),'')::uuid $$;
 create table storage.buckets(id text primary key,name text,public boolean);
-create table public.profiles(id uuid primary key references auth.users(id),full_name text,role text default 'member',institution text default 'CHUV',med_plus boolean default false,cdc_clinics text[] default '{}',first_name text,last_name text,phone text,lang text default 'fr',created_at timestamptz default now());
+create table public.profiles(id uuid primary key references auth.users(id),full_name text,role text default 'member',institution text default 'CHUV',med_plus boolean default false,cdc_clinics text[] default '{}',first_name text,last_name text,username text,phone text,lang text default 'fr',show_in_events boolean default false,contactable boolean default false,notify_events boolean default false,created_at timestamptz default now());
 create function public.current_role_name() returns text language sql stable security definer as $$ select role from public.profiles where id=auth.uid() $$;
 create function public.member_name(p_user uuid) returns text language sql stable security definer as $$ select full_name from public.profiles where id=p_user $$;
 create function public.ch_today() returns date language sql stable as $$ select date '2026-11-11' $$;

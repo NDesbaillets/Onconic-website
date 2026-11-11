@@ -165,7 +165,10 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json(req, 405, { error: "method_not_allowed" });
 
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  const worker = await workerAuthorized(req.headers.get("x-absence-worker"), Deno.env.get("ABSENCE_WORKER_TOKEN"));
+  // Traitement autonome (pg_cron) : jeton comparé au secret Edge s'il existe, sinon au secret Vault par la base (jamais affiché)
+  const provided = req.headers.get("x-absence-worker");
+  const worker = (await workerAuthorized(provided, Deno.env.get("ABSENCE_WORKER_TOKEN")))
+    || (!!provided && provided.length >= 32 && (await admin.rpc("absence_worker_verify", { p_token: provided })).data === true);
   if (!worker && !token) return json(req, 401, { error: "unauthorized" });
   const auth = worker ? null : (await admin.auth.getUser(token)).data;
   if (!worker && !auth?.user) return json(req, 401, { error: "unauthorized" });
