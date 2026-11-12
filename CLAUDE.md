@@ -47,6 +47,11 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **CTCAE v5 et v6** | Nouvel outil (médecins) : recherche libre d'un symptôme ou d'une anomalie biologique, grades v5 et v6 côte à côte, anglais et français ; données statiques, traduction à relire (voir memory/projects/ctcae.md) |
 → Détails : memory/projects/
 
+## Agents et sessions
+- Agents du dépôt : `relecteur-securite` (ici, `.claude/agents/`), `redacteur-clinique` et `verificateur-references` (dans onconic-content).
+- Seule la session chef d'orchestre merge une PR et exécute du SQL sur Supabase. Les sessions enfants et les sous-agents ouvrent une PR et s'arrêtent. Aucun sous-agent ne reçoit `execute_sql`.
+- Avant tout merge, la session chef lance `relecteur-securite` ; tout point bloquant empêche la fusion.
+
 ## Règles de sécurité (ne jamais enfreindre)
 - Jamais de données patients, jamais de clé `service_role`/secrète dans le dépôt (la clé publishable peut l'être).
 - Jamais commiter : Excel Ultragenda (`*.xlsx`), PDF de protocoles CHUV, lettres d'assurance Word.
