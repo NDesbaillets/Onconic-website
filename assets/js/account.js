@@ -23,7 +23,7 @@
     notifyDenied: "Les notifications sont bloquées pour ce site. Autorisez-les dans les réglages du navigateur ou de l'iPhone, puis réessayez.",
     notifyUnsupported: "Ce navigateur ne permet pas les notifications.",
     notifyIos: "Sur iPhone et iPad, ajoutez d'abord Onconic à l'écran d'accueil (Partager, puis « Sur l'écran d'accueil »), ouvrez l'app, puis revenez ici.",
-    roles: { admin: "Administrateur", clinician: "Médecin assistant", cdc: "CDC (chef·fe de clinique)", cadre: "Médecin cadre", assistant: "Assistante médicale", pharmacist: "Pharmacien·ne", member: "Membre (accès en attente)" },
+    roles: { admin: "Administrateur", clinician: "Médecin assistant", cdc: "CDC (chef·fe de clinique)", cadre: "Médecin cadre", assistant: "Assistante médicale", nurse: "Infirmier·ère", pharmacist: "Pharmacien·ne", member: "Membre (accès en attente)" },
     none: "—"
   } : {
     saved: "Profile saved.",
@@ -44,7 +44,7 @@
     notifyDenied: "Notifications are blocked for this site. Allow them in the browser or iPhone settings, then try again.",
     notifyUnsupported: "This browser does not support notifications.",
     notifyIos: "On iPhone and iPad, first add Onconic to your Home Screen (Share, then “Add to Home Screen”), open the app, then come back here.",
-    roles: { admin: "Administrator", clinician: "Resident physician", cdc: "Senior registrar (CDC)", cadre: "Consultant physician (cadre)", assistant: "Medical assistant", pharmacist: "Pharmacist", member: "Member (access pending)" },
+    roles: { admin: "Administrator", clinician: "Resident physician", cdc: "Senior registrar (CDC)", cadre: "Consultant physician (cadre)", assistant: "Medical assistant", nurse: "Nurse", pharmacist: "Pharmacist", member: "Member (access pending)" },
     none: "—"
   };
 

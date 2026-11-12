@@ -1509,7 +1509,7 @@
   // ----- Onglets -----
   // ----- Exports Excel (admin, direction : tous les membres ; validateurs : leurs cliniques) -----
   const DATE_FMT = "dd.mm.yyyy", DT_FMT = new Intl.DateTimeFormat("fr-CH", { timeZone: "Europe/Zurich", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-  const ROLE_NAME = { clinician: "Médecin assistant", cdc: "CDC", cadre: "Médecin cadre", assistant: "Assistante médicale", pharmacist: "Pharmacien·ne", direction: "Admin de direction", admin: "Administrateur" };
+  const ROLE_NAME = { clinician: "Médecin assistant", cdc: "CDC", cadre: "Médecin cadre", assistant: "Assistante médicale", nurse: "Infirmier·ère", pharmacist: "Pharmacien·ne", direction: "Admin de direction", admin: "Administrateur" };
   const xDT = (s) => (s ? DT_FMT.format(new Date(s)).replace(",", "") : "");
   const xDate = (s) => (s ? pd(s) : null);
   const FILL = { approved: "FFE3F1E4", requested: "FFFFF3D6", direction: "FFFCE4C8", rejected: "FFF9DADA", cancelled: "FFE6E8EC", change: "FFDDE8F7" };
