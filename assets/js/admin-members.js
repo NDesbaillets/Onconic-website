@@ -4,7 +4,7 @@
   const sb = window.supabase && cfg.supabaseUrl ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
   const $ = (id) => document.getElementById(id);
 
-  const ROLES = [["member", "En attente de validation"], ["clinician", "Médecin assistant"], ["cdc", "CDC (chef·fe de clinique)"], ["cadre", "Médecin cadre"], ["assistant", "Assistante médicale"],
+  const ROLES = [["member", "En attente de validation"], ["clinician", "Médecin assistant"], ["cdc", "CDC (chef·fe de clinique)"], ["cadre", "Médecin cadre"], ["assistant", "Assistante médicale"], ["nurse", "Infirmier·ère"],
     ["pharmacist", "Pharmacien·ne"], ["direction", "Admin de direction"], ["admin", "Administrateur"]];
   const ROLE_LABEL = Object.fromEntries(ROLES);
   const TOOLS = [["congres", "Congrès"], ["trials", "Key trials"], ["lettres", "Lettres d'assurance"],
@@ -276,7 +276,7 @@
     if (r.role === "member") notes.push("Compte en attente : choisissez un rôle pour ouvrir les accès.");
     if (r.role === "cdc") notes.push("CDC (chef·fe de clinique) : droits d'un médecin assistant, plus modification et validation des fiches Key trials des cliniques cochées.");
     if (r.role === "cadre") notes.push("Médecin cadre : exactement les droits d'un·e CDC, plus, si la case « Validateur des absences » est cochée, la validation des absences des cliniques où il ou elle est désigné·e (page « Absences : valideurs par clinique »).");
-    if (["assistant", "pharmacist", "direction", "admin"].includes(r.role)) notes.push("Rattaché·e à la clinique Administration pour les absences (seuls les médecins, CDC et cadres ont des cliniques).");
+    if (["assistant", "nurse", "pharmacist", "direction", "admin"].includes(r.role)) notes.push("Rattaché·e à la clinique Administration pour les absences (seuls les médecins, CDC et cadres ont des cliniques).");
     if (r.role === "pharmacist") notes.push("Pharmacien·ne : administre aussi les Lettres d'assurance, Limitations LS et Durée de traitement auxquelles il ou elle a accès.");
     if (notes.length) c.append(el("p", "muted am-note", notes.join(" ")));
     if (Object.values(r.tools || {}).some((x) => x.custom)) {
