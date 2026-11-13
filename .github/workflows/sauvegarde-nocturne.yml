@@ -103,6 +103,8 @@ jobs:
           tar -C work -czf - db storage | age -r "$AGE_RECIPIENT" -o "$nom"
           rm -rf work
           echo "Archive chiffrée : $(du -h "$nom" | cut -f1)"
+          # Crée le compartiment au premier passage (sans effet s'il existe)
+          rclone mkdir "sb:$BUCKET"
           rclone copyto "$nom" "sb:$BUCKET/quotidien/$nom" --s3-no-check-bucket
           # Le 1er du mois, une copie mensuelle conservée plus longtemps
           if [ "$(date -u +%d)" = "01" ]; then
