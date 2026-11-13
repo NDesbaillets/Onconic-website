@@ -1540,106 +1540,137 @@
     ws.views = [{ state: "frozen", ySplit: 1 }];
     ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } };
   }
-  // Grille calendaire : un bloc par mois, une ligne par personne, une colonne par jour (format du planning Excel des cliniques).
-  const CAL_FILL = { vacances: "FFFF9999", congres: "FF92D050", autre: "FFFFD966" }; // rose = vacances, vert = congrès, ambre = autre
-  const CAL_WE = "FFDCE6F1"; // week-ends et fériés vaudois
-  // Construit la liste des mois (année, mois 0-based) couverts par [from, to].
+  // ----- Export unique : Planning (grille calendaire au format du tableur des cliniques), Absences, Synthèse, Décisions, Légende -----
+  const CAL = {
+    approved: { vacances: "FFF4A6A6", congres: "FF8FCB6B", autre: "FFF7CF6B" }, // validée : couleur franche
+    pending: { vacances: "FFFBE1E1", congres: "FFE3F2D9", autre: "FFFDF1D2" },  // en cours : même teinte, très claire
+    weekend: "FFEEF0F3", month: "FF001B4D", clinic: "FFDCE3EE", grid: "FFD9DDE3",
+  };
+  const ROLE_ORDER = { cadre: 1, cdc: 2, clinician: 3, pharmacist: 4, nurse: 5, assistant: 6, direction: 7, admin: 8 };
+  const ROLE_SHORT = { cadre: "Médecin cadre", cdc: "CDC", clinician: "Méd. assistant", pharmacist: "Pharmacien·ne", nurse: "Infirmier·ère", assistant: "Assistante méd.", direction: "Direction", admin: "Admin" };
+  const WEEKDAY = ["D", "L", "M", "M", "J", "V", "S"];
   function monthsBetween(from, to) {
     const a = pd(from), b = pd(to), out = [];
     for (let y = a.getUTCFullYear(), m = a.getUTCMonth(); y < b.getUTCFullYear() || (y === b.getUTCFullYear() && m <= b.getUTCMonth()); m === 11 ? (m = 0, y++) : m++) out.push([y, m]);
     return out;
   }
-  // people : Map(id -> { name, role, clinics, days: Map(iso -> {kind, text}) }). Jours des absences validées, limités à [from, to].
-  function calendarPeople(rows, from, to) {
-    const people = new Map();
-    for (const r of rows) {
-      if (r.status !== "approved") continue;
-      let p = people.get(r.user_id);
-      if (!p) { p = { name: r.name, role: r.role, clinics: r.clinics || [], days: new Map() }; people.set(r.user_id, p); }
-      const s = r.start_date < from ? from : r.start_date, e = r.end_date > to ? to : r.end_date;
+  // Jours couverts par personne : Map(user -> Map(iso -> {kind, state, label, start})). Validée prioritaire sur en cours, congrès sur le reste.
+  function planningDays(absences, from, to) {
+    const out = new Map(), rank = (x) => (x.state === "approved" ? 2 : 0) + (x.kind === "congres" ? 1 : 0);
+    for (const a of absences) {
+      const st = a.status === "approved" ? "approved" : "pending";
+      const label = (a.kind === "congres" && a.note ? String(a.note).slice(0, 14) : KINDS[a.kind][0]) + (st === "pending" ? " ?" : "");
+      const s = a.start_date < from ? from : a.start_date, e = a.end_date > to ? to : a.end_date;
+      if (!out.has(a.user_id)) out.set(a.user_id, new Map());
+      const days = out.get(a.user_id);
       for (const d = pd(s); iso(d) <= e; d.setUTCDate(d.getUTCDate() + 1)) {
-        const day = iso(d), cur = p.days.get(day);
-        // Congrès prioritaire à l'affichage ; le texte reprend la précision (ex. « ESMO ») sinon l'abréviation V/C/A.
-        if (!cur || (r.kind === "congres" && cur.kind !== "congres")) p.days.set(day, { kind: r.kind, text: r.kind === "congres" && r.note ? String(r.note).slice(0, 12) : KINDS[r.kind][1] });
+        const day = iso(d), cand = { kind: a.kind, state: st, label, key: a.start_date + a.kind + st }, cur = days.get(day);
+        if (!cur || rank(cand) > rank(cur)) days.set(day, cand);
       }
     }
-    return people;
+    return out;
   }
-  function buildCalendar(wb, rows, w, scopeLabel) {
-    const ws = wb.addWorksheet("Calendrier", { views: [{ state: "frozen", xSplit: 1 }] });
-    ws.getColumn(1).width = 24;
-    for (let c = 2; c <= 32; c++) ws.getColumn(c).width = 3.6;
-    const people = [...calendarPeople(rows, w.from, w.to).values()].sort((a, b) => a.name.localeCompare(b.name, "fr"));
-    const border = { style: "thin", color: { argb: "FFD0D5DD" } };
-    const edges = { top: border, left: border, right: border, bottom: border };
+  // Groupes : une section par clinique (cadres puis CDC puis assistants…), puis les membres sans clinique (direction seulement).
+  function planningGroups(members) {
+    const scope = state.isDir ? null : new Set(state.ctx.validates || []), groups = new Map();
+    for (const m of members) {
+      const cl = (m.clinics || []).filter((c) => !scope || scope.has(c));
+      const keys = cl.length ? cl : state.isDir ? ["Sans clinique"] : [];
+      for (const k of keys) { if (!groups.has(k)) groups.set(k, []); groups.get(k).push(m); }
+    }
+    const order = [...groups.keys()].sort((a, b) => (a === "Sans clinique") - (b === "Sans clinique") || a.localeCompare(b, "fr"));
+    return order.map((k) => [k, groups.get(k).sort((a, b) => (ROLE_ORDER[a.role] || 9) - (ROLE_ORDER[b.role] || 9) || a.name.localeCompare(b.name, "fr"))]);
+  }
+  function addPlanningSheet(wb, plan, w) {
+    const ws = wb.addWorksheet("Planning", { views: [{ state: "frozen", xSplit: 2, showGridLines: false }], properties: { defaultRowHeight: 20 } });
+    ws.getColumn(1).width = 28; ws.getColumn(2).width = 16;
+    for (let c = 3; c <= 33; c++) ws.getColumn(c).width = 4.8;
+    const thin = { style: "thin", color: { argb: CAL.grid } }, box = { top: thin, left: thin, right: thin, bottom: thin };
+    const solid = (argb) => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
+    const days = planningDays(plan.absences || [], w.from, w.to), groups = planningGroups(plan.members || []);
     for (const [y, m] of monthsBetween(w.from, w.to)) {
-      const ndays = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+      const nd = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
       const label = new Date(Date.UTC(y, m, 1)).toLocaleDateString("fr-CH", { month: "long", year: "numeric", timeZone: "UTC" });
-      const head = ws.addRow([label.charAt(0).toUpperCase() + label.slice(1), ...Array.from({ length: ndays }, (_, i) => i + 1)]);
-      head.font = { bold: true };
-      head.eachCell((c) => { c.alignment = { horizontal: "center" }; c.border = edges; });
-      head.getCell(1).alignment = { horizontal: "left" };
-      const weekend = {};
-      for (let d = 1; d <= ndays; d++) { const day = iso(new Date(Date.UTC(y, m, d))), wd = pd(day).getUTCDay(); if (wd === 0 || wd === 6 || holidayOf(day)) { weekend[d] = true; head.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: CAL_WE } }; } }
-      for (const p of people) {
-        const row = ws.addRow([p.name]);
-        row.getCell(1).border = edges;
-        for (let d = 1; d <= ndays; d++) {
-          const cell = row.getCell(d + 1), hit = p.days.get(iso(new Date(Date.UTC(y, m, d))));
-          cell.border = edges; cell.alignment = { horizontal: "center" };
-          if (hit) { cell.value = hit.text; cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: CAL_FILL[hit.kind] } }; cell.font = { size: 8 }; }
-          else if (weekend[d]) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: CAL_WE } };
+      const title = ws.addRow([label.charAt(0).toUpperCase() + label.slice(1)]);
+      title.height = 26; ws.mergeCells(title.number, 1, title.number, 2 + nd);
+      title.getCell(1).font = { bold: true, size: 13, color: { argb: "FFFFFFFF" } };
+      title.getCell(1).fill = solid(CAL.month); title.getCell(1).alignment = { vertical: "middle", indent: 1 };
+      const iso_ = (d) => iso(new Date(Date.UTC(y, m, d))), off = {};
+      for (let d = 1; d <= nd; d++) { const day = iso_(d), wd = pd(day).getUTCDay(); off[d] = wd === 0 || wd === 6 || !!holidayOf(day); }
+      const wdRow = ws.addRow(["", "", ...Array.from({ length: nd }, (_, i) => WEEKDAY[pd(iso_(i + 1)).getUTCDay()])]);
+      const nRow = ws.addRow(["Nom", "Fonction", ...Array.from({ length: nd }, (_, i) => i + 1)]);
+      for (const r of [wdRow, nRow]) {
+        r.height = 18;
+        r.eachCell({ includeEmpty: true }, (c, col) => {
+          c.alignment = { horizontal: col <= 2 ? "left" : "center", vertical: "middle", indent: col <= 2 ? 1 : 0 };
+          c.font = { bold: r === nRow, size: 10, color: { argb: "FF4A5568" } };
+          if (col > 2 && off[col - 2]) c.fill = solid(CAL.weekend);
+          if (r === nRow) c.border = { bottom: { style: "medium", color: { argb: "FF9AA5B1" } } };
+        });
+      }
+      for (let d = 1; d <= nd; d++) { const h = holidayOf(iso_(d)); if (h) nRow.getCell(d + 2).note = h; }
+      for (const [clinic, people] of groups) {
+        const g = ws.addRow([clinic]);
+        g.height = 20; ws.mergeCells(g.number, 1, g.number, 2 + nd);
+        g.getCell(1).font = { bold: true, size: 11, color: { argb: "FF001B4D" } }; g.getCell(1).fill = solid(CAL.clinic);
+        g.getCell(1).alignment = { vertical: "middle", indent: 1 };
+        for (const p of people) {
+          const row = ws.addRow([p.name, ROLE_SHORT[p.role] || p.role]);
+          row.height = 20;
+          row.getCell(1).alignment = { vertical: "middle", indent: 1 }; row.getCell(1).font = { size: 10 };
+          row.getCell(2).alignment = { vertical: "middle" }; row.getCell(2).font = { size: 9, color: { argb: "FF6B7280" } };
+          row.getCell(1).border = box; row.getCell(2).border = box;
+          const mine = days.get(p.id);
+          let prev = null;
+          for (let d = 1; d <= nd; d++) {
+            const cell = row.getCell(d + 2), hit = mine && mine.get(iso_(d));
+            cell.border = box; cell.alignment = { vertical: "middle", horizontal: "left" };
+            if (hit) {
+              cell.fill = solid(CAL[hit.state][hit.kind]);
+              // Libellé une seule fois en début de plage (et en début de mois) : il déborde sur les cases suivantes.
+              if (!prev || prev.key !== hit.key) { cell.value = hit.label; cell.font = { size: 9, bold: hit.state === "approved", italic: hit.state === "pending", color: { argb: "FF1F2933" } }; }
+            } else if (off[d]) cell.fill = solid(CAL.weekend);
+            prev = hit || null;
+          }
         }
+        ws.addRow([]).height = 8;
       }
-      ws.addRow([]);
+      ws.addRow([]).height = 14;
     }
-    const lg = wb.addWorksheet("Légende");
-    lg.columns = [{ header: "Couleur", width: 14 }, { header: "Signification", width: 48 }];
-    [["Vacances (V)", CAL_FILL.vacances], ["Congrès (C, ou le nom indiqué)", CAL_FILL.congres], ["Autre (A)", CAL_FILL.autre], ["Week-end ou férié vaudois", CAL_WE]]
-      .forEach(([t, c]) => { const r = lg.addRow(["", t]); r.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: c } }; });
-    lg.getRow(1).font = { bold: true };
-    lg.addRow([]); lg.addRow(["", scopeLabel]);
-    lg.addRow(["", `Fenêtre : du ${fmtCH(w.from)} au ${fmtCH(w.to)}. Seules les absences validées figurent dans la grille ; une personne sans absence validée dans la fenêtre n'apparaît pas.`]);
-    return people.length;
+    return { members: (plan.members || []).length, absences: (plan.absences || []).length };
   }
-  async function runExport(kind) {
-    const w = exportWindow();
-    if (!w) return;
-    const msg = $("ab-exp-msg");
-    say(msg, "Préparation du fichier…");
-    const [abs, dec] = await Promise.all([sb.rpc("absence_export", { p_from: w.from, p_to: w.to }), kind === "sum" ? sb.rpc("absence_decisions", { p_from: w.from, p_to: w.to }) : Promise.resolve({ data: [] })]);
-    if (abs.error || dec.error) return say(msg, (abs.error || dec.error).message, "error");
-    const rows = (abs.data || []).map((r) => Object.assign(r, { start_date: String(r.start_date).slice(0, 10), end_date: String(r.end_date).slice(0, 10) }));
-    const decisions = (dec.data || []).map((r) => Object.assign(r, { start_date: String(r.start_date).slice(0, 10), end_date: String(r.end_date).slice(0, 10) }));
-    try { await loadScript(EXCELJS, "ExcelJS"); } catch (e) { return say(msg, e.message, "error"); }
-    const wb = new window.ExcelJS.Workbook();
-    const stamp = `${w.from}_${w.to}`;
-    if (kind === "abs") {
-      const ws = wb.addWorksheet("Absences");
-      ws.columns = ["Nom", "Rôle", "Cliniques", "Motif", "Précision", "Début", "Fin", "Jours ouvrables", "État", "Changement demandé", "Envoyée le", "Validée par (1re ligne)", "Visa de la direction", "Décision par", "Décision le", "Commentaire"].map((header) => ({ header }));
-      for (const r of rows) {
-        const chg = r.change_type === "delete" ? "Suppression" : r.change_type === "modify" ? `Modification : ${KINDS[r.change_kind] ? KINDS[r.change_kind][0] : r.change_kind}, ${period(String(r.change_start).slice(0, 10), String(r.change_end).slice(0, 10))}${r.change_note ? " (" + r.change_note + ")" : ""}` : "";
-        const row = ws.addRow([r.name, ROLE_NAME[r.role] || r.role, (r.clinics || []).join(", "), KINDS[r.kind][0], r.note || "", xDate(r.start_date), xDate(r.end_date), workdays(r.start_date, r.end_date),
-          statusLabel(r), chg, xDT(r.submitted_at), r.approvers || "", r.direction_name ? `${r.direction_name} (${xDT(r.direction_at)})` : "", r.decided_by_name || "", xDT(r.decided_at), r.decision_comment || ""]);
-        row.getCell(6).numFmt = DATE_FMT; row.getCell(7).numFmt = DATE_FMT;
-        row.eachCell((c) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: statusFill(r) } }; });
-      }
-      styleSheet(ws, [26, 18, 24, 12, 28, 12, 12, 10, 32, 36, 18, 44, 36, 24, 18, 36]);
-      const lg = wb.addWorksheet("Légende");
-      lg.columns = [{ header: "Couleur", width: 14 }, { header: "État", width: 40 }];
-      [["Validée", FILL.approved], ["En cours : chez les validateurs", FILL.requested], ["En cours : visa de la direction", FILL.direction], ["Validée, modification ou suppression demandée", FILL.change], ["Refusée", FILL.rejected], ["Annulée", FILL.cancelled]]
-        .forEach(([t, c]) => { const r = lg.addRow(["", t]); r.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: c } }; });
-      lg.getRow(1).font = { bold: true };
-      lg.addRow([]); lg.addRow(["", `Fenêtre : du ${fmtCH(w.from)} au ${fmtCH(w.to)} (absences qui chevauchent la fenêtre). Les brouillons ne sont pas exportés. Jours ouvrables : lundi à vendredi, fériés vaudois déduits.`]);
-      saveXlsx(await wb.xlsx.writeBuffer(), `absences_${stamp}.xlsx`);
-      return say(msg, `${plur(rows.length, "absence exportée", "absences exportées")}.`, "ok");
+  function addLegendSheet(wb, w, scope) {
+    const lg = wb.addWorksheet("Légende");
+    lg.columns = [{ header: "Couleur", width: 14 }, { header: "Signification", width: 70 }];
+    lg.getRow(1).font = { bold: true };
+    const fill = (argb) => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
+    const add = (argb, t) => { const r = lg.addRow(["", t]); if (argb) r.getCell(1).fill = fill(argb); r.height = 18; };
+    add(null, "Planning");
+    add(CAL.approved.vacances, "Vacances validées"); add(CAL.pending.vacances, "Vacances demandées, en cours de validation (libellé suivi de « ? »)");
+    add(CAL.approved.congres, "Congrès validé (nom du congrès si indiqué)"); add(CAL.pending.congres, "Congrès demandé, en cours de validation");
+    add(CAL.approved.autre, "Autre absence validée"); add(CAL.pending.autre, "Autre absence demandée, en cours de validation");
+    add(CAL.weekend, "Week-end ou jour férié vaudois (nom du férié en commentaire sur le numéro du jour)");
+    lg.addRow([]);
+    add(null, "Absences : une ligne par absence avec son état ; couleur de la ligne selon l'état");
+    [["Validée", FILL.approved], ["En cours : chez les validateurs", FILL.requested], ["En cours : visa de la direction", FILL.direction], ["Validée, modification ou suppression demandée", FILL.change], ["Refusée", FILL.rejected], ["Annulée", FILL.cancelled]].forEach(([t, c]) => add(c, t));
+    lg.addRow([]);
+    add(null, scope);
+    add(null, `Fenêtre : du ${fmtCH(w.from)} au ${fmtCH(w.to)}. Brouillons non exportés. Jours ouvrables : lundi à vendredi, fériés vaudois déduits.`);
+    add(null, "Planning : tout l'effectif du périmètre figure, y compris les personnes sans absence ; une personne rattachée à plusieurs cliniques apparaît dans chacune.");
+  }
+  function addAbsencesSheet(wb, rows) {
+    const ws = wb.addWorksheet("Absences");
+    ws.columns = ["Nom", "Rôle", "Cliniques", "Motif", "Précision", "Début", "Fin", "Jours ouvrables", "État", "Changement demandé", "Envoyée le", "Validée par (1re ligne)", "Visa de la direction", "Décision par", "Décision le", "Commentaire"].map((header) => ({ header }));
+    for (const r of rows) {
+      const chg = r.change_type === "delete" ? "Suppression" : r.change_type === "modify" ? `Modification : ${KINDS[r.change_kind] ? KINDS[r.change_kind][0] : r.change_kind}, ${period(String(r.change_start).slice(0, 10), String(r.change_end).slice(0, 10))}${r.change_note ? " (" + r.change_note + ")" : ""}` : "";
+      const row = ws.addRow([r.name, ROLE_NAME[r.role] || r.role, (r.clinics || []).join(", "), KINDS[r.kind][0], r.note || "", xDate(r.start_date), xDate(r.end_date), workdays(r.start_date, r.end_date),
+        statusLabel(r), chg, xDT(r.submitted_at), r.approvers || "", r.direction_name ? `${r.direction_name} (${xDT(r.direction_at)})` : "", r.decided_by_name || "", xDT(r.decided_at), r.decision_comment || ""]);
+      row.getCell(6).numFmt = DATE_FMT; row.getCell(7).numFmt = DATE_FMT;
+      row.eachCell((c) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: statusFill(r) } }; });
     }
-    if (kind === "cal") {
-      const n = buildCalendar(wb, rows, w, $("ab-exp-scope").textContent);
-      saveXlsx(await wb.xlsx.writeBuffer(), `planning-absences_${stamp}.xlsx`);
-      return say(msg, n ? `Grille de ${plur(n, "personne", "personnes")} avec une absence validée.` : "Aucune absence validée dans la fenêtre.", n ? "ok" : "error");
-    }
-    // Synthèse par personne
+    styleSheet(ws, [26, 18, 24, 12, 28, 12, 12, 10, 32, 36, 18, 44, 36, 24, 18, 36]);
+  }
+  function addSynthesisSheets(wb, rows, decisions, w) {
     const people = new Map();
     const get = (id, name, role, clinics) => { if (!people.has(id)) people.set(id, { name, role, clinics: clinics || [], ok: 0, days: { vacances: 0, congres: 0, autre: 0 }, pending: 0, changePending: 0, rejected: 0, cancelled: 0, chOk: 0, chKo: 0 }); return people.get(id); };
     for (const r of rows) {
@@ -1659,7 +1690,7 @@
     });
     styleSheet(ws, [26, 18, 24, 12, 14, 10, 10, 10, 10, 16, 10, 10, 14, 14]);
     ws.addRow([]);
-    ws.addRow([`Fenêtre : du ${fmtCH(w.from)} au ${fmtCH(w.to)}. Jours ouvrables comptés dans la fenêtre (week-ends et fériés vaudois exclus). Les refus sont tirés du journal des décisions : ceux d'avant la mise en service de l'export ne sont pas conservés au-delà des 14 jours de visibilité.`]);
+    ws.addRow([`Jours ouvrables comptés dans la fenêtre (week-ends et fériés vaudois exclus). Les refus sont tirés du journal des décisions : ceux d'avant la mise en service de l'export ne sont pas conservés au-delà des 14 jours de visibilité.`]);
     const wd = wb.addWorksheet("Décisions");
     wd.columns = ["Nom", "Décision", "Motif", "Précision", "Début", "Fin", "Décidée le", "Par", "Commentaire"].map((header) => ({ header }));
     for (const d of decisions) {
@@ -1667,8 +1698,32 @@
       r.getCell(5).numFmt = DATE_FMT; r.getCell(6).numFmt = DATE_FMT;
     }
     styleSheet(wd, [26, 20, 12, 28, 12, 12, 18, 24, 40]);
-    saveXlsx(await wb.xlsx.writeBuffer(), `synthese-absences_${stamp}.xlsx`);
-    say(msg, `Synthèse de ${plur(people.size, "personne", "personnes")}, ${plur(decisions.length, "décision", "décisions")}.`, "ok");
+    return people.size;
+  }
+  async function runExport() {
+    const w = exportWindow();
+    if (!w) return;
+    const msg = $("ab-exp-msg");
+    say(msg, "Préparation du fichier…");
+    const [abs, dec, plan] = await Promise.all([
+      sb.rpc("absence_export", { p_from: w.from, p_to: w.to }),
+      sb.rpc("absence_decisions", { p_from: w.from, p_to: w.to }),
+      sb.rpc("absence_planning", { p_from: w.from, p_to: w.to }),
+    ]);
+    const err = abs.error || dec.error || plan.error;
+    if (err) return say(msg, err.message, "error");
+    const day10 = (r) => Object.assign(r, { start_date: String(r.start_date).slice(0, 10), end_date: String(r.end_date).slice(0, 10) });
+    const rows = (abs.data || []).map(day10), decisions = (dec.data || []).map(day10);
+    const planning = plan.data || { members: [], absences: [] };
+    planning.absences = (planning.absences || []).map(day10);
+    try { await loadScript(EXCELJS, "ExcelJS"); } catch (e) { return say(msg, e.message, "error"); }
+    const wb = new window.ExcelJS.Workbook();
+    const p = addPlanningSheet(wb, planning, w);
+    addAbsencesSheet(wb, rows);
+    const n = addSynthesisSheets(wb, rows, decisions, w);
+    addLegendSheet(wb, w, $("ab-exp-scope").textContent);
+    saveXlsx(await wb.xlsx.writeBuffer(), `absences_${w.from}_${w.to}.xlsx`);
+    say(msg, `Fichier téléchargé : planning de ${plur(p.members, "personne", "personnes")}, ${plur(rows.length, "absence", "absences")}, synthèse de ${plur(n, "personne", "personnes")}.`, "ok");
   }
   function initExport() {
     const t = new Date();
@@ -1679,13 +1734,11 @@
       : `Les membres de ${state.ctx.validates.length > 1 ? "vos cliniques" : "votre clinique"} (${state.ctx.validates.join(", ")}). Choisissez la fenêtre (par défaut : le mois précédent et les 12 mois à venir).`;
     $("ab-exp-reset").addEventListener("click", defaults);
     $("ab-exp-form").addEventListener("submit", (e) => e.preventDefault());
-    for (const [id, kind] of [["ab-exp-abs", "abs"], ["ab-exp-sum", "sum"], ["ab-exp-cal", "cal"]]) {
-      $(id).addEventListener("click", async (e) => {
-        const b = e.currentTarget; b.disabled = true;
-        try { await runExport(kind); } catch (err) { say($("ab-exp-msg"), "Export impossible : " + err.message, "error"); }
-        b.disabled = false;
-      });
-    }
+    $("ab-exp-xlsx").addEventListener("click", async (e) => {
+      const b = e.currentTarget; b.disabled = true;
+      try { await runExport(); } catch (err) { say($("ab-exp-msg"), "Export impossible : " + err.message, "error"); }
+      b.disabled = false;
+    });
   }
 
   // ----- Direction : absence saisie au nom d'un membre, validée d'office -----

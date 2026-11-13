@@ -34,6 +34,8 @@ test('PostgreSQL : migrations, permissions et parcours complets',async(t)=>{
   // Migration de sécurité du 13.11.2026, appliquée deux fois (réexécutable) ; toute la suite tourne ensuite par-dessus.
   const securite=await read('supabase/migrations/202611130001_securite_advisors.sql');
   await db.exec(securite); await db.exec(securite);
+  const planning=await read('supabase/migrations/202611140001_absence_planning.sql');
+  await db.exec(planning); await db.exec(planning);
   await t.test('migration de sécurité : search_path figé sur absence_lo et absence_hi',async()=>{
    for(const f of ['absence_lo','absence_hi'])
     assert.deepEqual(await scalar("select proconfig from pg_proc where proname=$1 and pronamespace='public'::regnamespace",[f]),['search_path=""'],f);
@@ -118,6 +120,24 @@ test('PostgreSQL : migrations, permissions et parcours complets',async(t)=>{
    await superuser(); const doc=await rpc('absence_form_data',[[c]]);assert.ok(!JSON.stringify(doc).includes('SECRET'));
    await db.query('insert into calendar_tokens(user_id,token) values($1,$2)',[uid(4),'fictif']);
    const feed=(await db.query("select * from absence_calendar_feed('fictif')")).rows;assert.ok(!JSON.stringify(feed).includes('SECRET'));
+  });
+  await t.test('planning exportable : effectif complet du périmètre, en cours inclus, confidentialité',async()=>{
+   const plan=async()=>await rpc('absence_planning',['2027-03-01','2027-03-31']);
+   // Une demande en cours (non validée) d'un médecin de Thoracique
+   await as(4); const r=await rpc('absence_request',['vacances','PLANNING_TEST','2027-03-15','2027-03-19']); await rpc('absence_submit');
+   await as(5); let p=await plan(); const ids=p.members.map(m=>m.id);
+   assert.ok(ids.includes(uid(4)) && ids.includes(uid(5)) && ids.includes(uid(9)),'Thoracique, cadre compris');
+   assert.ok(!ids.includes(uid(7)),'pas de membre d’Urologie pour un cadre de Thoracique');
+   assert.ok(p.members.some(m=>m.id===uid(9)),'membre sans absence présent');
+   const pending=p.absences.find(a=>a.user_id===uid(4) && a.start_date==='2027-03-15');
+   assert.ok(pending && pending.status==='requested','demande en cours incluse');
+   assert.ok(p.absences.every(a=>['requested','approved'].includes(a.status)),'ni brouillon, ni refus, ni annulation');
+   assert.equal(p.absences.find(a=>a.note==='SECRET_MODIF'),undefined,'précision confidentielle masquée au cadre');
+   await as(2); p=await plan();
+   assert.ok(p.members.some(m=>m.id===uid(7)) && p.members.some(m=>m.id===uid(4)),'direction : tous les membres');
+   assert.ok(p.absences.some(a=>a.note==='SECRET_MODIF'),'direction : précision visible');
+   await as(4); await assert.rejects(()=>plan(),/Réservé/,'médecin non validateur refusé');
+   await as(4); await rpc('absence_withdraw',[typeof r==='object'&&r?r.id:r]).catch(()=>{});
   });
   await t.test('boîte d’envoi : délai, échec visible et reprise réservée à la direction',async()=>{
    await superuser();await db.exec("update absence_outbox set sent_at=now(); insert into absence_outbox(kind,recipient,absence_ids) values('approved','"+uid(4)+"','{}');");

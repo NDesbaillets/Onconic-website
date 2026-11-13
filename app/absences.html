@@ -215,13 +215,11 @@
                 <button class="btn btn-outline" type="button" id="ab-exp-reset">Mois précédent et 12 mois à venir</button>
               </div>
               <div class="btn-row">
-                <button class="btn" type="button" id="ab-exp-abs">Télécharger les absences (Excel)</button>
-                <button class="btn btn-outline" type="button" id="ab-exp-sum">Télécharger la synthèse par personne (Excel)</button>
-                <button class="btn btn-outline" type="button" id="ab-exp-cal">Télécharger le planning (grille calendaire)</button>
+                <button class="btn" type="button" id="ab-exp-xlsx">Télécharger l'export Excel</button>
               </div>
               <p class="form-msg" id="ab-exp-msg" role="status" aria-live="polite"></p>
             </form>
-            <p class="muted">Absences : une ligne par absence (vacances, congrès, autre) avec son état (validée, en cours, visa de la direction, refusée, annulée, modification ou suppression demandée), les validateurs et leurs horodatages. Synthèse : par personne, demandes acceptées (avec jours ouvrables), refusées, en attente et annulées, plus le détail des décisions. Planning : grille calendaire au format du tableur des cliniques, un bloc par mois, une ligne par personne et une colonne par jour, avec les seules absences validées (vacances, congrès avec leur nom, autre) ; les week-ends et fériés vaudois sont grisés. Les jours ouvrables excluent les week-ends et les fériés vaudois et sont comptés dans la fenêtre choisie. Les demandes refusées sont retirées de la liste 14 jours après le refus, mais leur décision reste dans le journal de la synthèse depuis la mise en service de l'export.</p>
+            <p class="muted">Un seul fichier Excel, en cinq onglets. <strong>Planning</strong> : grille calendaire au format du tableur des cliniques, un bloc par mois, une section par clinique avec tout l'effectif (même sans absence), une colonne par jour ; absences validées en couleur franche, demandes en cours de validation en teinte claire avec « ? » ; week-ends et fériés vaudois grisés. <strong>Absences</strong> : une ligne par absence avec son état, les validateurs et leurs horodatages. <strong>Synthèse</strong> : par personne, demandes acceptées (jours ouvrables), en attente, refusées et annulées. <strong>Décisions</strong> : le journal des décisions. <strong>Légende</strong> : couleurs, périmètre et fenêtre. Les demandes refusées sont retirées de la liste 14 jours après le refus, mais leur décision reste dans le journal.</p>
           </section>
 
           <section id="ab-p-dir" role="tabpanel" aria-labelledby="ab-t-dir" hidden>
