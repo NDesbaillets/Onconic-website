@@ -26,6 +26,15 @@ test('Oncoodle : PostgreSQL', async (t) => {
     await t.test('accès : tous les membres validés, pas les comptes en attente ; tables fermées', async () => {
       for (const n of [1, 2, 3, 5, 7, 8, 10]) { await as(n); assert.ok((await rpc('my_tools')).includes('oncoodle'), `membre ${n}`); }
       await as(9); assert.ok(!(await rpc('my_tools')).includes('oncoodle'));
+      // Non-régression (12.11.2026) : l'assistante médicale n'a par défaut ni Congrès, ni Absences, ni Key trials ; Oncoodle s'ajoute sans rien changer d'autre
+      await as(8);
+      const tools8 = await rpc('my_tools');
+      assert.ok(tools8.includes('oncoodle') && tools8.includes('formation'));
+      for (const t of ['congres', 'absences', 'trials']) assert.ok(!tools8.includes(t), `assistante : ${t} fermé par défaut`);
+      await as(7);
+      const tools7 = await rpc('my_tools');
+      assert.ok(tools7.includes('trials') && tools7.includes('oncoodle') && !tools7.includes('congres') && !tools7.includes('absences'), 'infirmier·ère : Key trials, pas Congrès ni Absences');
+      await as(9);
       await assert.rejects(rpc('oncoodle_people'), /Accès refusé/);
       await assert.rejects(rpc('oncoodle_list'), /Accès refusé/);
       await as(3);

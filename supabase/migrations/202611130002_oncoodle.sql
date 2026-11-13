@@ -14,7 +14,7 @@
 -- 6. Agenda commun : jamais direct. Une demande (désactivée par défaut) attend l'approbation d'un·e autre admin ou membre de la direction.
 -- 7. Conservation : sondages clos ou annulés supprimés après 180 jours ; sondages dont le dernier créneau date de plus de 180 jours aussi.
 --
--- Partant des définitions en production après 202611130001. Transactionnel et réexécutable.
+-- Partant des définitions en production après 202611130001 (tool_allowed : celle de 202611120002, assistantes sans Congrès, Absences ni Key trials). Transactionnel et réexécutable.
 begin;
 
 -- ===== 1. Accès à l'outil =====
@@ -36,9 +36,9 @@ begin
   if found then return o; end if;
   i := coalesce(i, '');
   return case p_tool
-    when 'absences' then r in ('clinician', 'cdc', 'cadre', 'assistant', 'pharmacist')
-    when 'congres' then r in ('clinician', 'cdc', 'cadre', 'assistant', 'pharmacist')
-    when 'trials' then r in ('clinician', 'cdc', 'cadre', 'assistant', 'pharmacist', 'nurse')
+    when 'absences' then r in ('clinician', 'cdc', 'cadre', 'pharmacist')
+    when 'congres' then r in ('clinician', 'cdc', 'cadre', 'pharmacist')
+    when 'trials' then r in ('clinician', 'cdc', 'cadre', 'pharmacist', 'nurse')
     when 'formation' then r in ('clinician', 'cdc', 'cadre', 'assistant', 'pharmacist', 'nurse')
     when 'annuaire' then r in ('clinician', 'cdc', 'cadre', 'assistant', 'pharmacist', 'nurse') and i = 'CHUV'
     when 'contacts' then r in ('clinician', 'cdc', 'cadre', 'assistant', 'pharmacist', 'nurse') and i = 'CHUV'
