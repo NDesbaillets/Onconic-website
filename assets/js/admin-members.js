@@ -11,7 +11,8 @@
     ["limitations", "Limitations LS"], ["duree", "Durée de traitement"], ["absences", "Absences"], ["medletters", "Lettres médicales"]];
   const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome", "Lower GI", "Upper GI", "ORL", "Sarcomes", "Rad-Inter", "ION", "UTOH"];
   const ABS_CLINICS = CLINICS.concat(["Plateforme"]); // cliniques de rattachement pour les absences (Key trials garde CLINICS)
-  const state = { rows: [], me: null, role: null, changes: new Map() };
+  const state = { rows: [], me: null, role: null, changes: new Map(), sel: null };
+  const desktop = () => window.matchMedia("(min-width: 1100px)").matches;
   const RESERVED = ["admin", "direction"]; // seul un administrateur donne ou retire ces rôles
 
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -38,13 +39,16 @@
   }
 
   async function renderClinicRequests() {
-    let box = $("am-clinic-requests");
-    if (!box) { box = el("section", "card"); box.id = "am-clinic-requests"; $("am-tool").prepend(box); }
-    box.replaceChildren(el("h2", null, "Demandes de changement de cliniques"));
+    const box = $("am-clinic-requests"), det = $("am-requests");
+    box.replaceChildren();
     const { data, error } = await sb.rpc("admin_clinic_requests");
-    if (error) { box.append(el("p", "form-msg error", "Chargement impossible : " + error.message)); return; }
-    if (!data.length) box.append(el("p", "muted", "Aucune demande en attente."));
-    for (const r of data) {
+    if (error) { det.hidden = false; $("am-requests-sum").textContent = "Demandes de changement de cliniques"; box.append(el("p", "form-msg error", "Chargement impossible : " + error.message)); return; }
+    const list = data || [];
+    $("am-requests-sum").textContent = `Demandes de changement de cliniques (${list.length})`;
+    det.classList.toggle("has-pending", list.length > 0);
+    det.open = list.length > 0;
+    if (!list.length) box.append(el("p", "muted", "Aucune demande en attente."));
+    for (const r of list) {
       const item = el("article", "card");
       item.append(el("h3", null, r.name), el("p", null, `Actuellement : ${r.current.join(", ") || "aucune"}. Demandé : ${r.clinics.join(", ") || "aucune"}.`));
       const label = el("label", null, "Commentaire (obligatoire pour refuser)");
@@ -68,15 +72,72 @@
     }
   }
 
+  const pendingFirst = (a, b) => (b.role === "member") - (a.role === "member") || nameOf(a).localeCompare(nameOf(b), "fr");
   function render() {
-    renderClinicRequests();
     const q = norm($("am-q").value);
     const role = $("am-role").value;
     const rows = state.rows.filter((r) => (!role || r.role === role)
-      && (!q || norm([r.first_name, r.last_name, r.full_name, r.email].join(" ")).includes(q)));
+      && (!q || norm([r.first_name, r.last_name, r.full_name, r.email].join(" ")).includes(q))).sort(pendingFirst);
     const pending = state.rows.filter((r) => r.role === "member").length;
     $("am-count").textContent = `${plur(rows.length, "membre affiché", "membres affichés")} sur ${state.rows.length}` + (pending ? ` · ${pending} en attente de validation` : "");
-    $("am-list").replaceChildren(...rows.map(card));
+    const list = $("am-list");
+    const top = list.scrollTop;
+    list.replaceChildren(...rows.map(row));
+    list.scrollTop = top;
+    renderDetail();
+  }
+  function row(r) {
+    const li = el("li");
+    const b = el("button", "am-row" + (r.role === "member" ? " am-pending" : "") + (r.id === state.sel ? " is-active" : ""));
+    b.type = "button";
+    b.dataset.id = r.id;
+    if (r.id === state.sel) b.setAttribute("aria-current", "true");
+    b.append(el("strong", "am-row-name", nameOf(r)));
+    const meta = el("span", "am-row-meta");
+    meta.append(el("span", "ug-badge" + (r.role === "member" ? " ug-warn" : ""), r.role === "member" ? "En attente" : ROLE_LABEL[r.role]));
+    if (Object.values(r.tools || {}).some((x) => x.custom)) meta.append(el("span", "ug-badge am-exc", "exception"));
+    if (r.role === "cadre" && r.absence_validator) meta.append(el("span", "ug-badge", "validateur"));
+    b.append(meta);
+    const sub = [r.email, (r.clinics || []).length ? r.clinics.join(", ") : ""].filter(Boolean).join(" · ");
+    if (sub) b.append(el("span", "am-row-sub", sub));
+    b.addEventListener("click", () => select(r.id));
+    li.append(b);
+    return li;
+  }
+  function select(id) {
+    state.sel = id;
+    document.querySelectorAll("#am-list .am-row").forEach((b) => {
+      const on = b.dataset.id === id;
+      b.classList.toggle("is-active", on);
+      if (on) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current");
+    });
+    renderDetail(true);
+    try { history.replaceState(null, "", location.pathname + "#u=" + encodeURIComponent(id)); } catch (e) { /* ignoré */ }
+  }
+  function closeDetail() {
+    state.sel = null;
+    document.querySelectorAll("#am-list .am-row.is-active").forEach((b) => { b.classList.remove("is-active"); b.removeAttribute("aria-current"); });
+    renderDetail();
+    try { history.replaceState(null, "", location.pathname); } catch (e) { /* ignoré */ }
+  }
+  // Panneau de droite (ordinateur) ou vue plein écran (mobile) : la fiche du membre choisi, sinon une aide
+  function renderDetail(reset) {
+    const host = $("am-detail-body"), panel = $("am-detail");
+    const r = state.rows.find((x) => x.id === state.sel);
+    const top = panel.scrollTop;
+    host.replaceChildren();
+    $("am-split").classList.toggle("has-detail", !!r);
+    $("am-tool").classList.toggle("is-detail", !!r);
+    if (!r) {
+      if (state.sel) state.sel = null;
+      const empty = el("div", "am-empty");
+      empty.append(el("p", "am-empty-title", "Sélectionnez un membre"), document.getElementById("am-help-tpl").content.cloneNode(true));
+      host.append(empty);
+      return;
+    }
+    host.append(card(r));
+    panel.scrollTop = reset ? 0 : top;
+    if (reset && !desktop()) $("am-split").scrollIntoView({ block: "start" });
   }
 
   // Changements de bloc programmés : « à partir du …, cliniques … ». Les absences qui tombent après cette date
@@ -139,10 +200,10 @@
   }
 
   function card(r) {
-    const c = el("article", "card am-card" + (r.role === "member" ? " am-pending" : ""));
+    const c = el("div", "am-card" + (r.role === "member" ? " am-pending" : ""));
     const head = el("div", "am-head");
     const who = el("div", "am-who");
-    const nm = el("h3", null, nameOf(r));
+    const nm = el("h2", "am-name", nameOf(r));
     who.append(nm);
     const mail = el("a", "am-mail", r.email || "");
     mail.href = "mailto:" + (r.email || "");
@@ -290,13 +351,18 @@
       });
       c.append(b);
     }
+    const help = el("details", "am-helpbox");
+    help.append(el("summary", null, "Comment lire ces cases ?"), document.getElementById("am-help-tpl").content.cloneNode(true));
+    c.append(help);
     return c;
   }
 
+  // Recharge les données en gardant le membre choisi et les positions de défilement
   async function refresh() {
     const y = window.scrollY;
     try { await load(); } catch (e) { return say("Chargement impossible : " + e.message, "error"); }
     render();
+    renderClinicRequests();
     window.scrollTo(0, y);
   }
 
@@ -314,6 +380,12 @@
     $("am-tool").hidden = false;
     $("am-q").addEventListener("input", render);
     $("am-role").addEventListener("change", render);
+    $("am-close").addEventListener("click", closeDetail);
+    $("am-back").addEventListener("click", closeDetail);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.sel && !document.querySelector("dialog[open]")) closeDetail(); });
+    const m = /^#u=(.+)$/.exec(location.hash);
+    if (m) state.sel = decodeURIComponent(m[1]);
     render();
+    renderClinicRequests();
   })();
 })();

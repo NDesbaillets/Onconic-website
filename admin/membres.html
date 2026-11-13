@@ -16,10 +16,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
+  <link rel="stylesheet" href="/assets/css/admin-members.css?v=20261113a">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/admin-members.js?v=20261112nurse" defer></script>
+  <script src="/assets/js/admin-members.js?v=20261113a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -35,7 +36,7 @@
   </header>
 
   <main>
-    <section class="section ug">
+    <section class="section ug am">
       <div class="container">
         <a class="btn btn-outline hive-back" href="/fr/app/">← The Hive</a>
         <span class="eyebrow">Administration</span>
@@ -45,25 +46,37 @@
         <p class="form-msg" id="ug-status" role="status">Chargement…</p>
 
         <div id="am-tool" hidden>
-          <div class="am-bar">
-            <label class="am-search">Rechercher<input id="am-q" type="search" autocomplete="off" placeholder="Nom, prénom ou e-mail"></label>
-            <label>Rôle<select id="am-role">
-              <option value="">Tous les rôles</option>
-              <option value="member">En attente de validation</option>
-              <option value="clinician">Médecin assistant</option>
-              <option value="cdc">CDC (chef·fe de clinique)</option>
-              <option value="cadre">Médecin cadre</option>
-              <option value="assistant">Assistante médicale</option>
-              <option value="nurse">Infirmier·ère</option>
-              <option value="pharmacist">Pharmacien·ne</option>
-              <option value="direction">Admin de direction</option>
-              <option value="admin">Administrateur</option>
-            </select></label>
+          <details class="am-requests" id="am-requests"><summary id="am-requests-sum">Demandes de changement de cliniques</summary><div id="am-clinic-requests"></div></details>
+          <p class="form-msg am-msg" id="am-msg" role="status" aria-live="polite"></p>
+          <div class="am-split" id="am-split">
+            <div class="am-left" id="am-left">
+              <div class="am-bar">
+                <label class="am-search">Rechercher<input id="am-q" type="search" autocomplete="off" placeholder="Nom, prénom ou e-mail"></label>
+                <label>Rôle<select id="am-role">
+                  <option value="">Tous les rôles</option>
+                  <option value="member">En attente de validation</option>
+                  <option value="clinician">Médecin assistant</option>
+                  <option value="cdc">CDC (chef·fe de clinique)</option>
+                  <option value="cadre">Médecin cadre</option>
+                  <option value="assistant">Assistante médicale</option>
+                  <option value="nurse">Infirmier·ère</option>
+                  <option value="pharmacist">Pharmacien·ne</option>
+                  <option value="direction">Admin de direction</option>
+                  <option value="admin">Administrateur</option>
+                </select></label>
+              </div>
+              <p class="muted am-count" id="am-count" role="status" aria-live="polite"></p>
+              <ul class="am-list" id="am-list"></ul>
+            </div>
+            <aside class="am-detail" id="am-detail" aria-label="Fiche du membre">
+              <div class="am-detail-bar">
+                <button class="btn btn-outline am-back" id="am-back" type="button">← Liste des membres</button>
+                <button class="btn btn-outline am-close" id="am-close" type="button">Fermer ✕</button>
+              </div>
+              <div class="am-detail-body" id="am-detail-body"></div>
+            </aside>
           </div>
-          <p class="muted am-count" id="am-count" role="status" aria-live="polite"></p>
-          <p class="muted am-help">Les cases reflètent l'accès réel de chaque membre. Par défaut, il découle du rôle (et du CHUV pour les Lettres d'assurance et la Durée de traitement) ; une case modifiée à la main est signalée par « exception ». Changer le rôle remet les accès par défaut. Les Lettres médicales s'ouvrent une à une, aux médecins et pharmaciens.</p>
-          <div id="am-list"></div>
-          <p class="form-msg" id="am-msg" role="status" aria-live="polite"></p>
+          <template id="am-help-tpl"><p class="muted am-help">Les cases reflètent l'accès réel de chaque membre. Par défaut, il découle du rôle (et du CHUV pour les Lettres d'assurance et la Durée de traitement) ; une case modifiée à la main est signalée par « exception ». Changer le rôle remet les accès par défaut. Les Lettres médicales s'ouvrent une à une, aux médecins et pharmaciens.</p></template>
         </div>
       </div>
     </section>

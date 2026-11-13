@@ -15,3 +15,6 @@ Rôle `cdc` (ex « CDC / Cadre », renommé le 06.11.2026 ; « Cadre » est deve
 ## Rôle cadre (médecin cadre, 06.11.2026)
 Exactement les droits d'un CDC (tous les outils, Key trials par `cdc_clinics`, cliniques de rattachement), plus la validation des absences s'il est désigné valideur d'une clinique. Voir absences.md et `supabase/cadre_medecin.sql`.
 Case « Validateur des absences » (cadre seulement, 06.11.2026) : `admin_set_absence_validator`, colonne `profiles.absence_validator` ; seuls les cadres cochés sont proposés dans `/admin/absences.html`.
+
+## Mise en page liste et fiche (13.11.2026)
+`/admin/membres.html` : sur ordinateur (≥ 1100 px), la liste des membres occupe un tiers de la fenêtre (recherche, filtre par rôle, comptes en attente en tête, badges rôle, « exception » et « validateur ») et la fiche du membre choisi s'ouvre sur les deux tiers de droite, comme Key trials ; chaque colonne défile seule. Sur téléphone et tablette, la liste puis la fiche en plein écran avec « ← Liste des membres ». Lien direct `#u=<id>`, Échap ferme la fiche. Les demandes de changement de cliniques sont dans un bloc repliable au-dessus (ouvert s'il y en a). Fichiers : `admin/membres.html`, `assets/js/admin-members.js`, `assets/css/admin-members.css`. Test navigateur : `node tests/absences/admin-members-ui.mjs` (Playwright, réponses simulées). Aucun changement SQL.
