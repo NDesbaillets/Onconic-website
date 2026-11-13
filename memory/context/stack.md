@@ -10,7 +10,7 @@
 ## Supabase
 - Production `icqrobnqvidusajburcu`, test `uubowlcyekbgmizrlyxb` (auth sur invitation, Postgres + RLS, Edge Functions). Voir la section Environnements du CLAUDE.md.
 - Fonctions SQL : `current_role_name()`, `current_institution()`, `is_hive_member()`.
-- Scripts dans `supabase/` (un par app), conçus pour être relancés sans risque. Claude les exécute lui-même via MCP `execute_sql` (voir CLAUDE.md) ; le SQL Editor reste une solution de repli.
+- Scripts dans `supabase/` (un par app), conçus pour être relancés sans risque. Nouveaux changements : migration numérotée dans `supabase/migrations/`, appliquée par Claude via MCP `execute_sql` d'abord sur le projet de test, puis en production seulement sur feu vert de Nicolas (règle complète dans CLAUDE.md).
 - Modèle d'e-mail d'invitation : `supabase/templates/invite.html` (à recoller dans Authentication › Email Templates).
 
 ## Tests (session cloud)

@@ -41,7 +41,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Lettres médicales** | Accès « médecin plus » caché, Haiku via Edge Function ; mise en service à finaliser |
 | **Limitations LS** | Recherche des limitations et codes d'indication, ordonnances per os ; LS à importer, 48 textes à valider |
 | **Absences** | En ligne (PR #63, 06.11.2026) : demandes (vacances, congrès, autre), planning mensuel avec agenda commun (fériés vaudois, vacances scolaires, événements), validation par tous les validateurs concernés (cadres désignés par clinique), envoi par lot après confirmation, e-mails, agenda iCal, refus supprimables, avertissement de chevauchement, export Word, proposition depuis Congrès (voir memory/projects/absences.md) ; SQL et fonction `notify-absence` déjà déployés ; à régler dans l'admin : rôles Cadre, cliniques des médecins, valideurs, vacances scolaires à confirmer |
-| **Infrastructure** | Supabase Pro, sauvegarde nocturne chiffrée, projet de test et aperçus Cloudflare (13.11.2026) ; restent : migration de sécurité (advisors), double authentification des admins dans l'app, audit avant l'annonce, nLPD avec la direction et la protection des données du CHUV |
+| **Infrastructure** | Supabase Pro, sauvegarde nocturne chiffrée, projet de test et aperçus Cloudflare (13.11.2026) ; suite : migration de sécurité, audit avant l'annonce, démarches nLPD |
 | **Administration** | `/admin/membres.html` : membres, rôles, accès par outil (`has_tool`, exceptions `tool_access`) |
 | **Page d'accueil** | Ton médical, abeilles discrètes (PR #25-26) |
 | **PWA** | Manifeste, service worker, page hors ligne, astuce iPhone (branche en relecture) |
@@ -66,7 +66,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 
 ## Agents et sessions
 - Agents du dépôt : `relecteur-securite` (ici, `.claude/agents/`), `redacteur-clinique` et `verificateur-references` (dans onconic-content).
-- Seule la session chef d'orchestre merge une PR et exécute du SQL sur Supabase. Les sessions enfants et les sous-agents ouvrent une PR et s'arrêtent. Aucun sous-agent ne reçoit `execute_sql`.
+- Seule la session chef d'orchestre merge une PR et exécute du SQL sur Supabase (projet de test d'emblée, production sur feu vert, voir Préférences de travail). Les sessions enfants et les sous-agents ouvrent une PR et s'arrêtent. Aucun sous-agent ne reçoit `execute_sql`.
 - Avant tout merge, la session chef lance `relecteur-securite` ; tout point bloquant empêche la fusion.
 
 ## Règles de sécurité (ne jamais enfreindre)
