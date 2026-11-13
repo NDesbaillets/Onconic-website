@@ -14,7 +14,7 @@
 - Modèle d'e-mail d'invitation : `supabase/templates/invite.html` (à recoller dans Authentication › Email Templates).
 
 ## Tests (session cloud)
-- Playwright avec Supabase simulé (routes interceptées, faux jeton dans localStorage `sb-icqrobnqvidusajburcu-auth-token`).
+- Playwright avec Supabase simulé (routes interceptées, faux jeton dans localStorage `sb-uubowlcyekbgmizrlyxb-auth-token` : sur localhost, `config.js` sélectionne le projet de test `uubowlcyekbgmizrlyxb` ; la production `icqrobnqvidusajburcu` ne sert que sur onconic.ch).
 - PGlite pour tester SQL et RLS (stub `auth.uid()` via `current_setting('test.uid')`).
 - Serveur local : `python3 -m http.server 8772` à la racine du dépôt.
 
