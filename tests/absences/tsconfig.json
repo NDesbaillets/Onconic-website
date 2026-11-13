@@ -10,5 +10,5 @@
    "npm:pdf-lib@1.17.1":["node_modules/pdf-lib"]
   }
  },
- "include":["deno-env.d.ts","../../supabase/functions/notify-absence/*.ts"]
+ "include":["deno-env.d.ts","../../supabase/functions/notify-absence/*.ts","../../supabase/functions/notify-oncoodle/*.ts"]
 }

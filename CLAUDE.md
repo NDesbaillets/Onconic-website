@@ -26,6 +26,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Key trials** | App des études clés (fiches, schéma, traitements, courbes KM) |
 | **Lettres** | App des lettres types de garantie de prise en charge (assurances) |
 | **Congrès** | App « Qui d'autre butine au congrès ? » |
+| **Oncoodle** | App de sondages (date à choisir, participation), tous les membres validés, sans externes |
 | **LS** | Liste des spécialités de l'OFSP (limitations, codes d'indication) |
 | **médecin plus** | Drapeau caché `profiles.med_plus` donnant accès aux Lettres médicales |
 | **rôles** | Trois rôles de médecins : clinician (**médecin assistant**), cdc (CDC = chef de clinique : médecin + gestion des fiches Key trials de ses cliniques), cadre (**médecin cadre** : exactement les droits d'un CDC, plus la validation des absences, s'il est coché « validateur des absences » et désigné pour une clinique par l'admin). Puis admin, direction (« Admin de direction » : gère les membres, le calendrier commun et les deux annuaires, vise les absences en 2e ligne, voir memory/projects/absences.md), assistant (assistante médicale : sans Congrès, Absences ni Key trials par défaut depuis le 12.11.2026), nurse (infirmier·ère : Durée, Key trials, Formation et les deux annuaires seulement), pharmacist ; « member » = en attente de validation. Les codes de rôle en base ne changent pas, seuls les libellés |
@@ -41,6 +42,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Lettres médicales** | Accès « médecin plus » caché, Haiku via Edge Function ; mise en service à finaliser |
 | **Limitations LS** | Recherche des limitations et codes d'indication, ordonnances per os ; LS à importer, 48 textes à valider |
 | **Absences** | En ligne (PR #63, 06.11.2026) : demandes (vacances, congrès, autre), planning mensuel avec agenda commun (fériés vaudois, vacances scolaires, événements), validation par tous les validateurs concernés (cadres désignés par clinique), envoi par lot après confirmation, e-mails, agenda iCal, refus supprimables, avertissement de chevauchement, export Word, proposition depuis Congrès (voir memory/projects/absences.md) ; SQL et fonction `notify-absence` déjà déployés ; à régler dans l'admin : rôles Cadre, cliniques des médecins, valideurs, vacances scolaires à confirmer |
+| **Oncoodle** | Développé le 13.11.2026 (voir memory/projects/oncoodle.md) ; migration `202611130002` et fonction `notify-oncoodle` à appliquer sur le projet de test, puis production sur feu vert ; secret Vault `oncoodle_worker_url` à créer |
 | **Infrastructure** | Supabase Pro, sauvegarde nocturne chiffrée, projet de test et aperçus Cloudflare (13.11.2026) ; suite : migration de sécurité, audit avant l'annonce, démarches nLPD |
 | **Administration** | `/admin/membres.html` : membres, rôles, accès par outil (`has_tool`, exceptions `tool_access`) |
 | **Page d'accueil** | Ton médical, abeilles discrètes (PR #25-26) |
