@@ -145,6 +145,7 @@ jobs:
           select s from (select s from st order by o, n, s) x;
           SQL
           grep -q "grant execute on function" work/db/acl.sql || { echo "::error::acl.sql incomplet"; exit 1; }
+          grep -q "grant SELECT on table" work/db/acl.sql || { echo "::error::acl.sql sans droits de table"; exit 1; }
           grep -q "on_auth_user_created" work/db/extras.sql || { echo "::error::extras.sql sans déclencheur auth"; exit 1; }
           ls -la work/db | awk '{print $5, $9}'
 
