@@ -64,7 +64,7 @@ GitHub désactive les workflows planifiés d'un dépôt public après 60 jours s
 
 ## Restaurer
 
-1. Télécharger l'archive depuis Swiss Backup (interface web ou `rclone`).
+1. Télécharger l'archive depuis Swiss Backup avec Cyberduck : activer le profil **S3 (Deprecated path style requests)** (Réglages > Profils), puis connexion de ce type sur `s3.swiss-backup02.infomaniak.com`, port 443, clés Swiss Backup ; dossier `onconic-backups/quotidien`. Le profil « Amazon S3 » par défaut affiche les compartiments mais échoue sur leur contenu. Alternative : `rclone`.
 2. Déchiffrer : `age -d -i onconic-backup.key onconic-AAAA-MM-JJ.tar.gz.age | tar -xzf -`
 3. Dans le projet **de test** d'abord (jamais directement en production) :
 
@@ -81,4 +81,6 @@ GitHub désactive les workflows planifiés d'un dépôt public après 60 jours s
 
 Tester une restauration complète dans le projet de test avant l'annonce, puis chaque trimestre. Noter la date du dernier test ici :
 
-- Dernier test de restauration : *pas encore fait*
+- Premier envoi réussi : 13.11.2026 (archive de 6,7 Mo, base complète et 3 fichiers Storage).
+- Test de déchiffrement avec la clé du gestionnaire de mots de passe : réussi le 13.11.2026.
+- Dernier test de restauration complète : *pas encore fait* (attend le projet de test).
