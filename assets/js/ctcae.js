@@ -9,7 +9,10 @@
   const ALLOWED = new Set(["admin", "clinician", "cdc", "cadre", "pharmacist"]);
 
   const $ = (id) => document.getElementById(id);
-  const state = { data: null, terms: [], q: "", ver: "5", lang: "fr", soc: -1, shown: PAGE };
+  const state = { data: null, terms: [], q: "", ver: "5", lang: "fr", soc: -1, shown: PAGE, sel: null };
+  let sv = null; // panneau de droite (ordinateur)
+  // Éléments déplacés entre la colonne et le panneau : gardés par référence (introuvables par identifiant quand le panneau les a retirés de la page)
+  let browse = null, browseHome = null;
 
   // ----- Texte -----
   // Minuscules sans accents, lettres et chiffres séparés par des espaces
@@ -317,7 +320,9 @@
   function card(o, words, open) {
     const d = el("details", "ug-card ct-card");
     d.id = "ct-" + o.i;
-    if (open) d.open = true;
+    d.dataset.i = String(o.i);
+    const wide = !!(sv && sv.desktop());
+    if (open && !wide) d.open = true;
     const sum = el("summary");
     const head = el("span", "ug-head");
     const line = el("span", "ct-line");
@@ -348,8 +353,33 @@
     let built = false;
     const build = () => { if (!built) { built = true; d.append(renderBody(o, words)); } };
     d.addEventListener("toggle", () => { if (d.open) build(); });
-    if (open) build();
+    if (open && !wide) build();
+    // Ordinateur : un clic sur le résumé ouvre le terme dans le panneau de droite, la liste reste en place
+    sum.addEventListener("click", (e) => { if (sv && sv.desktop()) { e.preventDefault(); state.sel = o.i; showPanel(o, words); markActive(true); } });
+    if (wide && state.sel === o.i) { d.classList.add("is-active"); sum.setAttribute("aria-current", "true"); }
     return d;
+  }
+
+  // ----- Panneau de détail (ordinateur) -----
+  function showPanel(o, words) {
+    const t = el("span");
+    pair(t, shownName(o), words);
+    sv.open(t, (holder) => holder.append(renderBody(o, words)));
+  }
+  function markActive(scroll) {
+    document.querySelectorAll("#ct-list .ct-card").forEach((d) => {
+      const on = state.sel != null && d.dataset.i === String(state.sel);
+      d.classList.toggle("is-active", on);
+      const sm = d.querySelector("summary");
+      if (on) sm.setAttribute("aria-current", "true"); else sm.removeAttribute("aria-current");
+      if (on && scroll) d.scrollIntoView({ block: "nearest" });
+    });
+  }
+  // La page d'accueil (recherches fréquentes, catégories) se place à droite sur ordinateur, au-dessus de la liste sinon
+  function placeBrowse() {
+    const target = sv && sv.desktop() ? browseHome : $("ct-left");
+    if (browse.parentNode === target) return;
+    if (target === browseHome) target.append(browse); else target.insertBefore(browse, $("ct-list"));
   }
 
   // ----- Écran -----
@@ -368,11 +398,14 @@
     const q = state.q.trim();
     const phrase = norm(q);
     const tokens = phrase.split(" ").filter((t) => t && !STOP.has(t));
-    $("ct-browse").hidden = true;
+    browse.hidden = true;
     $("ct-more").hidden = true;
+    placeBrowse();
 
     if (!tokens.length && state.soc < 0) {
       $("ct-count").textContent = "";
+      state.sel = null;
+      if (sv) sv.clear();
       renderBrowse();
       return;
     }
@@ -397,11 +430,19 @@
     shown.forEach((r, idx) => list.append(card(r.o, words, n <= 3 || (idx === 0 && tokens.length > 0 && r.score >= 10 && n <= 8))));
     $("ct-more").hidden = n <= state.shown;
     if (n > state.shown) $("ct-more-btn").textContent = "Afficher plus (" + (n - state.shown) + " restants)";
+    // Ordinateur : le terme choisi reste affiché (relu selon la version, la langue et les mots cherchés) ; un résultat évident s'ouvre seul
+    if (sv && sv.desktop()) {
+      const inResults = results.some((r) => r.o.i === state.sel);
+      if (!inResults && results.length && (n <= 3 || (tokens.length > 0 && results[0].score >= 10 && n <= 8))) state.sel = results[0].o.i;
+      const o = state.sel != null ? state.terms.find((x) => x.i === state.sel) : null;
+      if (o && verOK(o)) { showPanel(o, words); markActive(false); }
+      else { state.sel = null; sv.clear(); }
+    }
   }
 
   const QUICK = ["diarrhée", "nausées", "neutropénie fébrile", "ALAT", "neuropathie périphérique", "pneumopathie", "relargage cytokinique", "hypertension", "main-pied", "fatigue", "mucite", "éruption"];
   function renderBrowse() {
-    const box = $("ct-browse");
+    const box = browse;
     box.replaceChildren();
     box.hidden = false;
     const quick = el("div", "ct-quick");
@@ -474,9 +515,9 @@
     } catch (e) { $("ct-status").textContent = "Chargement impossible : " + e.message; return; }
 
     const p = new URLSearchParams(location.search);
-    const sv = store.get("ctcae2.ver"), sl = store.get("ctcae2.lang");
-    state.ver = ["all", "5", "6"].includes(p.get("v")) ? p.get("v") : ["all", "5", "6"].includes(sv) ? sv : "5";
-    state.lang = ["both", "fr", "en"].includes(p.get("l")) ? p.get("l") : ["both", "fr", "en"].includes(sl) ? sl : "fr";
+    const savedVer = store.get("ctcae2.ver"), savedLang = store.get("ctcae2.lang");
+    state.ver = ["all", "5", "6"].includes(p.get("v")) ? p.get("v") : ["all", "5", "6"].includes(savedVer) ? savedVer : "5";
+    state.lang = ["both", "fr", "en"].includes(p.get("l")) ? p.get("l") : ["both", "fr", "en"].includes(savedLang) ? savedLang : "fr";
     const c = parseInt(p.get("c"), 10);
     state.soc = c >= 0 && c < state.data.soc.length ? c : -1;
     state.q = p.get("q") || "";
@@ -486,6 +527,12 @@
     $("ct-src").textContent = `${m.v5.label} (${m.v5.date}, ${m.v5.meddra}) et ${m.v6.label} (${m.v6.date}, ${m.v6.meddra}). ${m.source}.`;
     $("ct-status").hidden = true;
     $("ct-tool").hidden = false;
+    browse = $("ct-browse");
+    browseHome = $("sv-empty-browse");
+    if (window.SplitView) {
+      sv = window.SplitView.create({ split: $("sv-split"), panel: $("sv-detail"), host: $("sv-body"), empty: $("sv-empty"), onClose: () => { state.sel = null; markActive(false); } });
+      window.SplitView.onChange(() => { render(); });
+    }
     controls();
     fillSoc();
     let timer = 0;
