@@ -6,9 +6,14 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 ## Préférences de travail
 - Réponses en **français**, directes, recommandation d'abord, sans flatterie ni tirets cadratins.
 - Ton médical sobre ; la métaphore des abeilles reste présente mais discrète (décision du 31.10.2026).
-- Chaque changement : branche `claude/quirky-tesla-kpblcm` repartie de `origin/main`, PR, tests, puis **Claude merge lui-même la PR** (autorisation permanente donnée le 31.10.2026 ; Nicolas ne merge plus). Merger seulement une PR testée, mergeable et sans commentaire en suspens.
-- **SQL Supabase : Claude l'exécute d'emblée** via le MCP Supabase (`execute_sql`, projet `icqrobnqvidusajburcu`), sans demander à Nicolas de le coller (autorisation permanente du 31.10.2026). Tester d'abord en PGlite ; pour un long fichier, l'envoyer par morceaux cohérents (schéma, puis données) ; vérifier ensuite par une requête de contrôle. Ne pas lancer de requête destructive (drop, delete massif) sans accord explicite.
-- Ordre habituel : merger la PR, exécuter le SQL associé, vérifier la base, puis faire un compte rendu court.
+- Chaque changement : branche `claude/quirky-tesla-kpblcm` repartie de `origin/main`, PR, tests, relecture par l'agent `relecteur-securite`, puis **Claude merge lui-même la PR** (autorisation permanente du 31.10.2026). Merger seulement une PR testée, mergeable, sans point bloquant ni commentaire en suspens.
+- **SQL et Edge Functions : d'abord le test, la production sur feu vert** (règle du 13.11.2026, remplace celle du 31.10.2026) :
+  1. Chaque changement de schéma est un fichier numéroté `supabase/migrations/AAAAMMJJNNNN_nom.sql`, transactionnel et réexécutable, testé d'abord en PGlite.
+  2. **Projet de test `uubowlcyekbgmizrlyxb`** : Claude applique d'emblée via le MCP Supabase (`execute_sql`), déploie les Edge Functions, puis vérifie par une requête de contrôle et les advisors.
+  3. Nicolas valide sur l'aperçu Cloudflare de la PR (`*.onconic.pages.dev`).
+  4. **Production `icqrobnqvidusajburcu`** : seulement après le **feu vert explicite de Nicolas dans la conversation, pour cette migration précise**, et une sauvegarde du jour (sauvegarde nocturne réussie ce jour-là, sinon lancement manuel du workflow « Sauvegarde nocturne »). Ensuite requête de contrôle, advisors, fusion de la PR, compte rendu court.
+  - En production sans feu vert : lecture seule (contrôles, comptages, advisors). Jamais de requête destructive (drop, delete, truncate) sans accord explicite, ni en production ni dans le projet de test.
+  - Le projet de test ne contient que des données fictives (`docs/environnement-test.md`). Ne jamais y copier de données réelles hors test de restauration ; ne jamais y recréer les tâches cron ni y déposer de secrets d'envoi.
 - Dates européennes (JJ.MM.AAAA), unités métriques, CHF.
 
 ## Termes
@@ -36,6 +41,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Lettres médicales** | Accès « médecin plus » caché, Haiku via Edge Function ; mise en service à finaliser |
 | **Limitations LS** | Recherche des limitations et codes d'indication, ordonnances per os ; LS à importer, 48 textes à valider |
 | **Absences** | En ligne (PR #63, 06.11.2026) : demandes (vacances, congrès, autre), planning mensuel avec agenda commun (fériés vaudois, vacances scolaires, événements), validation par tous les validateurs concernés (cadres désignés par clinique), envoi par lot après confirmation, e-mails, agenda iCal, refus supprimables, avertissement de chevauchement, export Word, proposition depuis Congrès (voir memory/projects/absences.md) ; SQL et fonction `notify-absence` déjà déployés ; à régler dans l'admin : rôles Cadre, cliniques des médecins, valideurs, vacances scolaires à confirmer |
+| **Infrastructure** | Supabase Pro, sauvegarde nocturne chiffrée, projet de test et aperçus Cloudflare (13.11.2026) ; suite : migration de sécurité, audit avant l'annonce, démarches nLPD |
 | **Administration** | `/admin/membres.html` : membres, rôles, accès par outil (`has_tool`, exceptions `tool_access`) |
 | **Page d'accueil** | Ton médical, abeilles discrètes (PR #25-26) |
 | **PWA** | Manifeste, service worker, page hors ligne, astuce iPhone (branche en relecture) |
@@ -47,9 +53,20 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **CTCAE v5 et v6** | Nouvel outil (médecins) : recherche libre d'un symptôme ou d'une anomalie biologique, grades v5 et v6 côte à côte, anglais et français ; données statiques, traduction à relire (voir memory/projects/ctcae.md) |
 → Détails : memory/projects/
 
+## Environnements
+| | Production | Test |
+|---|---|---|
+| Site | onconic.ch (GitHub Pages, branche `main`) | onconic.pages.dev et un aperçu par branche (Cloudflare Pages, accès restreint par Cloudflare Access) |
+| Supabase | `icqrobnqvidusajburcu` (Pro, Zurich) | `uubowlcyekbgmizrlyxb` (même organisation, Zurich) |
+| Données | réelles | fictives, comptes `@example.com` |
+
+- `assets/js/config.js` choisit le projet selon l'adresse : seules `onconic.ch` et `www.onconic.ch` vont en production ; toute autre adresse va au test, avec un bandeau orange.
+- Sauvegardes : quotidiennes Supabase (7 jours) et nocturne chiffrée vers Infomaniak Swiss Backup (workflow `.github/workflows/sauvegarde-nocturne.yml`, procédure de restauration dans `docs/sauvegardes.md`). Restauration complète testée le 13.11.2026 ; prochain test en février 2027.
+- Aucun lien GitHub automatique entre le dépôt et Supabase : les migrations s'appliquent à la main, selon la règle ci-dessus.
+
 ## Agents et sessions
 - Agents du dépôt : `relecteur-securite` (ici, `.claude/agents/`), `redacteur-clinique` et `verificateur-references` (dans onconic-content).
-- Seule la session chef d'orchestre merge une PR et exécute du SQL sur Supabase. Les sessions enfants et les sous-agents ouvrent une PR et s'arrêtent. Aucun sous-agent ne reçoit `execute_sql`.
+- Seule la session chef d'orchestre merge une PR et exécute du SQL sur Supabase (projet de test d'emblée, production sur feu vert, voir Préférences de travail). Les sessions enfants et les sous-agents ouvrent une PR et s'arrêtent. Aucun sous-agent ne reçoit `execute_sql`.
 - Avant tout merge, la session chef lance `relecteur-securite` ; tout point bloquant empêche la fusion.
 
 ## Règles de sécurité (ne jamais enfreindre)
