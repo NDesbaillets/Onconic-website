@@ -66,21 +66,29 @@ GitHub désactive les workflows planifiés d'un dépôt public après 60 jours s
 
 1. Télécharger l'archive depuis Swiss Backup avec Cyberduck : activer le profil **S3 (Deprecated path style requests)** (Réglages > Profils), puis connexion de ce type sur `s3.swiss-backup02.infomaniak.com`, port 443, clés Swiss Backup ; dossier `onconic-backups/quotidien`. Le profil « Amazon S3 » par défaut affiche les compartiments mais échoue sur leur contenu. Alternative : `rclone`.
 2. Déchiffrer : `age -d -i onconic-backup.key onconic-AAAA-MM-JJ.tar.gz.age | tar -xzf -`
-3. Dans le projet **de test** d'abord (jamais directement en production) :
+3. Le projet cible doit avoir `pg_cron` et `pg_net` activés (Database > Extensions). Retirer du fichier de données les tables réservées à Supabase, où le rôle `postgres` ne peut pas écrire (`storage.buckets_vectors`, `storage.vector_indexes`, `cron.job`) :
+
+   ```sh
+   awk '/^COPY "storage"\."(buckets_vectors|vector_indexes)" |^COPY "cron"\."job" /{skip=1;next} skip{if($0=="\\.")skip=0;next} /setval\(.*"cron"\./{next} {print}' db/data.sql > db/data-filtre.sql
+   ```
+
+4. Dans le projet **de test** d'abord (jamais directement en production), vérifier que l'adresse contient bien l'identifiant du projet de test, puis :
 
    ```sh
    psql --single-transaction --variable ON_ERROR_STOP=1 \
      --file db/roles.sql --file db/schema.sql \
      --command 'SET session_replication_role = replica' \
-     --file db/data.sql --dbname "$URL_PROJET_TEST"
+     --file db/data-filtre.sql --file db/extras.sql \
+     --dbname "$URL_PROJET_TEST"
    ```
 
-   Contenu : `data.sql` inclut les comptes (`auth.users`, identités), les métadonnées des fichiers (`storage.objects`) et les tâches `pg_cron`. Dans le projet de test, **désactiver aussitôt les tâches cron** (`select cron.unschedule(jobname) from cron.job;`) : elles appelleraient sinon les Edge Functions avec la configuration de production.
-4. Fichiers Storage : `rclone copy storage/ <remote du projet cible>:`
-5. Redéposer les secrets Edge et Vault depuis le gestionnaire de mots de passe.
+   Contenu : `data.sql` inclut les comptes (`auth.users`, identités) et les métadonnées des fichiers (`storage.objects`). `extras.sql` recrée ce que `supabase db dump` ignore : les déclencheurs sur `auth.users` (création du profil à l'inscription, changement d'e-mail) et les règles d'accès de `storage.objects`. `cron.sql` contient les tâches planifiées : **ne le rejouer qu'en production**, jamais dans le projet de test (envois d'e-mails). Archives antérieures au 13.11.2026 (fin de journée) : pas de `extras.sql` ni de `cron.sql`, les recréer à partir de la production.
+5. Fichiers Storage : `rclone copy storage/ <remote du projet cible>:`
+6. Redéposer les secrets Edge et Vault depuis le gestionnaire de mots de passe.
 
 Tester une restauration complète dans le projet de test avant l'annonce, puis chaque trimestre. Noter la date du dernier test ici :
 
 - Premier envoi réussi : 13.11.2026 (archive de 6,7 Mo, base complète et 3 fichiers Storage).
 - Test de déchiffrement avec la clé du gestionnaire de mots de passe : réussi le 13.11.2026.
-- Dernier test de restauration complète : *pas encore fait* (attend le projet de test).
+- Restauration complète dans le projet de test `uubowlcyekbgmizrlyxb` : réussie le 13.11.2026. Comptes, profils, absences, fiches Key trials, contacts, références Storage, tables, fonctions et règles RLS identiques à la production. Deux écarts corrigés à cette occasion : tables réservées Supabase à filtrer, déclencheurs `auth` et règles `storage` absents du dump (désormais dans `extras.sql`).
+- Prochain test de restauration : février 2027.
