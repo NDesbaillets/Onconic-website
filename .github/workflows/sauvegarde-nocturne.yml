@@ -59,7 +59,7 @@ jobs:
       - name: Installer les outils
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq age rclone >/dev/null
+          sudo apt-get install -y -qq age rclone postgresql-client >/dev/null
 
       - uses: supabase/setup-cli@v1
         with:
@@ -80,6 +80,34 @@ jobs:
             test -s "work/db/$f.sql" || { echo "::error::$f.sql vide"; exit 1; }
           done
           grep -q "CREATE TABLE" work/db/schema.sql || { echo "::error::schema.sql sans table"; exit 1; }
+          # Objets Onconic placés dans des schémas gérés par Supabase, que « db dump » ignore :
+          # déclencheurs sur auth.users et règles d'accès de storage.objects (extras.sql),
+          # tâches pg_cron (cron.sql, à rejouer seulement en production)
+          psql "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 -o work/db/extras.sql <<'SQL'
+          set search_path = '';
+          select '-- Déclencheurs auth et règles storage (hors db dump)';
+          select 'drop trigger if exists ' || quote_ident(t.tgname) || ' on auth.users;' || chr(10)
+                 || pg_get_triggerdef(t.oid) || ';'
+            from pg_trigger t
+            join pg_class c on c.oid = t.tgrelid
+            join pg_namespace n on n.oid = c.relnamespace
+           where n.nspname = 'auth' and not t.tgisinternal
+           order by t.tgname;
+          select format('drop policy if exists %I on %I.%I;', policyname, schemaname, tablename) || chr(10)
+                 || format('create policy %I on %I.%I as %s for %s to %s', policyname, schemaname, tablename,
+                           permissive, cmd, array_to_string(roles, ', '))
+                 || coalesce(' using (' || qual || ')', '')
+                 || coalesce(' with check (' || with_check || ')', '') || ';'
+            from pg_policies
+           where schemaname = 'storage'
+           order by tablename, policyname;
+          SQL
+          psql "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 -o work/db/cron.sql <<'SQL'
+          select '-- Tâches pg_cron : à rejouer uniquement en production';
+          select format('select cron.schedule(%L, %L, %L);', jobname, schedule, command)
+            from cron.job order by jobid;
+          SQL
+          grep -q "on_auth_user_created" work/db/extras.sql || { echo "::error::extras.sql sans déclencheur auth"; exit 1; }
           ls -la work/db | awk '{print $5, $9}'
 
       - name: Copier les fichiers Storage
