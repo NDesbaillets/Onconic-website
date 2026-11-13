@@ -78,11 +78,11 @@ GitHub désactive les workflows planifiés d'un dépôt public après 60 jours s
    psql --single-transaction --variable ON_ERROR_STOP=1 \
      --file db/roles.sql --file db/schema.sql \
      --command 'SET session_replication_role = replica' \
-     --file db/data-filtre.sql --file db/extras.sql \
+     --file db/data-filtre.sql --file db/extras.sql --file db/acl.sql \
      --dbname "$URL_PROJET_TEST"
    ```
 
-   Contenu : `data.sql` inclut les comptes (`auth.users`, identités) et les métadonnées des fichiers (`storage.objects`). `extras.sql` recrée ce que `supabase db dump` ignore : les déclencheurs sur `auth.users` (création du profil à l'inscription, changement d'e-mail) et les règles d'accès de `storage.objects`. `cron.sql` contient les tâches planifiées : **ne le rejouer qu'en production**, jamais dans le projet de test (envois d'e-mails). Archives antérieures au 13.11.2026 (fin de journée) : pas de `extras.sql` ni de `cron.sql`, les recréer à partir de la production.
+   Contenu : `data.sql` inclut les comptes (`auth.users`, identités) et les métadonnées des fichiers (`storage.objects`). `extras.sql` recrée ce que `supabase db dump` ignore : les déclencheurs sur `auth.users` (création du profil à l'inscription, changement d'e-mail) et les règles d'accès de `storage.objects`. `acl.sql` rétablit les droits exacts de la production sur les tables et fonctions du schéma `public` : un projet Supabase neuf accorde par défaut **tous** les droits à `anon` et `authenticated`, et `schema.sql` ne les retire pas (constat du 13.11.2026 : 336 droits de table et 165 fonctions ouvertes aux visiteurs au lieu de 15 et 11). Ne jamais ouvrir une base restaurée sans avoir rejoué `acl.sql`. `cron.sql` contient les tâches planifiées : **ne le rejouer qu'en production**, jamais dans le projet de test (envois d'e-mails). Archives antérieures au 13.11.2026 (fin de journée) : pas de `extras.sql` ni de `cron.sql`, les recréer à partir de la production.
 5. Fichiers Storage : `rclone copy storage/ <remote du projet cible>:`
 6. Redéposer les secrets Edge et Vault depuis le gestionnaire de mots de passe.
 
@@ -91,4 +91,5 @@ Tester une restauration complète dans le projet de test avant l'annonce, puis c
 - Premier envoi réussi : 13.11.2026 (archive de 6,7 Mo, base complète et 3 fichiers Storage).
 - Test de déchiffrement avec la clé du gestionnaire de mots de passe : réussi le 13.11.2026.
 - Restauration complète dans le projet de test `uubowlcyekbgmizrlyxb` : réussie le 13.11.2026. Comptes, profils, absences, fiches Key trials, contacts, références Storage, tables, fonctions et règles RLS identiques à la production. Deux écarts corrigés à cette occasion : tables réservées Supabase à filtrer, déclencheurs `auth` et règles `storage` absents du dump (désormais dans `extras.sql`).
+- Droits : la restauration du 13.11.2026 avait laissé les droits par défaut de Supabase (trop larges) ; corrigé le jour même dans le projet de test et ajout de `acl.sql` à la sauvegarde nocturne.
 - Prochain test de restauration : février 2027.

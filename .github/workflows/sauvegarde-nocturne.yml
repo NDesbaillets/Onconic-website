@@ -107,6 +107,45 @@ jobs:
           select format('select cron.schedule(%L, %L, %L);', jobname, schedule, command)
             from cron.job order by jobid;
           SQL
+          # Droits exacts du schéma public (acl.sql). Un projet Supabase neuf accorde par défaut tous
+          # les droits à anon et authenticated ; ce fichier rétablit ceux de la production après restauration.
+          psql "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 -o work/db/acl.sql <<'SQL'
+          set search_path = '';
+          with roles(r) as (values ('anon'), ('authenticated'), ('service_role')),
+          rel as (
+            select c.oid, c.relname, case c.relkind when 'S' then 'sequence' else 'table' end kw, c.relacl
+              from pg_class c
+             where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'v', 'm', 'S', 'p')
+          ),
+          fn as (
+            select p.oid, p.oid::regprocedure::text sig, coalesce(p.proacl, acldefault('f', p.proowner)) acl
+              from pg_proc p
+             where p.pronamespace = 'public'::regnamespace and p.prokind in ('f', 'p')
+          ),
+          st as (
+            select 1 o, relname n, format('revoke all on %s public.%I from anon, authenticated, service_role;', kw, relname) s from rel
+            union all
+            select 2, relname, format('grant %s on %s public.%I to %s;', a.privilege_type, kw, relname, a.grantee::regrole)
+              from rel, aclexplode(rel.relacl) a where a.grantee::regrole::text in (select r from roles)
+            union all
+            select 3, rel.relname, format('grant %s (%I) on table public.%I to %s;', a.privilege_type, att.attname, rel.relname, a.grantee::regrole)
+              from rel
+              join pg_attribute att on att.attrelid = rel.oid and att.attnum > 0 and not att.attisdropped and att.attacl is not null,
+                   aclexplode(att.attacl) a
+             where a.grantee::regrole::text in (select r from roles)
+            union all
+            select 4, sig, format('revoke all on function %s from public, anon, authenticated, service_role;', sig) from fn
+            union all
+            select 5, sig, format('grant execute on function %s to %s;', sig,
+                                  case when a.grantee = 0 then 'public' else a.grantee::regrole::text end)
+              from fn, aclexplode(fn.acl) a
+             where a.grantee = 0 or a.grantee::regrole::text in (select r from roles)
+          )
+          select '-- Droits du schéma public (rejouer après data.sql)' union all
+          select s from (select s from st order by o, n, s) x;
+          SQL
+          grep -q "grant execute on function" work/db/acl.sql || { echo "::error::acl.sql incomplet"; exit 1; }
+          grep -q "grant SELECT on table" work/db/acl.sql || { echo "::error::acl.sql sans droits de table"; exit 1; }
           grep -q "on_auth_user_created" work/db/extras.sql || { echo "::error::extras.sql sans déclencheur auth"; exit 1; }
           ls -la work/db | awk '{print $5, $9}'
 
