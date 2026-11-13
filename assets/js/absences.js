@@ -1540,6 +1540,68 @@
     ws.views = [{ state: "frozen", ySplit: 1 }];
     ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } };
   }
+  // Grille calendaire : un bloc par mois, une ligne par personne, une colonne par jour (format du planning Excel des cliniques).
+  const CAL_FILL = { vacances: "FFFF9999", congres: "FF92D050", autre: "FFFFD966" }; // rose = vacances, vert = congrès, ambre = autre
+  const CAL_WE = "FFDCE6F1"; // week-ends et fériés vaudois
+  // Construit la liste des mois (année, mois 0-based) couverts par [from, to].
+  function monthsBetween(from, to) {
+    const a = pd(from), b = pd(to), out = [];
+    for (let y = a.getUTCFullYear(), m = a.getUTCMonth(); y < b.getUTCFullYear() || (y === b.getUTCFullYear() && m <= b.getUTCMonth()); m === 11 ? (m = 0, y++) : m++) out.push([y, m]);
+    return out;
+  }
+  // people : Map(id -> { name, role, clinics, days: Map(iso -> {kind, text}) }). Jours des absences validées, limités à [from, to].
+  function calendarPeople(rows, from, to) {
+    const people = new Map();
+    for (const r of rows) {
+      if (r.status !== "approved") continue;
+      let p = people.get(r.user_id);
+      if (!p) { p = { name: r.name, role: r.role, clinics: r.clinics || [], days: new Map() }; people.set(r.user_id, p); }
+      const s = r.start_date < from ? from : r.start_date, e = r.end_date > to ? to : r.end_date;
+      for (const d = pd(s); iso(d) <= e; d.setUTCDate(d.getUTCDate() + 1)) {
+        const day = iso(d), cur = p.days.get(day);
+        // Congrès prioritaire à l'affichage ; le texte reprend la précision (ex. « ESMO ») sinon l'abréviation V/C/A.
+        if (!cur || (r.kind === "congres" && cur.kind !== "congres")) p.days.set(day, { kind: r.kind, text: r.kind === "congres" && r.note ? String(r.note).slice(0, 12) : KINDS[r.kind][1] });
+      }
+    }
+    return people;
+  }
+  function buildCalendar(wb, rows, w, scopeLabel) {
+    const ws = wb.addWorksheet("Calendrier", { views: [{ state: "frozen", xSplit: 1 }] });
+    ws.getColumn(1).width = 24;
+    for (let c = 2; c <= 32; c++) ws.getColumn(c).width = 3.6;
+    const people = [...calendarPeople(rows, w.from, w.to).values()].sort((a, b) => a.name.localeCompare(b.name, "fr"));
+    const border = { style: "thin", color: { argb: "FFD0D5DD" } };
+    const edges = { top: border, left: border, right: border, bottom: border };
+    for (const [y, m] of monthsBetween(w.from, w.to)) {
+      const ndays = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+      const label = new Date(Date.UTC(y, m, 1)).toLocaleDateString("fr-CH", { month: "long", year: "numeric", timeZone: "UTC" });
+      const head = ws.addRow([label.charAt(0).toUpperCase() + label.slice(1), ...Array.from({ length: ndays }, (_, i) => i + 1)]);
+      head.font = { bold: true };
+      head.eachCell((c) => { c.alignment = { horizontal: "center" }; c.border = edges; });
+      head.getCell(1).alignment = { horizontal: "left" };
+      const weekend = {};
+      for (let d = 1; d <= ndays; d++) { const day = iso(new Date(Date.UTC(y, m, d))), wd = pd(day).getUTCDay(); if (wd === 0 || wd === 6 || holidayOf(day)) { weekend[d] = true; head.getCell(d + 1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: CAL_WE } }; } }
+      for (const p of people) {
+        const row = ws.addRow([p.name]);
+        row.getCell(1).border = edges;
+        for (let d = 1; d <= ndays; d++) {
+          const cell = row.getCell(d + 1), hit = p.days.get(iso(new Date(Date.UTC(y, m, d))));
+          cell.border = edges; cell.alignment = { horizontal: "center" };
+          if (hit) { cell.value = hit.text; cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: CAL_FILL[hit.kind] } }; cell.font = { size: 8 }; }
+          else if (weekend[d]) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: CAL_WE } };
+        }
+      }
+      ws.addRow([]);
+    }
+    const lg = wb.addWorksheet("Légende");
+    lg.columns = [{ header: "Couleur", width: 14 }, { header: "Signification", width: 48 }];
+    [["Vacances (V)", CAL_FILL.vacances], ["Congrès (C, ou le nom indiqué)", CAL_FILL.congres], ["Autre (A)", CAL_FILL.autre], ["Week-end ou férié vaudois", CAL_WE]]
+      .forEach(([t, c]) => { const r = lg.addRow(["", t]); r.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: c } }; });
+    lg.getRow(1).font = { bold: true };
+    lg.addRow([]); lg.addRow(["", scopeLabel]);
+    lg.addRow(["", `Fenêtre : du ${fmtCH(w.from)} au ${fmtCH(w.to)}. Seules les absences validées figurent dans la grille ; une personne sans absence validée dans la fenêtre n'apparaît pas.`]);
+    return people.length;
+  }
   async function runExport(kind) {
     const w = exportWindow();
     if (!w) return;
@@ -1571,6 +1633,11 @@
       lg.addRow([]); lg.addRow(["", `Fenêtre : du ${fmtCH(w.from)} au ${fmtCH(w.to)} (absences qui chevauchent la fenêtre). Les brouillons ne sont pas exportés. Jours ouvrables : lundi à vendredi, fériés vaudois déduits.`]);
       saveXlsx(await wb.xlsx.writeBuffer(), `absences_${stamp}.xlsx`);
       return say(msg, `${plur(rows.length, "absence exportée", "absences exportées")}.`, "ok");
+    }
+    if (kind === "cal") {
+      const n = buildCalendar(wb, rows, w, $("ab-exp-scope").textContent);
+      saveXlsx(await wb.xlsx.writeBuffer(), `planning-absences_${stamp}.xlsx`);
+      return say(msg, n ? `Grille de ${plur(n, "personne", "personnes")} avec une absence validée.` : "Aucune absence validée dans la fenêtre.", n ? "ok" : "error");
     }
     // Synthèse par personne
     const people = new Map();
@@ -1612,7 +1679,7 @@
       : `Les membres de ${state.ctx.validates.length > 1 ? "vos cliniques" : "votre clinique"} (${state.ctx.validates.join(", ")}). Choisissez la fenêtre (par défaut : le mois précédent et les 12 mois à venir).`;
     $("ab-exp-reset").addEventListener("click", defaults);
     $("ab-exp-form").addEventListener("submit", (e) => e.preventDefault());
-    for (const [id, kind] of [["ab-exp-abs", "abs"], ["ab-exp-sum", "sum"]]) {
+    for (const [id, kind] of [["ab-exp-abs", "abs"], ["ab-exp-sum", "sum"], ["ab-exp-cal", "cal"]]) {
       $(id).addEventListener("click", async (e) => {
         const b = e.currentTarget; b.disabled = true;
         try { await runExport(kind); } catch (err) { say($("ab-exp-msg"), "Export impossible : " + err.message, "error"); }
