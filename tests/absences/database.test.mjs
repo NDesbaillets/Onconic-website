@@ -37,6 +37,7 @@ test('PostgreSQL : migrations, permissions et parcours complets',async(t)=>{
   await t.test('migration de sécurité : search_path figé sur absence_lo et absence_hi',async()=>{
    for(const f of ['absence_lo','absence_hi'])
     assert.deepEqual(await scalar("select proconfig from pg_proc where proname=$1 and pronamespace='public'::regnamespace",[f]),['search_path=""'],f);
+   assert.equal(await scalar("select count(*)::int from information_schema.role_table_grants where table_schema='public' and grantee in ('anon','authenticated') and privilege_type in ('TRUNCATE','REFERENCES','TRIGGER')"),0);
   });
   await t.test('droits de profils : colonnes de réglages conservées, affectations et rôle verrouillés',async()=>{
    for(const c of ['first_name','last_name','username','full_name','phone','lang','show_in_events','contactable','notify_events'])

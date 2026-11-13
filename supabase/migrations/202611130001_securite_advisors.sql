@@ -9,6 +9,8 @@
 -- 4. onconic_migrations : RLS activée. La table n'est accordée qu'à postgres et service_role, qui contournent la RLS.
 -- 5. key_trials_bak_20261109 : copie temporaire du 09.11.2026 (75 fiches), supprimée.
 --    Elle reste dans les sauvegardes Supabase (7 jours) et nocturnes (35 jours).
+-- 6. TRUNCATE, REFERENCES et TRIGGER retirés à anon et authenticated sur toutes les tables du schéma public.
+--    L'API REST n'utilise jamais ces droits ; TRUNCATE contourne la RLS. SELECT, INSERT, UPDATE, DELETE inchangés.
 --
 -- Non traité, volontairement :
 -- - current_role_name() reste exécutable par anon : des règles RLS « to public » l'appellent (profiles, contact_requests).
@@ -53,6 +55,9 @@ end $$;
 
 -- 5. Copie temporaire de Key trials
 drop table if exists public.key_trials_bak_20261109;
+
+-- 6. Droits inutiles à l'API
+revoke truncate, references, trigger on all tables in schema public from anon, authenticated;
 
 do $$
 begin
