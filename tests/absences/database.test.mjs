@@ -31,6 +31,13 @@ test('PostgreSQL : migrations, permissions et parcours complets',async(t)=>{
   // Reproduire les permissions de profils usuelles ; le durcissement doit aussi retirer un éventuel grant large.
   await db.exec('grant select,update on profiles to authenticated;');
   await db.exec(await read(migration));
+  // Migration de sécurité du 13.11.2026, appliquée deux fois (réexécutable) ; toute la suite tourne ensuite par-dessus.
+  const securite=await read('supabase/migrations/202611130001_securite_advisors.sql');
+  await db.exec(securite); await db.exec(securite);
+  await t.test('migration de sécurité : search_path figé sur absence_lo et absence_hi',async()=>{
+   for(const f of ['absence_lo','absence_hi'])
+    assert.deepEqual(await scalar("select proconfig from pg_proc where proname=$1 and pronamespace='public'::regnamespace",[f]),['search_path=""'],f);
+  });
   await t.test('droits de profils : colonnes de réglages conservées, affectations et rôle verrouillés',async()=>{
    for(const c of ['first_name','last_name','username','full_name','phone','lang','show_in_events','contactable','notify_events'])
     assert.equal(await scalar("select has_column_privilege('authenticated','public.profiles',$1,'UPDATE')",[c]),true,c);
