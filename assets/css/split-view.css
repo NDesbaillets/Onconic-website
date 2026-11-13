@@ -1,0 +1,28 @@
+/* Liste à gauche (un tiers), fiche à droite (deux tiers) : Lettres d'assurance et CTCAE. Ordinateur seulement (≥ 1100 px). */
+.sv-detail { display: none; }
+@media (min-width: 1100px) {
+  .sv.section { padding: var(--space-4) 0 var(--space-5); }
+  .sv > .container { max-width: 1800px; }
+  .sv h1 { font-size: 2rem; margin-bottom: 4px; }
+  .sv .cg-sub { margin-bottom: 0; }
+  .sv .rule { margin: var(--space-2) 0 var(--space-3); }
+  .sv-split { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(0, 2fr); gap: var(--space-4); align-items: start; }
+  .sv-left { position: sticky; top: 84px; max-height: calc(100vh - 100px); overflow-y: auto; min-width: 0; padding-right: var(--space-2); }
+  .sv-left .ug-search { position: sticky; top: 0; z-index: 2; background: var(--paper); padding-bottom: var(--space-2); display: block; }
+  .sv-left .ug-search input { min-height: 48px; font-size: 1.05rem; }
+  .sv-left .lt-fields { grid-template-columns: 1fr 1fr; gap: var(--space-2); margin: 0 0 var(--space-2); }
+  .sv-left .lt-fields > label:first-child { grid-column: 1 / -1; }
+  .sv-left .ug-filters { margin: var(--space-2) 0; }
+  .sv-left .ug-chip { min-height: 34px; padding: 3px 10px; font-size: .85rem; }
+  .sv-left .lt-drugs, .sv-left .lt-trial, .sv-left .ct-snip { display: none; }
+  .sv-left .ug-card.is-active { border-top-color: var(--amber-500); background: var(--amber-50); }
+  .sv-detail { display: block; position: sticky; top: 84px; max-height: calc(100vh - 100px); overflow-y: auto; background: var(--white); border: 1px solid var(--navy-100); border-top: 3px solid var(--amber-500); min-width: 0; }
+  .sv-bar { position: sticky; top: 0; z-index: 3; display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: 8px 16px; background: var(--mist); border-bottom: 1px solid var(--navy-100); }
+  .sv-bar .btn { min-height: 36px; }
+  .sv-split:not(.has-detail) .sv-close { visibility: hidden; }
+  .sv-body { padding: 0 var(--space-4) var(--space-4); }
+  .sv-title { font-size: 1.5rem; font-weight: 400; margin: var(--space-3) 0 var(--space-2); }
+  .sv-empty { padding: var(--space-4) 0; color: var(--ink-600); }
+  .sv-empty-title { font-size: 1.25rem; color: var(--navy-800); margin: 0 0 var(--space-2); }
+  .sv-content .ug-body { padding: 0; border: 0; }
+}

@@ -16,7 +16,8 @@
   ];
 
   const $ = (id) => document.getElementById(id);
-  const state = { rows: [], clinic: "", route: "", line: "" };
+  const state = { rows: [], clinic: "", route: "", line: "", sel: null };
+  let sv = null; // panneau de droite (ordinateur)
 
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
     .toLowerCase().replace(/[^a-z0-9+<>≥≤%]+/g, " ").trim();
@@ -99,7 +100,28 @@
     s.append(head);
     d.append(s);
     d.addEventListener("toggle", () => { if (d.open && !d.dataset.ready) body(d, r); });
+    // Ordinateur : un clic sur le résumé ouvre la lettre dans le panneau de droite, la liste reste en place
+    s.addEventListener("click", (e) => { if (sv && sv.desktop()) { e.preventDefault(); select(r); } });
+    d.dataset.id = String(r.id);
+    if (sv && sv.desktop() && state.sel === r.id) { d.classList.add("is-active"); s.setAttribute("aria-current", "true"); }
     return d;
+  }
+
+  // Panneau de détail (ordinateur) : la lettre choisie ; la carte active est marquée dans la liste
+  function select(r, scroll) {
+    state.sel = r.id;
+    sv.open(r.title, (holder) => body(holder, r));
+    document.querySelectorAll("#ug-results .lt-card").forEach((d) => {
+      const on = d.dataset.id === String(r.id);
+      d.classList.toggle("is-active", on);
+      const sm = d.querySelector("summary");
+      if (on) sm.setAttribute("aria-current", "true"); else sm.removeAttribute("aria-current");
+      if (on && scroll) d.scrollIntoView({ block: "nearest" });
+    });
+  }
+  function unselect() {
+    state.sel = null;
+    document.querySelectorAll("#ug-results .lt-card.is-active").forEach((d) => { d.classList.remove("is-active"); d.querySelector("summary").removeAttribute("aria-current"); });
   }
 
   function body(d, r) {
@@ -166,7 +188,9 @@
     $("ug-count").textContent = filtered
       ? `${plur(list.length, "lettre", "lettres")} sur ${state.rows.length}`
       : plur(state.rows.length, "lettre", "lettres");
-    if (list.length === 1) out.firstChild.open = true;
+    if (list.length === 1) {
+      if (sv && sv.desktop()) { if (state.sel !== list[0].id) select(list[0]); } else out.firstChild.open = true;
+    }
   }
 
   function chips(id, values, key, all) {
@@ -245,13 +269,24 @@
     return error ? null : rows || [];
   }
 
+  function initSv() {
+    if (sv || !window.SplitView) return;
+    sv = window.SplitView.create({ split: $("sv-split"), panel: $("sv-detail"), host: $("sv-body"), empty: $("sv-empty-tpl").content.firstElementChild.cloneNode(true), onClose: unselect });
+  }
+
   async function refresh() {
     const rows = await loadRows();
     if (!rows) return;
+    if (rows.length) initSv();
     prepare(rows);
     $("ug-status").hidden = rows.length > 0;
     $("ug-tool").hidden = rows.length === 0;
     setupFilters();
+    // Après une modification ou une suppression, la lettre ouverte est relue (ou le panneau vidé si elle n'existe plus)
+    if (sv && state.sel != null) {
+      const r = state.rows.find((x) => x.id === state.sel);
+      if (r) select(r); else { sv.clear(); unselect(); }
+    }
   }
 
   const splitList = (v) => String(v || "").split(";").map((x) => x.trim()).filter(Boolean);
@@ -485,6 +520,7 @@
     }
     $("ug-status").hidden = true;
     $("ug-tool").hidden = false;
+    initSv();
     prepare(rows);
     setupFilters();
     // Recherche transmise par un autre outil (ex. Limitations LS : médicament hors liste)

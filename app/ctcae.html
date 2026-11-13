@@ -16,10 +16,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
+  <link rel="stylesheet" href="/assets/css/split-view.css?v=20261113a">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/ctcae.js?v=20261106d" defer></script>
+  <script src="/assets/js/split-view.js?v=20261113a" defer></script>
+  <script src="/assets/js/ctcae.js?v=20261113a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -35,7 +37,7 @@
   </header>
 
   <main>
-    <section class="section ug ct">
+    <section class="section ug ct sv">
       <div class="container">
         <a class="hive-back" href="/fr/app/">← The Hive</a>
         <span class="eyebrow">Outil des médecins</span>
@@ -45,30 +47,39 @@
         <p class="muted" id="ct-status">Chargement…</p>
 
         <div id="ct-tool" hidden>
-          <label class="ug-search">
-            <span class="visually-hidden">Rechercher un symptôme ou une anomalie biologique</span>
-            <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Symptôme ou anomalie biologique : diarrhée, ALAT, neutropénie fébrile, CRS…">
-          </label>
+          <div class="sv-split" id="sv-split">
+            <div class="sv-left" id="ct-left">
+              <label class="ug-search">
+                <span class="visually-hidden">Rechercher un symptôme ou une anomalie biologique</span>
+                <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Symptôme ou anomalie biologique : diarrhée, ALAT, neutropénie fébrile, CRS…">
+              </label>
 
-          <div class="ct-controls">
-            <div class="ct-ctl">
-              <span class="ct-ctl-label" id="ct-l-ver">Version</span>
-              <div class="ct-seg" id="ct-ver" role="group" aria-labelledby="ct-l-ver"></div>
+              <div class="ct-controls">
+                <div class="ct-ctl">
+                  <span class="ct-ctl-label" id="ct-l-ver">Version</span>
+                  <div class="ct-seg" id="ct-ver" role="group" aria-labelledby="ct-l-ver"></div>
+                </div>
+                <div class="ct-ctl">
+                  <span class="ct-ctl-label" id="ct-l-lang">Langue</span>
+                  <div class="ct-seg" id="ct-lang" role="group" aria-labelledby="ct-l-lang"></div>
+                </div>
+                <label class="ct-ctl ct-soc">
+                  <span class="ct-ctl-label">Catégorie (SOC)</span>
+                  <select id="ct-soc"></select>
+                </label>
+              </div>
+
+              <p class="muted" id="ct-count" role="status" aria-live="polite"></p>
+              <div id="ct-browse" hidden></div>
+              <div id="ct-list"></div>
+              <div class="btn-row ct-more" id="ct-more" hidden><button class="btn btn-outline" id="ct-more-btn" type="button">Afficher plus</button></div>
             </div>
-            <div class="ct-ctl">
-              <span class="ct-ctl-label" id="ct-l-lang">Langue</span>
-              <div class="ct-seg" id="ct-lang" role="group" aria-labelledby="ct-l-lang"></div>
-            </div>
-            <label class="ct-ctl ct-soc">
-              <span class="ct-ctl-label">Catégorie (SOC)</span>
-              <select id="ct-soc"></select>
-            </label>
+            <aside class="sv-detail" id="sv-detail" aria-label="Terme CTCAE">
+              <div class="sv-bar"><span class="muted">Terme CTCAE</span><button class="btn btn-outline sv-close" type="button">Fermer ✕</button></div>
+              <div class="sv-body" id="sv-body"></div>
+            </aside>
           </div>
-
-          <p class="muted" id="ct-count" role="status" aria-live="polite"></p>
-          <div id="ct-browse" hidden></div>
-          <div id="ct-list"></div>
-          <div class="btn-row ct-more" id="ct-more" hidden><button class="btn btn-outline" id="ct-more-btn" type="button">Afficher plus</button></div>
+          <div class="sv-empty" id="sv-empty" hidden><p class="sv-empty-title">Sélectionnez un terme</p><p>Les grades 1 à 5 s'ouvrent ici, pour la version et la langue choisies. Cherchez un symptôme ou une anomalie biologique, ou parcourez par catégorie.</p><div id="sv-empty-browse"></div></div>
 
           <details class="ct-legend">
             <summary>Abréviations et sources</summary>

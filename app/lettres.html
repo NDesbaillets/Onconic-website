@@ -16,12 +16,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
+  <link rel="stylesheet" href="/assets/css/split-view.css?v=20261113a">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
   <script src="/assets/js/letter-parse.js?v=20261029b" defer></script>
   <script src="/assets/js/lettres-bulk.js?v=20261103a" defer></script>
-  <script src="/assets/js/lettres.js?v=20261103a" defer></script>
+  <script src="/assets/js/split-view.js?v=20261113a" defer></script>
+  <script src="/assets/js/lettres.js?v=20261113a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -37,7 +39,7 @@
   </header>
 
   <main>
-    <section class="section ug">
+    <section class="section ug sv">
       <div class="container">
         <a class="hive-back" href="/fr/app/">← The Hive</a>
         <span class="eyebrow">Outil des médecins</span>
@@ -46,24 +48,33 @@
         <p class="form-msg" id="ug-status" role="status">Chargement…</p>
 
         <div id="ug-tool" hidden>
-          <label class="ug-search">
-            <span class="visually-hidden">Rechercher une lettre par médicament, nom commercial, étude ou code d'indication (ex. osimertinib, Keytruda, KEYNOTE-189)</span>
-            <input id="q" type="search" autocomplete="off" placeholder="Médicament, étude ou code">
-          </label>
-          <div class="lt-fields">
-            <label>Clinique<select id="f-clinic"></select></label>
-            <label>Diagnostic<input id="f-dx" type="search" autocomplete="off" list="dx-list" placeholder="ex. CBNPC non épidermoïde"></label>
-            <label>Drivers / marqueurs<input id="f-mk" type="search" autocomplete="off" list="mk-list" placeholder="ex. EGFR, ALK, PD-L1 ≥ 50 %"></label>
-            <datalist id="dx-list"></datalist>
-            <datalist id="mk-list"></datalist>
+          <div class="sv-split" id="sv-split">
+            <div class="sv-left">
+              <label class="ug-search">
+                <span class="visually-hidden">Rechercher une lettre par médicament, nom commercial, étude ou code d'indication (ex. osimertinib, Keytruda, KEYNOTE-189)</span>
+                <input id="q" type="search" autocomplete="off" placeholder="Médicament, étude ou code">
+              </label>
+              <div class="lt-fields">
+                <label>Clinique<select id="f-clinic"></select></label>
+                <label>Diagnostic<input id="f-dx" type="search" autocomplete="off" list="dx-list" placeholder="ex. CBNPC non épidermoïde"></label>
+                <label>Drivers / marqueurs<input id="f-mk" type="search" autocomplete="off" list="mk-list" placeholder="ex. EGFR, ALK, PD-L1 ≥ 50 %"></label>
+                <datalist id="dx-list"></datalist>
+                <datalist id="mk-list"></datalist>
+              </div>
+              <div class="ug-filters">
+                <div class="ug-chips" id="ug-lines" role="group" aria-label="Ligne thérapeutique"></div>
+                <div class="ug-chips" id="ug-routes" role="group" aria-label="Voie d'administration"></div>
+              </div>
+              <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
+              <div id="ug-results"></div>
+            </div>
+            <aside class="sv-detail" id="sv-detail" aria-label="Lettre">
+              <div class="sv-bar"><span class="muted">Lettre</span><button class="btn btn-outline sv-close" type="button">Fermer ✕</button></div>
+              <div class="sv-body" id="sv-body"></div>
+            </aside>
           </div>
-          <div class="ug-filters">
-            <div class="ug-chips" id="ug-lines" role="group" aria-label="Ligne thérapeutique"></div>
-            <div class="ug-chips" id="ug-routes" role="group" aria-label="Voie d'administration"></div>
-          </div>
-          <p class="muted" id="ug-count" role="status" aria-live="polite"></p>
-          <div id="ug-results"></div>
           <p class="muted ug-source" id="ug-source"></p>
+          <template id="sv-empty-tpl"><div class="sv-empty"><p class="sv-empty-title">Sélectionnez une lettre</p><p>La lettre s'ouvre ici : copier le texte, télécharger le Word. Cherchez par médicament, étude, code d'indication, ou filtrez par clinique, diagnostic, marqueur, ligne et voie.</p></div></template>
         </div>
 
         <div class="card ug-admin" id="ug-admin" hidden>

@@ -17,3 +17,6 @@ Recherche libre tolérante aux accents et aux fautes (1 à 2 lettres), sur noms 
 
 ## Idées non faites
 Hors ligne (ajouter `.json` au service worker), relecture et signalement des erreurs de traduction, traduction des définitions de terme, liens depuis Key trials.
+
+## Mise en page liste et terme (13.11.2026)
+Sur ordinateur (≥ 1100 px), recherche, version, langue, catégorie et résultats occupent un tiers de la fenêtre ; le terme choisi (grades 1 à 5) s'ouvre sur les deux tiers de droite et se relit quand la version, la langue ou la recherche changent. La page d'accueil (recherches fréquentes, catégories) s'affiche à droite tant qu'aucun terme n'est choisi ; un résultat évident s'ouvre seul. En dessous de 1100 px, cartes dépliables et catégories sous la recherche comme avant. Module partagé `assets/js/split-view.js`, test `node tests/absences/split-view-ui.mjs`.
