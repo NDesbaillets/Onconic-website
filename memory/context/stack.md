@@ -8,7 +8,7 @@
 - Bibliothèques (jsdelivr) : supabase-js 2.57.4 UMD, mammoth 1.8.0, ExcelJS 4.4.0.
 
 ## Supabase
-- Projet `icqrobnqvidusajburcu` (auth sur invitation, Postgres + RLS, Edge Functions).
+- Production `icqrobnqvidusajburcu`, test `uubowlcyekbgmizrlyxb` (auth sur invitation, Postgres + RLS, Edge Functions). Voir la section Environnements du CLAUDE.md.
 - Fonctions SQL : `current_role_name()`, `current_institution()`, `is_hive_member()`.
 - Scripts dans `supabase/` (un par app), conçus pour être relancés sans risque. Claude les exécute lui-même via MCP `execute_sql` (voir CLAUDE.md) ; le SQL Editor reste une solution de repli.
 - Modèle d'e-mail d'invitation : `supabase/templates/invite.html` (à recoller dans Authentication › Email Templates).
