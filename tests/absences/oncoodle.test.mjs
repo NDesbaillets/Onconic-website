@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { makeDb, read, uid } from './oncoodle-db.mjs';
 
 // Oncoodle : droits, destinataires, réponses, conflits, clôture, relances. Données entièrement fictives, aucune base distante.
-const SETOF = ['oncoodle_people', 'oncoodle_list', 'oncoodle_outbox_claim'];
+const SETOF = ['oncoodle_people', 'oncoodle_list', 'oncoodle_outbox_claim', 'oncoodle_calendar_requests'];
 
 test('Oncoodle : PostgreSQL', async (t) => {
   const db = await makeDb();
@@ -52,7 +52,10 @@ test('Oncoodle : PostgreSQL', async (t) => {
       assert.deepEqual(await ids({ rules: [{ roles: ['nurse'] }] }), [uid(7)]);
       assert.deepEqual(await ids({ rules: [{ clinics: ['Urologie'] }, { roles: ['nurse', 'assistant'] }] }), [uid(11), uid(6), uid(7), uid(8)].sort());
       assert.deepEqual(await ids({ rules: [{ roles: ['nurse'] }], users: [uid(11)], exclude: [uid(7)] }), [uid(11)]);
+      await assert.rejects(rpc('oncoodle_audience_preview', [{ rules: [{ all: true }] }]), /Seuls l'admin et la direction/);
+      await as(2);
       assert.equal((await rpc('oncoodle_audience_preview', [{ rules: [{ all: true }] }])).count, 10);
+      await as(3);
       const via = (await rpc('oncoodle_audience_preview', [{ rules: [{ clinics: ['Thoracique'], roles: ['cdc'] }], users: [uid(10)] }])).members;
       assert.equal(via[0].via, 'Individuel');
       await assert.rejects(rpc('oncoodle_audience_preview', [{ rules: [{ clinics: ['Inconnue'] }] }]), /Clinique inconnue/);
@@ -199,7 +202,7 @@ test('Oncoodle : PostgreSQL', async (t) => {
       await assert.rejects(rpc('oncoodle_update', [poll, { deadline: '2020-01-01T00:00:00Z' }]), /futur/);
     });
 
-    await t.test('clôture, rouverture, calendrier commun (direct pour la direction, proposition sinon)', async () => {
+    await t.test('clôture, rouverture, agenda commun (demande facultative, approbation par un·e autre admin)', async () => {
       await as(4); await assert.rejects(rpc('oncoodle_close', [poll, null, null, false]), /introuvable/);
       await as(3);
       await assert.rejects(rpc('oncoodle_close', [poll, null, null, false]), /Choisissez le créneau/);
@@ -217,13 +220,39 @@ test('Oncoodle : PostgreSQL', async (t) => {
       await assert.rejects(rpc('oncoodle_update', [poll, { title: 'Trop tard' }]), /clos ou annulé/);
       await rpc('oncoodle_reopen', [poll]);
       assert.equal((await rpc('oncoodle_get', [poll])).poll.status, 'open');
-      // Direction : insertion directe dans l'agenda commun, une seule fois
+      // Agenda commun : jamais direct, même pour la direction ; demande à approuver par un·e autre admin ou membre de la direction
       await as(2);
       const p = await rpc('oncoodle_create', [{ kind: 'rsvp', title: 'Retraite annuelle', options: [{ day: D3 }], audience: { users: [uid(3)] } }]);
       await rpc('oncoodle_close', [p, null, null, true]);
       await superuser();
+      assert.equal(await scalar("select count(*)::int from absence_calendar where label='Retraite annuelle'"), 0, 'pas d\'insertion directe');
+      assert.equal(await scalar('select status from oncoodle_calendar_requests where poll_id=$1', [p]), 'pending');
+      assert.equal((await outbox('calendar_proposal', p)).length, 1);
+      await as(2);
+      assert.equal((await rpc('oncoodle_get', [p])).poll.calendar_request, 'pending');
+      const mine = (await rpc('oncoodle_calendar_requests')).find((r) => r.poll_id === p);
+      assert.equal(mine.own, true);
+      await assert.rejects(rpc('oncoodle_calendar_decide', [mine.id, true]), /autre admin/);
+      await as(3); await assert.rejects(rpc('oncoodle_calendar_requests'), /Accès refusé/);
+      await assert.rejects(rpc('oncoodle_calendar_decide', [mine.id, true]), /Accès refusé/);
+      await as(1);
+      await rpc('oncoodle_calendar_decide', [mine.id, true]);
+      await superuser();
       assert.equal(await scalar("select count(*)::int from absence_calendar where kind='evenement' and label='Retraite annuelle' and start_date=$1", [D3]), 1);
-      assert.equal((await outbox('calendar_proposal', p)).length, 0);
+      await as(1); await assert.rejects(rpc('oncoodle_calendar_decide', [mine.id, false]), /déjà traitée/);
+      // Refus : rien n'est publié ; la demande d'un membre ordinaire passe aussi par l'approbation
+      await as(3);
+      const p3 = await rpc('oncoodle_create', [{ kind: 'rsvp', title: 'Apéro', options: [{ day: D2 }], audience: { users: [uid(4)] } }]);
+      await rpc('oncoodle_close', [p3, null, null, false]);
+      await superuser(); assert.equal(await scalar('select count(*)::int from oncoodle_calendar_requests where poll_id=$1', [p3]), 0, 'désactivé par défaut');
+      await as(3); await rpc('oncoodle_reopen', [p3]); await rpc('oncoodle_close', [p3, null, null, true]);
+      await as(2);
+      const q = (await rpc('oncoodle_calendar_requests')).find((r) => r.poll_id === p3);
+      assert.equal(q.own, false);
+      await rpc('oncoodle_calendar_decide', [q.id, false]);
+      await superuser();
+      assert.equal(await scalar("select count(*)::int from absence_calendar where label='Apéro'"), 0);
+      assert.equal(await scalar('select status from oncoodle_calendar_requests where poll_id=$1', [p3]), 'rejected');
     });
 
     await t.test('relances : manuelle limitée à une par 12 h, jamais la nuit, annulation', async () => {
@@ -293,6 +322,21 @@ test('Oncoodle : PostgreSQL', async (t) => {
       await as(1); const h = await rpc('oncoodle_worker_health');
       assert.equal(h.scheduled, false); assert.ok(h.pending > 0);
       await as(3); await assert.rejects(rpc('oncoodle_worker_health'), /Accès refusé/);
+    });
+
+    await t.test('quota : invitations par 24 h, et contrôle d\'accès de la fonction d\'envoi', async () => {
+      await superuser(); await db.exec('create or replace function public.oncoodle_daily_quota() returns int language sql immutable as $$ select 5 $$');
+      await as(8);
+      const a = await rpc('oncoodle_create', [{ kind: 'rsvp', title: 'Quota un', options: [{ day: D1 }], audience: { users: [uid(3), uid(4), uid(5)] } }]);
+      await assert.rejects(rpc('oncoodle_create', [{ kind: 'rsvp', title: 'Quota deux', options: [{ day: D1 }], audience: { users: [uid(3), uid(4), uid(10)] } }]), /Quota atteint/);
+      await assert.rejects(rpc('oncoodle_update', [a, { add_audience: { users: [uid(6), uid(10), uid(11)] } }]), /Quota atteint/);
+      await superuser(); assert.equal(await scalar("select count(*)::int from oncoodle_polls where title='Quota deux'"), 0, 'rien n\'est créé quand le quota est dépassé');
+      await as(8); await rpc('oncoodle_delete', [a]);
+      await superuser(); await db.exec('create or replace function public.oncoodle_daily_quota() returns int language sql immutable as $$ select 300 $$');
+      await service();
+      assert.equal(await rpc('oncoodle_user_allowed', [uid(3)]), true);
+      assert.equal(await rpc('oncoodle_user_allowed', [uid(9)]), false);
+      await as(3); await assert.rejects(rpc('oncoodle_user_allowed', [uid(3)]), /permission denied/);
     });
 
     await t.test('limites : 10 sondages par 24 h', async () => {

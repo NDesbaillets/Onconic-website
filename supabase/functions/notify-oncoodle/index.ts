@@ -4,7 +4,7 @@
 // Garde-fous : chaque message est pris une seule fois (oncoodle_outbox_claim), réessayé 5 fois au plus ; l'état du sondage
 // est relu avant l'envoi (un sondage clos, annulé ou déjà répondu ne produit pas de relance).
 // E-mail : noreply@onconic.ch (secret SMTP_PASSWORD). Push : appareils abonnés des membres qui ont activé les notifications.
-// Propositions pour l'agenda commun : boîte de la direction (secret ABSENCE_FORMS_TO).
+// Demandes d'ajout à l'agenda commun : avis envoyé à la boîte de la direction (secret ABSENCE_FORMS_TO) ; l'approbation se fait dans Oncoodle.
 import nodemailer from "npm:nodemailer@6.9.16";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import webpush from "npm:web-push@3.6.7";
@@ -125,6 +125,9 @@ Deno.serve(async (req) => {
     if (!token) return json(req, 401, { error: "unauthorized" });
     const { data: auth } = await admin.auth.getUser(token);
     if (!auth?.user) return json(req, 401, { error: "unauthorized" });
+    // Seuls les membres qui disposent de l'outil peuvent déclencher le vidage de la file (un compte en attente de validation, non)
+    const { data: allowed } = await admin.rpc("oncoodle_user_allowed", { p_user: auth.user.id });
+    if (allowed !== true) return json(req, 403, { error: "forbidden" });
   }
 
   const { data: rows, error } = await admin.rpc("oncoodle_outbox_claim", { p_limit: 30 });

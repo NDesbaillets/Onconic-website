@@ -103,3 +103,7 @@
 @media (max-width: 640px) { .oc-form .cg-grid { grid-template-columns: minmax(0, 1fr); } }
 .oc-form select, .oc-form input, .oc-form textarea { font: inherit; }
 .oc-tpl, .oc-pick label { display: grid; gap: 4px; font-weight: 500; font-size: .88rem; color: var(--navy-800); }
+.oc-cal { margin: var(--space-4) 0; padding: var(--space-3); background: var(--amber-50); border-left: 4px solid var(--amber-500); }
+.oc-cal h2 { font-size: 1.3rem; }
+.oc-calreq { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-3); padding: 10px 14px; background: var(--white); border: 1px solid var(--navy-100); }
+.oc-calreq .oc-tools { margin: 0; }

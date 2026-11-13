@@ -45,7 +45,7 @@ test('autres messages : annulation, tout le monde a répondu, échéance, propos
   assert.match(buildMessage({ lang: 'en', kind: 'all_responded', data: data() }).text, /All 4 invited/);
   assert.match(buildMessage({ lang: 'fr', kind: 'deadline', data: data() }).text, /2 sur 4/);
   const p = buildMessage({ lang: 'fr', kind: 'calendar_proposal', by: 'Test 8', data: data({ poll: { status: 'closed', final_option_id: 2 } }) });
-  assert.match(p.text, /Test 8 propose/); assert.match(p.text, /24\.11\.2026/); assert.equal(p.push.body, '');
+  assert.match(p.text, /Test 8 demande/); assert.match(p.text, /approbation/); assert.match(p.text, /24\.11\.2026/); assert.equal(p.push.body, '');
 });
 
 test('fichier agenda : heures de Zurich avec fuseau, journée entière, échappement, pliage, CRLF', () => {

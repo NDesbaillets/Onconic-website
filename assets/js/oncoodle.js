@@ -14,7 +14,7 @@
 
   const $ = (id) => document.getElementById(id);
   const goList = () => { if (location.hash && location.hash !== "#") location.hash = ""; else route(); };
-  const state = { flash: "", list: [], tab: null, people: [], role: "", me: null, detail: null, answers: {}, comment: "", saving: false, form: null, previewTimer: 0, previewSeq: 0 };
+  const state = { flash: "", list: [], tab: null, people: [], role: "", isDirection: false, me: null, detail: null, answers: {}, comment: "", saving: false, form: null, previewTimer: 0, previewSeq: 0 };
 
   function el(tag, cls, txt) {
     const e = document.createElement(tag);
@@ -112,6 +112,34 @@
     }
   }
 
+  // Demandes d'ajout à l'agenda commun : visibles des seuls admin et direction
+  async function loadCalendar() {
+    const sec = $("oc-cal");
+    if (!state.isDirection) return void (sec.hidden = true);
+    let rows = [];
+    try { rows = (await call("oncoodle_calendar_requests")) || []; } catch (e) { return void (sec.hidden = true); }
+    const ul = $("oc-cal-list");
+    ul.replaceChildren();
+    sec.hidden = !rows.length && !$("oc-cal-msg").textContent;
+    for (const r of rows) {
+      const li = el("li", "oc-calreq");
+      const info = el("div");
+      info.append(el("strong", null, r.label), el("span", "oc-sub", `${C.fmtLong(r.day)}${r.start_time ? ", " + r.start_time + "–" + r.end_time : ""} · demandé par ${r.requester}`));
+      li.append(info);
+      const act = el("div", "oc-tools");
+      if (r.own) act.append(el("span", "muted", "Votre demande : un·e autre admin doit l'approuver"));
+      else {
+        act.append(button("Approuver", "btn", () => decideCalendar(r.id, true)), button("Refuser", "btn btn-outline", () => decideCalendar(r.id, false)));
+      }
+      li.append(act);
+      ul.append(li);
+    }
+  }
+  async function decideCalendar(id, approve) {
+    try { await call("oncoodle_calendar_decide", { p_id: id, p_approve: approve }); say("oc-cal-msg", approve ? "Ajouté à l'agenda commun." : "Demande refusée.", "ok"); await loadCalendar(); }
+    catch (e) { say("oc-cal-msg", e.message, "error"); }
+  }
+
   // ----- Navigation -----
   function show(view) {
     $("oc-list-view").hidden = view !== "list";
@@ -125,6 +153,8 @@
     try { await loadList(); } catch (e) { return say("oc-status", "Chargement impossible : " + e.message, "error"); }
     show("list");
     renderList();
+    say("oc-cal-msg", "");
+    loadCalendar();
   }
 
   // ----- Détail -----
@@ -197,6 +227,9 @@
     if (note) box.append(el("p", "form-msg ok", note));
 
     const final = d.options.find((o) => o.id === p.final_option_id);
+    if (p.is_creator && p.calendar_request) {
+      box.append(el("p", "oc-banner", "Agenda commun : " + ({ pending: "demande en attente d'approbation.", approved: "événement ajouté.", rejected: "demande refusée." }[p.calendar_request] || "")));
+    }
     if (p.status === "closed" && final) {
       const b = el("p", "oc-banner");
       b.append(el("strong", null, "Date retenue : "), document.createTextNode(`${C.fmtLong(final.day)}${final.start ? ", " + C.timeRange(final) : ""}`));
@@ -422,8 +455,7 @@
     msgLab.append(msg);
     const calLab = el("label", "cg-check");
     const cal = el("input"); cal.type = "checkbox";
-    const direct = state.role === "admin" || state.role === "direction";
-    calLab.append(cal, document.createTextNode(direct ? "Ajouter l'événement à l'agenda commun (visible de tous dans le planning des absences, titre compris)" : "Proposer l'événement à la direction pour l'agenda commun (le titre serait visible de tous)"));
+    calLab.append(cal, document.createTextNode("Demander l'ajout à l'agenda commun (facultatif). Un·e admin de direction doit l'approuver ; le titre serait visible de tous les usagers d'Absences."));
     body.push(msgLab, calLab);
     dialog(rsvp ? "Confirmer l'événement" : "Choisir la date et clôturer", body, rsvp ? "Confirmer" : "Clôturer et prévenir", async () => {
       if (!rsvp && !sel) throw new Error("Choisissez le créneau retenu.");
@@ -605,11 +637,13 @@
     f.rules.forEach((r, idx) => {
       const fs = el("fieldset", "oc-rule");
       fs.append(el("legend", null, `Groupe ${idx + 1}`));
-      const all = el("label", "cg-check");
-      const ca = el("input"); ca.type = "checkbox"; ca.checked = !!r.all;
-      ca.addEventListener("change", () => { r.all = ca.checked; if (r.all) { r.clinics = []; r.roles = []; } renderRules(); schedulePreview(); });
-      all.append(ca, document.createTextNode("Tous les membres de The Hive"));
-      fs.append(all);
+      if (state.isDirection) {
+        const all = el("label", "cg-check");
+        const ca = el("input"); ca.type = "checkbox"; ca.checked = !!r.all;
+        ca.addEventListener("change", () => { r.all = ca.checked; if (r.all) { r.clinics = []; r.roles = []; } renderRules(); schedulePreview(); });
+        all.append(ca, document.createTextNode("Tous les membres de The Hive"));
+        fs.append(all);
+      }
       if (!r.all) {
         fs.append(el("h4", null, "Cliniques (une ou plusieurs)"));
         const cl = el("div", "oc-opts");
@@ -787,6 +821,7 @@
     state.me = data.session.user.id;
     const { data: profile } = await sb.from("profiles").select("role").eq("id", state.me).single();
     state.role = profile ? profile.role : "member";
+    state.isDirection = state.role === "admin" || state.role === "direction";
     const { data: allowed } = await sb.rpc("has_tool", { p_tool: "oncoodle" });
     if (state.role !== "admin" && allowed !== true) return say("oc-status", "Cet espace est réservé aux membres validés de The Hive.");
     try { state.people = (await call("oncoodle_people")) || []; } catch (e) { return say("oc-status", "Chargement impossible : " + e.message, "error"); }

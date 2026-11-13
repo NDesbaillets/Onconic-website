@@ -9,7 +9,9 @@
 --    Absences, jamais de nom ni de motif) et entrées de l'agenda commun. Réservé aux usagers de l'outil Absences, sauf vacances scolaires.
 -- 4. Envoi : file oncoodle_outbox vidée par la fonction Edge notify-oncoodle (même jeton Vault que notify-absence). Relances
 --    automatiques et manuelles, jamais la nuit. Aucun texte libre de l'utilisateur dans les push.
--- 5. Conservation : sondages clos ou annulés supprimés après 180 jours ; sondages dont le dernier créneau date de plus de 180 jours aussi.
+-- 5. Abus : « tous les membres » réservé à l'admin et à la direction ; quota de 300 invitations par 24 h et par créateur.
+-- 6. Agenda commun : jamais direct. Une demande (désactivée par défaut) attend l'approbation d'un·e autre admin ou membre de la direction.
+-- 7. Conservation : sondages clos ou annulés supprimés après 180 jours ; sondages dont le dernier créneau date de plus de 180 jours aussi.
 --
 -- Partant des définitions en production après 202611130001. Transactionnel et réexécutable.
 begin;
@@ -140,6 +142,23 @@ create unique index if not exists oncoodle_outbox_once on public.oncoodle_outbox
   where kind in ('invite', 'all_responded', 'deadline');
 create index if not exists oncoodle_outbox_pending on public.oncoodle_outbox (next_attempt_at) where sent_at is null and skipped_at is null;
 
+-- Demandes d'ajout à l'agenda commun (jamais direct) : une par sondage, approuvée ou refusée par un·e autre admin ou membre de la direction
+create table if not exists public.oncoodle_calendar_requests (
+  id bigint generated always as identity primary key,
+  poll_id bigint not null unique references public.oncoodle_polls (id) on delete cascade,
+  requested_by uuid not null references auth.users (id) on delete cascade,
+  label text not null check (char_length(label) between 2 and 120),
+  day date not null,
+  start_time time,
+  end_time time,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  decided_by uuid references auth.users (id) on delete set null,
+  decided_at timestamptz,
+  created_at timestamptz not null default now()
+);
+alter table public.oncoodle_calendar_requests enable row level security;
+revoke all on public.oncoodle_calendar_requests from anon, authenticated;
+
 alter table public.profiles add column if not exists oncoodle_email boolean not null default true;
 
 alter table public.oncoodle_polls enable row level security;
@@ -208,6 +227,7 @@ begin
   for r in select value from jsonb_array_elements(coalesce(p_aud->'rules', '[]')) loop
     if jsonb_typeof(r) <> 'object' then raise exception 'Destinataires invalides.'; end if;
     if coalesce(r->>'all', 'false') = 'true' then
+      if not public.is_direction_admin() then raise exception 'Seuls l''admin et la direction peuvent inviter tous les membres.'; end if;
       rules := rules || jsonb_build_array(jsonb_build_object('all', true));
     else
       cl := array(select distinct c from unnest(public.oncoodle_text_array(r->'clinics')) c order by c);
@@ -297,6 +317,19 @@ begin
 end;
 $$;
 
+-- Quota d'invitations : 300 par créateur et par 24 h (invitations mises en file, y compris les ajouts de destinataires)
+create or replace function public.oncoodle_daily_quota() returns int language sql immutable set search_path = public as $$ select 300; $$;
+create or replace function public.oncoodle_check_quota(p_user uuid) returns void language plpgsql stable security definer set search_path = public as $$
+declare n int;
+begin
+  select count(*)::int into n from public.oncoodle_outbox o join public.oncoodle_polls p on p.id = o.poll_id
+    where p.created_by = p_user and o.kind = 'invite' and o.created_at > now() - interval '24 hours';
+  if n > public.oncoodle_daily_quota() then
+    raise exception 'Quota atteint : % invitations par 24 heures au maximum. Réessayez plus tard ou réduisez les destinataires.', public.oncoodle_daily_quota();
+  end if;
+end;
+$$;
+
 -- ===== 4. Annuaire et aperçu des destinataires =====
 create or replace function public.oncoodle_people() returns table(id uuid, name text, role text, clinics text[], is_me boolean)
 language plpgsql stable security definer set search_path = public as $$
@@ -383,6 +416,7 @@ begin
 
   insert into public.oncoodle_outbox (kind, poll_id, recipient)
     select 'invite', pid, i.user_id from public.oncoodle_invitees i where i.poll_id = pid and i.user_id <> uid on conflict do nothing;
+  perform public.oncoodle_check_quota(uid);
   return pid;
 end;
 $$;
@@ -464,6 +498,7 @@ begin
     select count(*) into added from ins;
     select count(*) into n from public.oncoodle_invitees where poll_id = p_poll;
     if n > 300 then raise exception 'Trop de destinataires (300 au maximum).'; end if;
+    perform public.oncoodle_check_quota(uid);
   end if;
   if c ? 'remove_users' then
     rm := public.oncoodle_uuid_array(c->'remove_users');
@@ -624,7 +659,8 @@ begin
       'deadline', p.deadline, 'visibility', p.visibility, 'creator_id', p.created_by, 'creator', public.member_name(p.created_by), 'is_creator', is_cr,
       'final_option_id', p.final_option_id, 'final_message', p.final_message, 'closed_at', p.closed_at, 'created_at', p.created_at,
       'locked', p.status <> 'open' or (p.deadline is not null and p.deadline <= now()),
-      'reminded_at', case when is_cr then p.reminded_at end, 'audience', case when is_cr then p.audience end),
+      'reminded_at', case when is_cr then p.reminded_at end, 'audience', case when is_cr then p.audience end,
+      'calendar_request', case when is_cr then (select r.status from public.oncoodle_calendar_requests r where r.poll_id = p.id) end),
     'options', opts, 'invitees', invs, 'me', mine, 'counts', jsonb_build_object('invited', n_inv, 'responded', n_resp));
 end;
 $$;
@@ -649,15 +685,14 @@ begin
   insert into public.oncoodle_outbox (kind, poll_id, recipient, payload)
     select 'closed', p_poll, i.user_id, jsonb_build_object('option_id', o.id) from public.oncoodle_invitees i where i.poll_id = p_poll and i.user_id <> uid;
   if coalesce(p_calendar, false) then
+    -- Jamais d'ajout direct : demande à approuver par un·e autre admin ou membre de la direction (une seule par sondage ; modifiable tant qu'elle est en attente)
     lbl := left(p.title, 120);
-    if public.is_direction_admin() then
-      if not exists (select 1 from public.absence_calendar c where c.kind = 'evenement' and c.label = lbl and c.start_date = o.day and c.end_date = o.day) then
-        insert into public.absence_calendar (kind, label, start_date, end_date) values ('evenement', lbl, o.day, o.day);
-      end if;
-    else
-      insert into public.oncoodle_outbox (kind, poll_id, recipient, payload)
-        values ('calendar_proposal', p_poll, null, jsonb_build_object('option_id', o.id, 'by', public.member_name(uid)));
-    end if;
+    insert into public.oncoodle_calendar_requests (poll_id, requested_by, label, day, start_time, end_time)
+      values (p_poll, uid, lbl, o.day, o.start_time, o.end_time)
+      on conflict (poll_id) do update set label = excluded.label, day = excluded.day, start_time = excluded.start_time, end_time = excluded.end_time
+        where public.oncoodle_calendar_requests.status = 'pending';
+    insert into public.oncoodle_outbox (kind, poll_id, recipient, payload)
+      values ('calendar_proposal', p_poll, null, jsonb_build_object('option_id', o.id, 'by', public.member_name(uid)));
   end if;
 end;
 $$;
@@ -721,6 +756,38 @@ begin
   perform public.oncoodle_guard();
   delete from public.oncoodle_polls where id = p_poll and created_by = auth.uid();
   if not found then raise exception 'Sondage introuvable.'; end if;
+end;
+$$;
+
+create or replace function public.oncoodle_calendar_requests() returns table(
+  id bigint, poll_id bigint, label text, day date, start_time text, end_time text, requester text, requester_id uuid, own boolean, created_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.oncoodle_guard();
+  if not public.is_direction_admin() then raise exception 'Accès refusé.' using errcode = '42501'; end if;
+  return query
+    select r.id, r.poll_id, r.label, r.day, to_char(r.start_time, 'HH24:MI'), to_char(r.end_time, 'HH24:MI'),
+      public.member_name(r.requested_by), r.requested_by, r.requested_by = auth.uid(), r.created_at
+    from public.oncoodle_calendar_requests r where r.status = 'pending' order by r.day, r.id limit 100;
+end;
+$$;
+
+create or replace function public.oncoodle_calendar_decide(p_id bigint, p_approve boolean) returns void
+language plpgsql security definer set search_path = public as $$
+declare r public.oncoodle_calendar_requests;
+begin
+  perform public.oncoodle_guard();
+  if not public.is_direction_admin() then raise exception 'Accès refusé.' using errcode = '42501'; end if;
+  select * into r from public.oncoodle_calendar_requests where id = p_id for update;
+  if r.id is null then raise exception 'Demande introuvable.'; end if;
+  if r.status <> 'pending' then raise exception 'Cette demande est déjà traitée.'; end if;
+  if r.requested_by = auth.uid() then raise exception 'Un·e autre admin ou membre de la direction doit approuver votre propre demande.'; end if;
+  if coalesce(p_approve, false) then
+    if not exists (select 1 from public.absence_calendar c where c.kind = 'evenement' and c.label = r.label and c.start_date = r.day and c.end_date = r.day) then
+      insert into public.absence_calendar (kind, label, start_date, end_date) values ('evenement', r.label, r.day, r.day);
+    end if;
+  end if;
+  update public.oncoodle_calendar_requests set status = case when coalesce(p_approve, false) then 'approved' else 'rejected' end, decided_by = auth.uid(), decided_at = now() where id = p_id;
 end;
 $$;
 
@@ -801,6 +868,10 @@ language sql security definer set search_path = public as $$
   update public.oncoodle_outbox set skipped_at = now(), claimed_at = null, last_error = null where id = p_id;
 $$;
 
+-- Un membre a-t-il le droit d'utiliser l'outil ? (contrôle de la fonction Edge pour les appels avec session)
+create or replace function public.oncoodle_user_allowed(p_user uuid) returns boolean
+language sql stable security definer set search_path = public as $$ select public.tool_allowed(p_user, 'oncoodle'); $$;
+
 -- Données d'un message (lues en base par la fonction Edge, jamais dans la requête)
 create or replace function public.oncoodle_mail_data(p_poll bigint, p_recipient uuid) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
@@ -875,19 +946,20 @@ begin
     'oncoodle_guard()', 'oncoodle_role_label(text)', 'oncoodle_parse_date(text)', 'oncoodle_parse_time(text)', 'oncoodle_text_array(jsonb)',
     'oncoodle_uuid_array(jsonb)', 'oncoodle_check_audience(jsonb)', 'oncoodle_resolve(jsonb)', 'oncoodle_next_send(timestamptz)',
     'oncoodle_last_day(bigint)', 'oncoodle_parse_options(jsonb)', 'oncoodle_tick()', 'oncoodle_outbox_claim(int)', 'oncoodle_outbox_done(bigint,text)',
-    'oncoodle_outbox_skip(bigint)', 'oncoodle_mail_data(bigint,uuid)', 'oncoodle_dispatch()'] loop
+    'oncoodle_outbox_skip(bigint)', 'oncoodle_mail_data(bigint,uuid)', 'oncoodle_dispatch()', 'oncoodle_daily_quota()', 'oncoodle_check_quota(uuid)',
+    'oncoodle_user_allowed(uuid)'] loop
     execute format('revoke execute on function public.%s from public, anon, authenticated', f);
   end loop;
   -- Appelables par les membres connectés (chaque fonction contrôle l'appelant)
   foreach f in array array[
     'oncoodle_people()', 'oncoodle_audience_preview(jsonb)', 'oncoodle_create(jsonb)', 'oncoodle_update(bigint,jsonb)', 'oncoodle_vote(bigint,jsonb,text)',
     'oncoodle_list()', 'oncoodle_pending_count()', 'oncoodle_get(bigint)', 'oncoodle_close(bigint,bigint,text,boolean)', 'oncoodle_reopen(bigint)',
-    'oncoodle_remind(bigint)', 'oncoodle_cancel(bigint,text)', 'oncoodle_delete(bigint)', 'oncoodle_prefs()', 'oncoodle_set_prefs(boolean)',
+    'oncoodle_remind(bigint)', 'oncoodle_cancel(bigint,text)', 'oncoodle_delete(bigint)', 'oncoodle_calendar_requests()', 'oncoodle_calendar_decide(bigint,boolean)', 'oncoodle_prefs()', 'oncoodle_set_prefs(boolean)',
     'oncoodle_worker_health()'] loop
     execute format('revoke execute on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;
-  foreach f in array array['oncoodle_tick()', 'oncoodle_outbox_claim(int)', 'oncoodle_outbox_done(bigint,text)', 'oncoodle_outbox_skip(bigint)', 'oncoodle_mail_data(bigint,uuid)'] loop
+  foreach f in array array['oncoodle_user_allowed(uuid)', 'oncoodle_tick()', 'oncoodle_outbox_claim(int)', 'oncoodle_outbox_done(bigint,text)', 'oncoodle_outbox_skip(bigint)', 'oncoodle_mail_data(bigint,uuid)'] loop
     execute format('grant execute on function public.%s to service_role', f);
   end loop;
 end $$;

@@ -12,7 +12,7 @@ let chromium;
 try { ({ chromium } = require('playwright')); } catch { console.log('Playwright absent : test de navigateur ignoré.'); process.exit(0); }
 const ROOT = new URL('../../', import.meta.url).pathname;
 const SHOTS = process.env.SHOTS_DIR || '';
-const SETOF = new Set(['oncoodle_people', 'oncoodle_list']);
+const SETOF = new Set(['oncoodle_people', 'oncoodle_list', 'oncoodle_calendar_requests']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
 
 const db = await makeDb();
@@ -210,13 +210,29 @@ try {
   await f.page.locator('#oc-detail h2').waitFor();
   assert.match(await text(f.page, '#oc-detail'), /Participation/);
   await f.page.getByRole('button', { name: "Confirmer l'événement" }).click();
+  assert.equal(await f.page.locator('#oc-dlg-body input[type=checkbox]').isChecked(), false, 'agenda commun désactivé par défaut');
   await f.page.locator('#oc-dlg-body input[type=checkbox]').check();
   await f.page.click('#oc-dlg-ok');
   await f.page.locator('.oc-banner', { hasText: 'Date retenue' }).waitFor();
+  assert.match(await text(f.page, '#oc-detail'), /demande en attente d'approbation/);
   await exclusive(() => db.exec('reset role'));
-  const cal = await db.query("select count(*)::int as n from absence_calendar where kind='evenement' and label='Repas d''équipe'");
-  assert.equal(cal.rows[0].n, 1, 'la direction publie directement dans l\'agenda commun');
-  ok('sondage de participation, tous les membres, agenda commun par la direction');
+  assert.equal((await db.query("select count(*)::int as n from absence_calendar where label='Repas d''équipe'")).rows[0].n, 0, 'jamais d\'ajout direct');
+  // La direction ne peut pas approuver sa propre demande ; un·e autre admin le fait ; un membre ordinaire n'a pas la section ni « Tous les membres »
+  await f.page.getByRole('button', { name: '← Tous les sondages' }).click();
+  await f.page.locator('#oc-cal').waitFor({ state: 'visible' });
+  assert.match(await text(f.page, '#oc-cal'), /Votre demande : un·e autre admin doit l'approuver/);
+  assert.equal(await f.page.getByRole('button', { name: 'Approuver' }).count(), 0);
+  const g = await open(1, 'admin', '/app/oncoodle.html');
+  await g.page.locator('#oc-cal').waitFor({ state: 'visible' });
+  await g.page.getByRole('button', { name: 'Approuver' }).click();
+  await g.page.locator('#oc-cal-msg.ok', { hasText: 'Ajouté à l\'agenda commun' }).waitFor();
+  await exclusive(() => db.exec('reset role'));
+  assert.equal((await db.query("select count(*)::int as n from absence_calendar where kind='evenement' and label='Repas d''équipe'")).rows[0].n, 1);
+  await a.page.goto(BASE + '/app/oncoodle.html'); await a.page.locator('#oc-tool').waitFor({ state: 'visible' });
+  await a.page.click('#oc-new'); await a.page.locator('#oc-form').waitFor({ state: 'visible' });
+  assert.equal(await a.page.getByLabel('Tous les membres de The Hive').count(), 0, '« Tous les membres » réservé à l\'admin et à la direction');
+  assert.equal(await a.page.locator('#oc-cal').isVisible(), false);
+  ok('sondage de participation, tous les membres (direction), agenda commun soumis à approbation');
 
   // 8. Mobile : pas de défilement horizontal de la page
   const m = await open(4, 'clinician', `/app/oncoodle.html#p=${pollId}`, { width: 390, height: 844 });
