@@ -1,0 +1,126 @@
+# Sauvegarde nocturne chiffrée de la base Supabase et des fichiers Storage
+# vers Infomaniak Swiss Backup (S3). Mode d'emploi : docs/sauvegardes.md
+#
+# Dépôt PUBLIC : les journaux de ce workflow sont visibles par tous.
+# Ne jamais afficher le contenu d'un dump, ne jamais publier d'artefact.
+
+name: Sauvegarde nocturne
+
+on:
+  schedule:
+    - cron: "17 1 * * *" # 01:17 UTC, soit 02:17 en hiver et 03:17 en été à Lausanne
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # bash -eo pipefail : un échec de tar arrête le job au lieu de chiffrer une archive tronquée
+    shell: bash
+
+concurrency:
+  group: sauvegarde-nocturne
+  cancel-in-progress: false
+
+jobs:
+  sauvegarde:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BUCKET: ${{ vars.SWISS_BACKUP_BUCKET }}
+      AGE_RECIPIENT: ${{ vars.BACKUP_AGE_PUBLIC_KEY }}
+      # Remotes rclone non secrets ; les clés sont passées étape par étape
+      RCLONE_CONFIG_SB_TYPE: s3
+      RCLONE_CONFIG_SB_PROVIDER: Other
+      RCLONE_CONFIG_SB_ENDPOINT: ${{ vars.SWISS_BACKUP_ENDPOINT }}
+      RCLONE_CONFIG_SB_REGION: ${{ vars.SWISS_BACKUP_REGION }}
+      RCLONE_CONFIG_ST_TYPE: s3
+      RCLONE_CONFIG_ST_PROVIDER: Other
+      RCLONE_CONFIG_ST_ENDPOINT: https://icqrobnqvidusajburcu.storage.supabase.co/storage/v1/s3
+      RCLONE_CONFIG_ST_REGION: eu-central-2
+    steps:
+      - name: Contrôler la configuration
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          RCLONE_CONFIG_SB_ACCESS_KEY_ID: ${{ secrets.SWISS_BACKUP_ACCESS_KEY }}
+          RCLONE_CONFIG_SB_SECRET_ACCESS_KEY: ${{ secrets.SWISS_BACKUP_SECRET_KEY }}
+          RCLONE_CONFIG_ST_ACCESS_KEY_ID: ${{ secrets.SUPABASE_STORAGE_ACCESS_KEY }}
+          RCLONE_CONFIG_ST_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_STORAGE_SECRET_KEY }}
+        run: |
+          manque=0
+          for v in RCLONE_CONFIG_SB_ENDPOINT RCLONE_CONFIG_SB_ACCESS_KEY_ID RCLONE_CONFIG_SB_SECRET_ACCESS_KEY \
+                   RCLONE_CONFIG_ST_ACCESS_KEY_ID RCLONE_CONFIG_ST_SECRET_ACCESS_KEY BUCKET AGE_RECIPIENT DB_URL; do
+            if [ -z "${!v}" ]; then echo "::error::Variable ou secret manquant : $v"; manque=1; fi
+          done
+          case "$AGE_RECIPIENT" in age1*) ;; *) echo "::error::BACKUP_AGE_PUBLIC_KEY doit commencer par age1"; manque=1;; esac
+          exit $manque
+
+      - name: Installer les outils
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age rclone >/dev/null
+
+      - uses: supabase/setup-cli@v1
+        with:
+          # Version stable épinglée : la v4 supprime --db-url
+          version: 2.122.1
+
+      - name: Exporter la base (rôles, schéma, données)
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          umask 077
+          mkdir -p work/db
+          supabase db dump --db-url "$DB_URL" -f work/db/roles.sql --role-only
+          supabase db dump --db-url "$DB_URL" -f work/db/schema.sql
+          supabase db dump --db-url "$DB_URL" -f work/db/data.sql --use-copy --data-only
+          # Contrôle minimal sans rien afficher du contenu
+          for f in roles schema data; do
+            test -s "work/db/$f.sql" || { echo "::error::$f.sql vide"; exit 1; }
+          done
+          grep -q "CREATE TABLE" work/db/schema.sql || { echo "::error::schema.sql sans table"; exit 1; }
+          ls -la work/db | awk '{print $5, $9}'
+
+      - name: Copier les fichiers Storage
+        env:
+          RCLONE_CONFIG_ST_ACCESS_KEY_ID: ${{ secrets.SUPABASE_STORAGE_ACCESS_KEY }}
+          RCLONE_CONFIG_ST_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_STORAGE_SECRET_KEY }}
+        run: |
+          umask 077
+          mkdir -p work/storage
+          rclone copy st: work/storage --s3-no-check-bucket --transfers 8 --stats-log-level NOTICE --stats 0
+          echo "Fichiers Storage : $(find work/storage -type f | wc -l)"
+
+      - name: Chiffrer et envoyer
+        env:
+          RCLONE_CONFIG_SB_ACCESS_KEY_ID: ${{ secrets.SWISS_BACKUP_ACCESS_KEY }}
+          RCLONE_CONFIG_SB_SECRET_ACCESS_KEY: ${{ secrets.SWISS_BACKUP_SECRET_KEY }}
+        run: |
+          umask 077
+          jour=$(date -u +%Y-%m-%d)
+          nom="onconic-$jour.tar.gz.age"
+          tar -C work -czf - db storage | age -r "$AGE_RECIPIENT" -o "$nom"
+          rm -rf work
+          echo "Archive chiffrée : $(du -h "$nom" | cut -f1)"
+          rclone copyto "$nom" "sb:$BUCKET/quotidien/$nom" --s3-no-check-bucket
+          # Le 1er du mois, une copie mensuelle conservée plus longtemps
+          if [ "$(date -u +%d)" = "01" ]; then
+            rclone copyto "$nom" "sb:$BUCKET/mensuel/$nom" --s3-no-check-bucket
+          fi
+          rclone lsf "sb:$BUCKET/quotidien/" | grep -qx "$nom" || { echo "::error::archive absente après envoi"; exit 1; }
+          rm -f "$nom"
+
+      - name: Purger les anciennes archives
+        env:
+          RCLONE_CONFIG_SB_ACCESS_KEY_ID: ${{ secrets.SWISS_BACKUP_ACCESS_KEY }}
+          RCLONE_CONFIG_SB_SECRET_ACCESS_KEY: ${{ secrets.SWISS_BACKUP_SECRET_KEY }}
+        run: |
+          # 35 jours de quotidiennes, 13 mois de mensuelles
+          rclone delete "sb:$BUCKET/quotidien/" --min-age 35d
+          rclone delete "sb:$BUCKET/mensuel/" --min-age 400d
+          echo "Quotidiennes : $(rclone lsf "sb:$BUCKET/quotidien/" | wc -l), mensuelles : $(rclone lsf "sb:$BUCKET/mensuel/" | wc -l)"
+
+      - name: Nettoyer
+        if: always()
+        run: rm -rf work onconic-*.tar.gz.age
