@@ -14,6 +14,11 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    # bash -eo pipefail : un échec de tar arrête le job au lieu de chiffrer une archive tronquée
+    shell: bash
+
 concurrency:
   group: sauvegarde-nocturne
   cancel-in-progress: false
@@ -23,26 +28,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # Swiss Backup (S3), lu par rclone sous le nom de remote « sb »
+      BUCKET: ${{ vars.SWISS_BACKUP_BUCKET }}
+      AGE_RECIPIENT: ${{ vars.BACKUP_AGE_PUBLIC_KEY }}
+      # Remotes rclone non secrets ; les clés sont passées étape par étape
       RCLONE_CONFIG_SB_TYPE: s3
       RCLONE_CONFIG_SB_PROVIDER: Other
       RCLONE_CONFIG_SB_ENDPOINT: ${{ vars.SWISS_BACKUP_ENDPOINT }}
       RCLONE_CONFIG_SB_REGION: ${{ vars.SWISS_BACKUP_REGION }}
-      RCLONE_CONFIG_SB_ACCESS_KEY_ID: ${{ secrets.SWISS_BACKUP_ACCESS_KEY }}
-      RCLONE_CONFIG_SB_SECRET_ACCESS_KEY: ${{ secrets.SWISS_BACKUP_SECRET_KEY }}
-      # Supabase Storage (S3), lu par rclone sous le nom de remote « st »
       RCLONE_CONFIG_ST_TYPE: s3
       RCLONE_CONFIG_ST_PROVIDER: Other
       RCLONE_CONFIG_ST_ENDPOINT: https://icqrobnqvidusajburcu.storage.supabase.co/storage/v1/s3
       RCLONE_CONFIG_ST_REGION: eu-central-2
-      RCLONE_CONFIG_ST_ACCESS_KEY_ID: ${{ secrets.SUPABASE_STORAGE_ACCESS_KEY }}
-      RCLONE_CONFIG_ST_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_STORAGE_SECRET_KEY }}
-      BUCKET: ${{ vars.SWISS_BACKUP_BUCKET }}
-      AGE_RECIPIENT: ${{ vars.BACKUP_AGE_PUBLIC_KEY }}
     steps:
       - name: Contrôler la configuration
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          RCLONE_CONFIG_SB_ACCESS_KEY_ID: ${{ secrets.SWISS_BACKUP_ACCESS_KEY }}
+          RCLONE_CONFIG_SB_SECRET_ACCESS_KEY: ${{ secrets.SWISS_BACKUP_SECRET_KEY }}
+          RCLONE_CONFIG_ST_ACCESS_KEY_ID: ${{ secrets.SUPABASE_STORAGE_ACCESS_KEY }}
+          RCLONE_CONFIG_ST_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_STORAGE_SECRET_KEY }}
         run: |
           manque=0
           for v in RCLONE_CONFIG_SB_ENDPOINT RCLONE_CONFIG_SB_ACCESS_KEY_ID RCLONE_CONFIG_SB_SECRET_ACCESS_KEY \
@@ -59,7 +63,8 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Version stable épinglée : la v4 supprime --db-url
+          version: 2.122.1
 
       - name: Exporter la base (rôles, schéma, données)
         env:
@@ -78,6 +83,9 @@ jobs:
           ls -la work/db | awk '{print $5, $9}'
 
       - name: Copier les fichiers Storage
+        env:
+          RCLONE_CONFIG_ST_ACCESS_KEY_ID: ${{ secrets.SUPABASE_STORAGE_ACCESS_KEY }}
+          RCLONE_CONFIG_ST_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_STORAGE_SECRET_KEY }}
         run: |
           umask 077
           mkdir -p work/storage
@@ -85,6 +93,9 @@ jobs:
           echo "Fichiers Storage : $(find work/storage -type f | wc -l)"
 
       - name: Chiffrer et envoyer
+        env:
+          RCLONE_CONFIG_SB_ACCESS_KEY_ID: ${{ secrets.SWISS_BACKUP_ACCESS_KEY }}
+          RCLONE_CONFIG_SB_SECRET_ACCESS_KEY: ${{ secrets.SWISS_BACKUP_SECRET_KEY }}
         run: |
           umask 077
           jour=$(date -u +%Y-%m-%d)
@@ -101,8 +112,15 @@ jobs:
           rm -f "$nom"
 
       - name: Purger les anciennes archives
+        env:
+          RCLONE_CONFIG_SB_ACCESS_KEY_ID: ${{ secrets.SWISS_BACKUP_ACCESS_KEY }}
+          RCLONE_CONFIG_SB_SECRET_ACCESS_KEY: ${{ secrets.SWISS_BACKUP_SECRET_KEY }}
         run: |
           # 35 jours de quotidiennes, 13 mois de mensuelles
           rclone delete "sb:$BUCKET/quotidien/" --min-age 35d
           rclone delete "sb:$BUCKET/mensuel/" --min-age 400d
           echo "Quotidiennes : $(rclone lsf "sb:$BUCKET/quotidien/" | wc -l), mensuelles : $(rclone lsf "sb:$BUCKET/mensuel/" | wc -l)"
+
+      - name: Nettoyer
+        if: always()
+        run: rm -rf work onconic-*.tar.gz.age

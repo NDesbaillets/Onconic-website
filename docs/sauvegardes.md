@@ -75,6 +75,7 @@ GitHub désactive les workflows planifiés d'un dépôt public après 60 jours s
      --file db/data.sql --dbname "$URL_PROJET_TEST"
    ```
 
+   Contenu : `data.sql` inclut les comptes (`auth.users`, identités), les métadonnées des fichiers (`storage.objects`) et les tâches `pg_cron`. Dans le projet de test, **désactiver aussitôt les tâches cron** (`select cron.unschedule(jobname) from cron.job;`) : elles appelleraient sinon les Edge Functions avec la configuration de production.
 4. Fichiers Storage : `rclone copy storage/ <remote du projet cible>:`
 5. Redéposer les secrets Edge et Vault depuis le gestionnaire de mots de passe.
 
