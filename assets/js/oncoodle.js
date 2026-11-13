@@ -753,6 +753,7 @@
     }
     box.append(ul);
     if (f.members.length > 300) box.append(el("p", "form-msg error", "Plus de 300 destinataires : le sondage sera refusé."));
+    else if (r.over_cap) box.append(el("p", "form-msg error", `Plus de ${r.cap} destinataires : l'envoi est réservé à l'admin et à la direction. Réduisez la liste.`));
   }
 
   async function onSubmit(ev) {

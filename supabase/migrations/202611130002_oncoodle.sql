@@ -9,7 +9,8 @@
 --    Absences, jamais de nom ni de motif) et entrées de l'agenda commun. Réservé aux usagers de l'outil Absences, sauf vacances scolaires.
 -- 4. Envoi : file oncoodle_outbox vidée par la fonction Edge notify-oncoodle (même jeton Vault que notify-absence). Relances
 --    automatiques et manuelles, jamais la nuit. Aucun texte libre de l'utilisateur dans les push.
--- 5. Abus : « tous les membres » réservé à l'admin et à la direction ; quota de 300 invitations par 24 h et par créateur.
+-- 5. Abus : plus de 100 destinataires par sondage et la règle « tous les membres » réservés à l'admin et à la direction ; quotas persistants
+--    par créateur et par 24 h (10 sondages, 300 invitations), non réduits par la suppression d'un sondage.
 -- 6. Agenda commun : jamais direct. Une demande (désactivée par défaut) attend l'approbation d'un·e autre admin ou membre de la direction.
 -- 7. Conservation : sondages clos ou annulés supprimés après 180 jours ; sondages dont le dernier créneau date de plus de 180 jours aussi.
 --
@@ -158,6 +159,21 @@ create table if not exists public.oncoodle_calendar_requests (
 );
 alter table public.oncoodle_calendar_requests enable row level security;
 revoke all on public.oncoodle_calendar_requests from anon, authenticated;
+
+-- Journal des quotas : sans lien avec les sondages, donc non réduit par leur suppression ni par le retrait de destinataires
+create table if not exists public.oncoodle_quota_log (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  kind text not null check (kind in ('poll', 'invite')),
+  n int not null check (n > 0),
+  at timestamptz not null default now()
+);
+create index if not exists oncoodle_quota_log_user on public.oncoodle_quota_log (user_id, kind, at);
+alter table public.oncoodle_quota_log enable row level security;
+revoke all on public.oncoodle_quota_log from anon, authenticated;
+
+-- Un seul avis par sondage à la boîte de la direction (une demande d'agenda commun)
+create unique index if not exists oncoodle_outbox_proposal_once on public.oncoodle_outbox (poll_id) where kind = 'calendar_proposal';
 
 alter table public.profiles add column if not exists oncoodle_email boolean not null default true;
 
@@ -317,16 +333,23 @@ begin
 end;
 $$;
 
--- Quota d'invitations : 300 par créateur et par 24 h (invitations mises en file, y compris les ajouts de destinataires)
+-- Quotas par créateur et par 24 h, tenus dans oncoodle_quota_log (verrou par créateur : pas de course entre deux créations simultanées)
 create or replace function public.oncoodle_daily_quota() returns int language sql immutable set search_path = public as $$ select 300; $$;
-create or replace function public.oncoodle_check_quota(p_user uuid) returns void language plpgsql stable security definer set search_path = public as $$
-declare n int;
+create or replace function public.oncoodle_poll_quota() returns int language sql immutable set search_path = public as $$ select 10; $$;
+-- Au-delà, l'envoi est réservé à l'admin et à la direction (une clinique, une fonction ou une liste de fonctions ne suffit pas à atteindre tout le monde)
+create or replace function public.oncoodle_recipient_cap() returns int language sql immutable set search_path = public as $$ select 100; $$;
+create or replace function public.oncoodle_quota_use(p_user uuid, p_kind text, p_n int) returns void language plpgsql security definer set search_path = public as $$
+declare used int; lim int;
 begin
-  select count(*)::int into n from public.oncoodle_outbox o join public.oncoodle_polls p on p.id = o.poll_id
-    where p.created_by = p_user and o.kind = 'invite' and o.created_at > now() - interval '24 hours';
-  if n > public.oncoodle_daily_quota() then
-    raise exception 'Quota atteint : % invitations par 24 heures au maximum. Réessayez plus tard ou réduisez les destinataires.', public.oncoodle_daily_quota();
+  perform pg_advisory_xact_lock(hashtextextended('oncoodle:' || p_user::text, 0));
+  if p_n is null or p_n <= 0 then return; end if;
+  lim := case p_kind when 'poll' then public.oncoodle_poll_quota() else public.oncoodle_daily_quota() end;
+  select coalesce(sum(n), 0)::int into used from public.oncoodle_quota_log where user_id = p_user and kind = p_kind and at > now() - interval '24 hours';
+  if used + p_n > lim then
+    if p_kind = 'poll' then raise exception 'Limite atteinte : % sondages par 24 heures.', lim; end if;
+    raise exception 'Quota atteint : % invitations par 24 heures au maximum. Réessayez plus tard ou réduisez les destinataires.', lim;
   end if;
+  insert into public.oncoodle_quota_log (user_id, kind, n) values (p_user, p_kind, p_n);
 end;
 $$;
 
@@ -350,7 +373,7 @@ begin
   perform public.oncoodle_guard();
   a := public.oncoodle_check_audience(p_audience);
   select count(*) into n from public.oncoodle_resolve(a);
-  return jsonb_build_object('count', n, 'truncated', n > 400, 'members', coalesce((
+  return jsonb_build_object('count', n, 'truncated', n > 400, 'cap', public.oncoodle_recipient_cap(), 'over_cap', n > public.oncoodle_recipient_cap() and not public.is_direction_admin(), 'members', coalesce((
     select jsonb_agg(jsonb_build_object('id', x.user_id, 'name', x.nm, 'role', x.role, 'via', x.via) order by lower(x.nm))
     from (select r.user_id, public.member_name(r.user_id) as nm, p.role, r.via
           from public.oncoodle_resolve(a) r join public.profiles p on p.id = r.user_id
@@ -384,8 +407,7 @@ begin
     if dl < now() + interval '5 minutes' then raise exception 'L''échéance doit être dans le futur.'; end if;
     if dl > now() + interval '400 days' then raise exception 'L''échéance est trop lointaine.'; end if;
   end if;
-  select count(*) into n from public.oncoodle_polls where created_by = uid and created_at > now() - interval '24 hours';
-  if n >= 10 then raise exception 'Limite atteinte : 10 sondages par 24 heures.'; end if;
+  perform public.oncoodle_quota_use(uid, 'poll', 1);
   select count(*) into n from public.oncoodle_polls where created_by = uid and status = 'open';
   if n >= 40 then raise exception 'Limite atteinte : 40 sondages ouverts. Clôturez ou supprimez-en.'; end if;
 
@@ -410,13 +432,16 @@ begin
   select count(*) into others from public.oncoodle_invitees where poll_id = pid and user_id <> uid;
   if others = 0 then raise exception 'Aucun destinataire : ajoutez au moins une personne autre que vous.'; end if;
   if total > 300 then raise exception 'Trop de destinataires (300 au maximum).'; end if;
+  if others > public.oncoodle_recipient_cap() and not public.is_direction_admin() then
+    raise exception 'Plus de % destinataires : réservé à l''admin et à la direction.', public.oncoodle_recipient_cap();
+  end if;
 
   req := public.oncoodle_uuid_array(p_poll->'required');
   update public.oncoodle_invitees set required = true where poll_id = pid and user_id = any (req);
 
   insert into public.oncoodle_outbox (kind, poll_id, recipient)
     select 'invite', pid, i.user_id from public.oncoodle_invitees i where i.poll_id = pid and i.user_id <> uid on conflict do nothing;
-  perform public.oncoodle_check_quota(uid);
+  perform public.oncoodle_quota_use(uid, 'invite', others);
   return pid;
 end;
 $$;
@@ -425,7 +450,7 @@ create or replace function public.oncoodle_update(p_poll bigint, p_changes jsonb
 language plpgsql security definer set search_path = public as $$
 declare
   uid uuid := auth.uid(); p public.oncoodle_polls; c jsonb := coalesce(p_changes, '{}'); n int; opts_changed boolean := false;
-  dl timestamptz; aud jsonb; added int := 0; ids bigint[]; rm uuid[]; rq jsonb; x jsonb; prior uuid[];
+  dl timestamptz; aud jsonb; added int := 0; notified int := 0; ids bigint[]; rm uuid[]; rq jsonb; x jsonb; prior uuid[];
 begin
   perform public.oncoodle_guard();
   if jsonb_typeof(c) <> 'object' then raise exception 'Modification invalide.'; end if;
@@ -495,10 +520,13 @@ begin
     ), q as (
       insert into public.oncoodle_outbox (kind, poll_id, recipient) select 'invite', p_poll, user_id from ins where user_id <> uid on conflict do nothing returning 1
     )
-    select count(*) into added from ins;
+    select (select count(*) from ins), (select count(*) from q) into added, notified;
     select count(*) into n from public.oncoodle_invitees where poll_id = p_poll;
     if n > 300 then raise exception 'Trop de destinataires (300 au maximum).'; end if;
-    perform public.oncoodle_check_quota(uid);
+    if n - 1 > public.oncoodle_recipient_cap() and not public.is_direction_admin() then
+      raise exception 'Plus de % destinataires : réservé à l''admin et à la direction.', public.oncoodle_recipient_cap();
+    end if;
+    perform public.oncoodle_quota_use(uid, 'invite', notified);
   end if;
   if c ? 'remove_users' then
     rm := public.oncoodle_uuid_array(c->'remove_users');
@@ -692,7 +720,7 @@ begin
       on conflict (poll_id) do update set label = excluded.label, day = excluded.day, start_time = excluded.start_time, end_time = excluded.end_time
         where public.oncoodle_calendar_requests.status = 'pending';
     insert into public.oncoodle_outbox (kind, poll_id, recipient, payload)
-      values ('calendar_proposal', p_poll, null, jsonb_build_object('option_id', o.id, 'by', public.member_name(uid)));
+      values ('calendar_proposal', p_poll, null, jsonb_build_object('option_id', o.id, 'by', public.member_name(uid))) on conflict do nothing;
   end if;
 end;
 $$;
@@ -705,6 +733,8 @@ begin
   select * into p from public.oncoodle_polls where id = p_poll for update;
   if p.id is null or p.created_by <> uid then raise exception 'Sondage introuvable.'; end if;
   if p.status <> 'closed' then raise exception 'Seul un sondage clos peut être rouvert.'; end if;
+  -- Une demande d'agenda commun encore en attente tombe avec la réouverture (le créneau retenu n'est plus valable)
+  delete from public.oncoodle_calendar_requests where poll_id = p_poll and status = 'pending';
   update public.oncoodle_polls set status = 'open', final_option_id = null, final_message = null, closed_at = null,
     deadline = case when deadline <= now() then null else deadline end, updated_at = now() where id = p_poll;
   insert into public.oncoodle_outbox (kind, poll_id, recipient, payload)
@@ -742,6 +772,7 @@ begin
   if p.id is null or p.created_by <> uid then raise exception 'Sondage introuvable.'; end if;
   if p.status = 'cancelled' then raise exception 'Ce sondage est déjà annulé.'; end if;
   if char_length(coalesce(m, '')) > 500 then raise exception 'Le message est limité à 500 caractères.'; end if;
+  delete from public.oncoodle_calendar_requests where poll_id = p_poll and status = 'pending';
   update public.oncoodle_polls set status = 'cancelled', final_message = m, closed_at = now(), updated_at = now() where id = p_poll;
   -- Les envois en attente n'ont plus de sens (invitation, relance) : remplacés par l'annulation
   update public.oncoodle_outbox set skipped_at = now() where poll_id = p_poll and sent_at is null and skipped_at is null;
@@ -846,6 +877,7 @@ begin
     where (p.status in ('closed', 'cancelled') and coalesce(p.closed_at, p.updated_at) < now() - interval '180 days')
        or (coalesce(public.oncoodle_last_day(p.id), p.created_at::date) < public.ch_today() - 180);
   get diagnostics purged = row_count;
+  delete from public.oncoodle_quota_log where at < now() - interval '3 days';
   delete from public.oncoodle_outbox where coalesce(sent_at, skipped_at, created_at) < now() - interval '90 days' and (sent_at is not null or skipped_at is not null or attempts >= 5);
   return jsonb_build_object('reminders', rem, 'deadline_notices', dead, 'purged', purged);
 end;
@@ -946,7 +978,7 @@ begin
     'oncoodle_guard()', 'oncoodle_role_label(text)', 'oncoodle_parse_date(text)', 'oncoodle_parse_time(text)', 'oncoodle_text_array(jsonb)',
     'oncoodle_uuid_array(jsonb)', 'oncoodle_check_audience(jsonb)', 'oncoodle_resolve(jsonb)', 'oncoodle_next_send(timestamptz)',
     'oncoodle_last_day(bigint)', 'oncoodle_parse_options(jsonb)', 'oncoodle_tick()', 'oncoodle_outbox_claim(int)', 'oncoodle_outbox_done(bigint,text)',
-    'oncoodle_outbox_skip(bigint)', 'oncoodle_mail_data(bigint,uuid)', 'oncoodle_dispatch()', 'oncoodle_daily_quota()', 'oncoodle_check_quota(uuid)',
+    'oncoodle_outbox_skip(bigint)', 'oncoodle_mail_data(bigint,uuid)', 'oncoodle_dispatch()', 'oncoodle_daily_quota()', 'oncoodle_poll_quota()', 'oncoodle_recipient_cap()', 'oncoodle_quota_use(uuid,text,int)',
     'oncoodle_user_allowed(uuid)'] loop
     execute format('revoke execute on function public.%s from public, anon, authenticated', f);
   end loop;
