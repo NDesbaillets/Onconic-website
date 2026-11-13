@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Oncoodle · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <meta name="apple-mobile-web-app-title" content="Onconic">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
+  <link rel="stylesheet" href="/assets/css/oncoodle.css?v=20261113a">
+  <script src="/assets/js/site.js?v=20261110b" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/oncoodle-core.js?v=20261113a"></script>
+  <script src="/assets/js/oncoodle.js?v=20261113a" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug oc">
+      <div class="container">
+        <a class="hive-back" href="/fr/app/">← The Hive</a>
+        <span class="eyebrow">Pour toute la communauté The Hive</span>
+        <h1>Oncoodle</h1>
+        <p class="cg-sub">Trouvez la date qui convient à tout le monde.</p>
+        <hr class="rule">
+        <p class="form-msg" id="oc-status" role="status">Chargement…</p>
+
+        <div id="oc-tool" hidden>
+          <!-- ===== Liste ===== -->
+          <div id="oc-list-view">
+            <div class="oc-bar">
+              <div class="cg-views" role="group" aria-label="Filtrer les sondages" id="oc-tabs"></div>
+              <button class="btn" id="oc-new" type="button">Nouveau sondage</button>
+            </div>
+            <p class="muted" id="oc-count" role="status" aria-live="polite"></p>
+            <ul class="oc-list" id="oc-list"></ul>
+            <details class="oc-prefs">
+              <summary>Réglages des e-mails</summary>
+              <label class="cg-check"><input type="checkbox" id="oc-pref-email"> Recevoir par e-mail les rappels et résumés (sondage modifié, tout le monde a répondu, échéance passée). Les invitations et les dates retenues sont toujours envoyées.</label>
+              <p class="form-msg" id="oc-pref-msg" role="status" aria-live="polite"></p>
+              <p class="muted">Les notifications sur l'appareil se règlent dans <a href="/fr/app/compte.html#notifications">Mon compte</a>.</p>
+            </details>
+          </div>
+
+          <!-- ===== Détail d'un sondage ===== -->
+          <div id="oc-detail-view" hidden>
+            <p><button class="btn btn-outline" id="oc-back" type="button">← Tous les sondages</button></p>
+            <div id="oc-detail"></div>
+          </div>
+
+          <!-- ===== Création / modification ===== -->
+          <div id="oc-form-view" hidden>
+            <form class="oc-form" id="oc-form" novalidate>
+              <h2 id="oc-form-title">Nouveau sondage</h2>
+              <fieldset class="oc-kind" id="oc-kind">
+                <legend>Type de sondage</legend>
+                <label class="cg-check"><input type="radio" name="kind" value="slots" checked> Choisir une date : plusieurs créneaux, chacun répond oui, peut-être ou non</label>
+                <label class="cg-check"><input type="radio" name="kind" value="rsvp"> Participation à un événement : une seule date, oui, peut-être ou non</label>
+              </fieldset>
+              <label class="oc-tpl">Partir d'un modèle
+                <select id="oc-template"><option value="">Aucun</option></select>
+              </label>
+              <div class="cg-grid">
+                <label class="cg-wide">Titre *<input name="title" required minlength="3" maxlength="150" autocomplete="off" placeholder="ex. Colloque de clinique thoracique"></label>
+                <label class="cg-wide">Description<textarea name="description" maxlength="1000" rows="3"></textarea></label>
+                <label class="cg-wide">Lieu<input name="location" maxlength="200" autocomplete="off" placeholder="ex. Salle de colloque, BH10"></label>
+              </div>
+              <p class="ug-note ug-attn">Aucun nom ni donnée de patient dans ce sondage. Le titre, le lieu et le message de clôture sont envoyés par e-mail aux participants.</p>
+
+              <fieldset class="oc-sec" id="oc-slots-sec">
+                <legend id="oc-slots-legend">Créneaux proposés</legend>
+                <div id="oc-gen" class="oc-gen">
+                  <h3>Générer des créneaux</h3>
+                  <div class="cg-grid">
+                    <label>Du<input type="date" id="g-from"></label>
+                    <label>Au<input type="date" id="g-to"></label>
+                    <label>Heures de début (séparées par une virgule)<input id="g-starts" autocomplete="off" placeholder="12:00, 12:30"></label>
+                    <label>Durée<select id="g-dur">
+                      <option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60" selected>1 heure</option>
+                      <option value="90">1 h 30</option><option value="120">2 heures</option><option value="180">3 heures</option><option value="0">Journée entière</option>
+                    </select></label>
+                  </div>
+                  <div class="oc-days" role="group" aria-label="Jours de la semaine" id="g-days"></div>
+                  <label class="cg-check"><input type="checkbox" id="g-holidays" checked> Sauter les jours fériés vaudois</label>
+                  <button class="btn btn-outline" type="button" id="g-run">Générer</button>
+                  <p class="form-msg" id="g-msg" role="status" aria-live="polite"></p>
+                </div>
+                <div class="oc-manual">
+                  <h3 id="oc-manual-title">Ajouter un créneau</h3>
+                  <div class="cg-grid">
+                    <label>Jour<input type="date" id="m-day"></label>
+                    <label>Début<input type="time" id="m-start"></label>
+                    <label>Fin<input type="time" id="m-end"></label>
+                  </div>
+                  <button class="btn btn-outline" type="button" id="m-add">Ajouter</button>
+                  <p class="muted">Sans heure, le créneau couvre la journée.</p>
+                </div>
+                <ul class="oc-slots" id="oc-slots" aria-live="polite"></ul>
+                <p class="form-msg" id="oc-slots-msg" role="status"></p>
+              </fieldset>
+
+              <fieldset class="oc-sec">
+                <legend>Réponses</legend>
+                <div class="cg-grid">
+                  <label>Répondre avant (facultatif)<input type="datetime-local" name="deadline"></label>
+                  <label>Qui voit les réponses ?<select name="visibility">
+                    <option value="all">Tous les invités voient qui a répondu quoi</option>
+                    <option value="creator">Seul·e l'organisateur·trice voit les réponses nominatives</option>
+                  </select></label>
+                </div>
+                <p class="muted">Après l'échéance, les réponses sont closes et vous choisissez la date. Sans échéance, une relance part automatiquement après 3 jours.</p>
+              </fieldset>
+
+              <fieldset class="oc-sec" id="oc-people-sec">
+                <legend id="oc-aud-legend">Destinataires</legend>
+                <div id="oc-current" class="oc-current" hidden></div>
+                <p class="muted" id="oc-aud-help">Réunissez autant de groupes et de personnes que nécessaire. Dans un groupe, la clinique et la fonction se combinent : « Thoracique » avec « Infirmier·ères » = les infirmier·ères de la clinique thoracique.</p>
+                <div id="oc-rules"></div>
+                <button class="btn btn-outline" type="button" id="oc-add-rule">Ajouter un groupe</button>
+                <div class="oc-pick">
+                  <label>Ajouter des personnes<input type="search" id="oc-pick-in" autocomplete="off" placeholder="Rechercher un nom" aria-controls="oc-pick-list"></label>
+                  <ul class="oc-suggest" id="oc-pick-list" hidden></ul>
+                  <div class="oc-chips" id="oc-users" aria-label="Personnes ajoutées"></div>
+                </div>
+                <div class="oc-pick">
+                  <label>Exclure des personnes<input type="search" id="oc-ex-in" autocomplete="off" placeholder="Rechercher un nom" aria-controls="oc-ex-list"></label>
+                  <ul class="oc-suggest" id="oc-ex-list" hidden></ul>
+                  <div class="oc-chips" id="oc-excl" aria-label="Personnes exclues"></div>
+                </div>
+                <label class="cg-check" id="oc-me-wrap"><input type="checkbox" id="oc-me" checked> Je participe aussi (je réponds comme les autres)</label>
+                <div class="oc-preview" id="oc-preview" aria-live="polite"></div>
+              </fieldset>
+
+              <p class="form-msg" id="oc-form-msg" role="status" aria-live="polite"></p>
+              <div class="btn-row">
+                <button class="btn" type="submit" id="oc-submit">Envoyer le sondage</button>
+                <button class="btn btn-outline" type="button" id="oc-cancel-form">Annuler</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <dialog class="cg-dialog" id="oc-dlg" aria-labelledby="oc-dlg-title">
+          <form class="cg-form" id="oc-dlg-form" method="dialog" novalidate>
+            <h2 id="oc-dlg-title"></h2>
+            <div id="oc-dlg-body"></div>
+            <p class="form-msg" id="oc-dlg-msg" role="status" aria-live="polite"></p>
+            <div class="btn-row">
+              <button class="btn" type="submit" id="oc-dlg-ok">Confirmer</button>
+              <button class="btn btn-outline" type="button" id="oc-dlg-cancel">Annuler</button>
+            </div>
+          </form>
+        </dialog>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>

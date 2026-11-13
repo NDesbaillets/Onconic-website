@@ -217,6 +217,14 @@
         });
       }
 
+      // Oncoodle : nombre de sondages en attente de réponse, sur la tuile
+      if (myTools && myTools.includes("oncoodle")) {
+        sb.rpc("oncoodle_pending_count").then(({ data: n }) => {
+          const tag = app.querySelector('[data-tool="oncoodle"] .hex-tag');
+          if (tag && Number(n) > 0) tag.textContent = lang === "fr" ? `${n} réponse${n > 1 ? "s" : ""} attendue${n > 1 ? "s" : ""} →` : `${n} to answer →`;
+        });
+      }
+
       document.getElementById("logout").addEventListener("click", async () => {
         await sb.auth.signOut();
         location.href = base + "/";

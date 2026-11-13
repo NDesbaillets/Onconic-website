@@ -79,6 +79,12 @@ Page `/app/duree.html`, réservée aux membres rattachés au CHUV (adresse `@chu
 - Participation : « J'y vais », « Peut-être », « Je présente ». Les noms ne s'affichent qu'avec le consentement « Afficher mon nom » (Mon compte), les coordonnées (e-mail, WhatsApp) qu'avec le consentement « Être contacté » ; la règle est appliquée côté base par `event_attendees()`.
 - Export agenda (.ics) par événement.
 
+## Outil « Oncoodle » (tous les membres validés)
+
+- Page `/app/oncoodle.html` (français) : sondages de dates (créneaux oui / peut-être / non) et de participation. Destinataires par clinique, fonction ou personne, participants obligatoires, conflits avec Absences et l'agenda commun, relances, clôture avec fichier agenda. Détail et mise en service : `memory/projects/oncoodle.md`.
+- Installation : migration `supabase/migrations/202611130002_oncoodle.sql`, fonction `notify-oncoodle`, secret Vault `oncoodle_worker_url`.
+- Tests : `npm --prefix tests/absences test` (SQL, messages, logique) et `node tests/absences/oncoodle-e2e.mjs` (navigateur ; nécessite Playwright, ignoré sinon).
+
 ## Outil « Key trials » (membres validés)
 
 - Page `/app/trials.html` : une fiche par étude clé (design, résultats OS/PFS/DFS/ORR/DoR, tolérance, forces, limites, « practice changing ? », références PubMed/DOI). Recherche par mot-clé, clinique, diagnostic, drivers et ligne ; lien direct `?t=slug`.
