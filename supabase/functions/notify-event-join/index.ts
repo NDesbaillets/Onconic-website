@@ -8,6 +8,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import webpush from "npm:web-push@3.6.7";
 import { buildMessage, joinerName, type Lang } from "./message.ts";
+import { wants } from "./prefs.ts";
 
 const SITE = "https://onconic.ch";
 const ORIGINS = [SITE, "https://www.onconic.ch"];
@@ -84,8 +85,9 @@ Deno.serve(async (req) => {
   const ids = (others ?? []).map((o) => o.user_id);
   if (!ids.length) return json(req, 200, { sent: 0, reason: "no_one_else" });
 
-  const { data: recipients } = await admin.from("profiles").select("id, lang").in("id", ids).eq("notify_events", true);
-  const lang = new Map((recipients ?? []).map((r) => [r.id, (r.lang === "en" ? "en" : "fr") as Lang]));
+  const { data: recipients } = await admin.from("profiles").select("id, lang, notif_prefs").in("id", ids).eq("notify_events", true);
+  // Réglage « event_join » du membre (Mon compte) : notification désactivée = pas d'envoi
+  const lang = new Map((recipients ?? []).filter((r) => wants(r.notif_prefs, "event_join", "push")).map((r) => [r.id, (r.lang === "en" ? "en" : "fr") as Lang]));
   if (!lang.size) return json(req, 200, { sent: 0, reason: "no_recipient" });
   const { data: subs } = await admin.from("push_subscriptions").select("id, user_id, endpoint, p256dh, auth").in("user_id", [...lang.keys()]);
   if (!subs?.length) return json(req, 200, { sent: 0, reason: "no_device" });

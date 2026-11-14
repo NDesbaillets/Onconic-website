@@ -23,7 +23,8 @@ source=source.replace('import nodemailer from "npm:nodemailer@6.9.16";','const n
  .replace('import webpush from "npm:web-push@3.6.7";','const webpush = {};')
  .replace(/import \{ buildAbsenceForm, FILE_LABEL, type FormData, stamp \} from "\.\/form.ts";/,'const buildAbsenceForm = async () => new Uint8Array([37,80,68,70]); const FILE_LABEL = {clinician:"Test"}; const stamp = (x) => x;')
  .replace('"./message.ts"',JSON.stringify(new URL('../../supabase/functions/notify-absence/message.ts',import.meta.url).href))
- .replace('"./delivery.ts"',JSON.stringify(new URL('../../supabase/functions/notify-absence/delivery.ts',import.meta.url).href));
+ .replace('"./delivery.ts"',JSON.stringify(new URL('../../supabase/functions/notify-absence/delivery.ts',import.meta.url).href))
+ .replace('"./prefs.ts"',JSON.stringify(new URL('../../supabase/functions/notify-absence/prefs.ts',import.meta.url).href));
 const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
 const request=(headers={},body={})=>globalThis.absenceHandler(new Request('https://example.invalid/notify-absence',{method:'POST',headers:{'content-type':'application/json',...headers},body:JSON.stringify(body)}));

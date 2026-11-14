@@ -12,6 +12,7 @@ import nodemailer from "npm:nodemailer@6.9.16";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import webpush from "npm:web-push@3.6.7";
 import { type Abs, buildEmail, buildFormEmail, type Kind, type Lang } from "./message.ts";
+import { wants } from "./prefs.ts";
 import { buildAbsenceForm, FILE_LABEL, type FormData, stamp } from "./form.ts";
 
 const SITE = "https://onconic.ch";
@@ -105,7 +106,11 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
   const absences = (row.payload.absences ?? rawAbsences ?? []).filter((a) => allowed.includes(a.id)).map((a) => externalAbsence(a as Abs & { user_id: string }));
   if (!absences.length) return "__skip__"; // absence supprimée entre-temps : rien à envoyer
 
-  const { data: prof } = await admin.from("profiles").select("lang, notify_events, role").eq("id", row.recipient).maybeSingle();
+  const { data: prof } = await admin.from("profiles").select("lang, notify_events, role, notif_prefs").eq("id", row.recipient).maybeSingle();
+  // Réglages du membre (Mon compte) : un type ou un canal désactivé n'est pas envoyé ; sans réglage, tout est reçu
+  const wantsPush = wants(prof?.notif_prefs, row.kind, "push", !!row.payload.reminder);
+  const wantsEmail = wants(prof?.notif_prefs, row.kind, "email", !!row.payload.reminder);
+  let pushSent = false;
   const lang: Lang = prof?.lang === "en" ? "en" : "fr";
   const first = absences[0];
   const { data: ownerName } = await admin.rpc("member_name", { p_user: first.user_id });
@@ -121,9 +126,10 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
 
   // Push (facultatif : l'appareil doit avoir activé les notifications dans Mon compte)
   try {
-    if (prof?.notify_events) {
+    if (prof?.notify_events && wantsPush) {
       const { data: subs } = await admin.from("push_subscriptions").select("id, endpoint, p256dh, auth").eq("user_id", row.recipient);
       if (subs?.length) {
+        pushSent = true;
         const keys = await vapidKeys();
         webpush.setVapidDetails("mailto:contact@onconic.ch", keys.vapid_public, keys.vapid_private);
         const dead: number[] = [];
@@ -135,6 +141,10 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
       }
     }
   } catch (_) { /* le push ne doit jamais bloquer l'e-mail */ }
+
+  // E-mail désactivé par le membre : rien à envoyer (« ignoré » si aucune notification n'est partie non plus).
+  // Pour la direction, l'e-mail part vers la boîte commune dès qu'un destinataire du message le souhaite : une ligne ignorée n'empêche pas l'envoi des autres.
+  if (!wantsEmail) return pushSent ? null : "__skip__";
 
   // E-mail : boîte commune de la direction pour ses messages (un seul envoi par message), sinon adresse du destinataire
   const toDirection = DIRECTION_KINDS.includes(row.kind) || (VALIDATE_KINDS.includes(row.kind) && prof?.role === "direction");
