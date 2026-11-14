@@ -1,0 +1,12 @@
+/* Mon compte : réglages des notifications par type et par canal. */
+.np-title { margin: var(--space-4) 0 var(--space-2); font-size: 1.15rem; }
+.np-wrap { overflow-x: auto; margin: 0 0 var(--space-3); }
+.np-table { border-collapse: collapse; width: 100%; background: var(--white); }
+.np-table th, .np-table td { border: 1px solid var(--navy-100); padding: 8px 10px; text-align: left; vertical-align: middle; }
+.np-caption { text-align: left; font-weight: 500; color: var(--navy-800); padding: 8px 0 4px; caption-side: top; }
+.np-table thead th { background: var(--mist); font-weight: 500; font-size: .88rem; color: var(--navy-800); }
+.np-table .np-ch { width: 112px; text-align: center; white-space: nowrap; }
+.np-table input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--navy-800); vertical-align: middle; }
+.np-all { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; min-height: 32px; }
+.np-hint { display: block; font-size: .82rem; color: var(--ink-600); margin-top: 2px; }
+@media (max-width: 640px) { .np-table .np-ch { width: 84px; } }
