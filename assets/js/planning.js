@@ -478,55 +478,68 @@
   });
 
   // ----- Codes et couleurs -----
+  const td = (node, cls) => { const c = el("td", cls); c.append(node); return c; };
   function codeRow(c) {
-    const row = el("div", "pl-coderow");
-    const code = el("input"); code.value = c.code || ""; code.maxLength = 8; code.disabled = !!c.code; code.placeholder = "CODE";
-    const label = el("input"); label.value = c.label || ""; label.placeholder = "Libellé"; label.maxLength = 120;
-    const grp = el("input"); grp.value = c.grp || ""; grp.placeholder = "Groupe"; grp.maxLength = 60;
-    const bg = el("input"); bg.type = "color"; bg.value = (c.bg || "#FFFFFF").toLowerCase(); bg.title = "Fond";
-    const fg = el("input"); fg.type = "color"; fg.value = (c.fg || "#000000").toLowerCase(); fg.title = "Texte";
+    const row = el("tr");
+    const code = el("input"); code.value = c.code || ""; code.maxLength = 8; code.disabled = !!c.code; code.placeholder = "CODE"; code.setAttribute("aria-label", "Code");
+    const label = el("input"); label.value = c.label || ""; label.placeholder = "Libellé"; label.maxLength = 120; label.setAttribute("aria-label", "Libellé");
+    const grp = el("input"); grp.value = c.grp || ""; grp.placeholder = "Groupe"; grp.maxLength = 60; grp.setAttribute("aria-label", "Groupe");
+    const bg = el("input"); bg.type = "color"; bg.value = (c.bg || "#FFFFFF").toLowerCase(); bg.setAttribute("aria-label", "Couleur de fond");
+    const fg = el("input"); fg.type = "color"; fg.value = (c.fg || "#000000").toLowerCase(); fg.setAttribute("aria-label", "Couleur du texte");
     const kind = el("select"); [["poste", "poste"], ["absence", "absence"]].forEach(([v, l]) => { const o = el("option", null, l); o.value = v; kind.append(o); }); kind.value = c.kind || "poste";
-    const priv = el("label", "pl-inline"); const pv = el("input"); pv.type = "checkbox"; pv.checked = !!c.private; priv.append(pv, "privé");
-    const act = el("label", "pl-inline"); const av = el("input"); av.type = "checkbox"; av.checked = c.active !== false; act.append(av, "actif");
-    const pos = el("input"); pos.type = "number"; pos.value = c.position != null ? c.position : 900; pos.title = "Ordre";
+    const pv = el("input"); pv.type = "checkbox"; pv.checked = !!c.private; pv.setAttribute("aria-label", "Privé");
+    const av = el("input"); av.type = "checkbox"; av.checked = c.active !== false; av.setAttribute("aria-label", "Actif");
+    const pos = el("input"); pos.type = "number"; pos.value = c.position != null ? c.position : 900; pos.setAttribute("aria-label", "Ordre");
     const save = el("button", "btn btn-outline", "Enregistrer"); save.type = "button";
     save.addEventListener("click", async () => {
       const body = { code: code.value.trim().toUpperCase(), label: label.value.trim(), grp: grp.value.trim(), bg: bg.value.toUpperCase(), fg: fg.value.toUpperCase(),
         kind: kind.value, private: pv.checked, active: av.checked, position: pos.value };
       if (!/^[A-Z0-9][A-Z0-9-]{0,7}$/.test(body.code)) return say($("pl-codes-msg"), "Code : 1 à 8 lettres majuscules, chiffres ou tirets.", "error");
+      save.disabled = true;
       const { error } = await sb.rpc("plan_code_save", { p: body });
+      save.disabled = false;
       if (error) return say($("pl-codes-msg"), error.message, "error");
       say($("pl-codes-msg"), "Code " + body.code + " enregistré.", "ok");
       code.disabled = true;
       await load();
     });
-    row.append(code, label, grp, bg, fg, kind, priv, act, pos, save);
+    row.append(td(code, "pl-c-code"), td(label), td(grp), td(bg, "pl-c-color"), td(fg, "pl-c-color"), td(kind, "pl-c-kind"),
+      td(pv, "pl-c-check"), td(av, "pl-c-check"), td(pos, "pl-c-num"), td(save, "pl-c-act"));
     return row;
   }
+  function tableOf(heads, rows) {
+    const wrap = el("div", "pl-tabwrap"), t = el("table", "pl-tab"), th = el("thead"), hr = el("tr"), tb = el("tbody");
+    heads.forEach((h) => hr.append(el("th", null, h)));
+    th.append(hr); tb.append(...rows); t.append(th, tb); wrap.append(t);
+    return wrap;
+  }
   $("pl-codes").addEventListener("click", () => {
-    const list = $("pl-codes-list");
-    const head = el("div", "pl-coderow pl-codehead");
-    ["Code", "Libellé", "Groupe", "Fond", "Texte", "Type", "", "", "Ordre", ""].forEach((t) => head.append(el("span", null, t)));
-    list.replaceChildren(head, ...st.codes.map(codeRow));
+    $("pl-codes-list").replaceChildren(tableOf(["Code", "Libellé", "Groupe", "Fond", "Texte", "Type", "Privé", "Actif", "Ordre", ""], st.codes.map(codeRow)));
     say($("pl-codes-msg"), "");
     $("pl-codes-dlg").showModal();
   });
-  $("pl-code-add").addEventListener("click", () => { const r = codeRow({}); $("pl-codes-list").append(r); r.querySelector("input").focus(); });
+  $("pl-code-add").addEventListener("click", () => {
+    const r = codeRow({}); $("pl-codes-list").querySelector("tbody").append(r);
+    r.scrollIntoView({ block: "nearest" }); r.querySelector("input").focus();
+  });
 
   // ----- Couverture -----
   function minRow(r) {
-    const row = el("div", "pl-minrow");
-    const label = el("input"); label.value = r.label || ""; label.placeholder = "Libellé"; label.maxLength = 60;
-    const codes = el("input"); codes.value = (r.codes || []).join(", "); codes.placeholder = "AM1, AM2";
-    const min = el("input"); min.type = "number"; min.min = 0; min.max = 50; min.value = r.min != null ? r.min : 1;
+    const row = el("tr");
+    const label = el("input"); label.value = r.label || ""; label.placeholder = "ex. AM bloc 1"; label.maxLength = 60; label.setAttribute("aria-label", "Libellé");
+    const codes = el("input"); codes.value = (r.codes || []).join(", "); codes.placeholder = "ex. AM1, AM2"; codes.setAttribute("aria-label", "Codes comptés");
+    const min = el("input"); min.type = "number"; min.min = 0; min.max = 50; min.value = r.min != null ? r.min : 1; min.setAttribute("aria-label", "Minimum");
     const del = el("button", "btn btn-outline", "Retirer"); del.type = "button"; del.addEventListener("click", () => row.remove());
-    row.append(label, codes, min, del);
+    row.append(td(label), td(codes), td(min, "pl-c-num"), td(del, "pl-c-act"));
     return row;
   }
-  $("pl-min").addEventListener("click", () => { $("pl-mins").replaceChildren(...st.coverage.map(minRow)); say($("pl-min-msg"), ""); $("pl-min-dlg").showModal(); });
-  $("pl-min-add").addEventListener("click", () => $("pl-mins").append(minRow({})));
+  $("pl-min").addEventListener("click", () => {
+    $("pl-mins").replaceChildren(tableOf(["Ligne", "Codes comptés (séparés par des virgules)", "Minimum", ""], st.coverage.map(minRow)));
+    say($("pl-min-msg"), ""); $("pl-min-dlg").showModal();
+  });
+  $("pl-min-add").addEventListener("click", () => { const r = minRow({}); $("pl-mins").querySelector("tbody").append(r); r.querySelector("input").focus(); });
   $("pl-min-save").addEventListener("click", async () => {
-    const rows = [...$("pl-mins").children].map((r) => {
+    const rows = [...$("pl-mins").querySelectorAll("tbody tr")].map((r) => {
       const [l, c, m] = r.querySelectorAll("input");
       return { label: l.value.trim(), codes: c.value.split(/[,;\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean), min: Number(m.value) || 0 };
     }).filter((r) => r.label);

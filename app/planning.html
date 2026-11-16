@@ -12,11 +12,11 @@
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#001B4D">
   <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
-  <link rel="stylesheet" href="/assets/css/planning.css?v=20261116b">
+  <link rel="stylesheet" href="/assets/css/planning.css?v=20261116e">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/planning.js?v=20261116b" defer></script>
+  <script src="/assets/js/planning.js?v=20261116c" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -173,11 +173,11 @@
     </form>
   </dialog>
 
-  <dialog class="pl-dlg" id="pl-codes-dlg">
+  <dialog class="pl-dlg pl-dlg-wide" id="pl-codes-dlg">
     <form method="dialog">
       <h2>Codes et couleurs</h2>
       <p class="muted">« Privé » : motif masqué (« ABS ») pour tous sauf les cadres administratifs et la personne concernée. Un code inactif disparaît de la palette mais reste affiché là où il est déjà posé.</p>
-      <div class="pl-codes" id="pl-codes-list"></div>
+      <div id="pl-codes-list"></div>
       <div class="pl-row"><button type="button" class="btn btn-outline" id="pl-code-add">Nouveau code</button></div>
       <p class="form-msg" id="pl-codes-msg" role="status"></p>
       <div class="pl-row pl-end"><button class="btn btn-outline" value="close">Fermer</button></div>
@@ -188,7 +188,7 @@
     <form method="dialog">
       <h2>Lignes de couverture</h2>
       <p class="muted">Pour chaque ligne, les codes comptés (séparés par des virgules) et le minimum par demi-journée ; sous le minimum, le compteur passe en rouge.</p>
-      <div class="pl-mins" id="pl-mins"></div>
+      <div id="pl-mins"></div>
       <div class="pl-row"><button type="button" class="btn btn-outline" id="pl-min-add">Ajouter une ligne</button></div>
       <p class="form-msg" id="pl-min-msg" role="status"></p>
       <div class="pl-row pl-end">
