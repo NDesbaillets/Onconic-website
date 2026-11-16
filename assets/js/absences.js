@@ -654,26 +654,46 @@
     $("ab-days").textContent = a && b && b >= a ? `${plur(workdays(a, b), "jour ouvrable", "jours ouvrables")} (hors week-ends et fériés vaudois), ${plur((pd(b) - pd(a)) / 864e5 + 1, "jour calendaire", "jours calendaires")}` : "";
     $("ab-note-hint").textContent = $("ab-kind").value === "autre" ? "(obligatoire)" : "(facultatif)";
   }
-  // Le formulaire crée un brouillon, puis ouvre le popup : validateurs prévenus, ajout d'autres demandes, confirmation, envoi groupé
-  async function submitRequest(ev) {
-    ev.preventDefault();
+  // Le formulaire crée un brouillon. « Demander l'absence » ouvre ensuite la fenêtre d'envoi groupé ;
+  // « Enregistrer en brouillon » s'arrête là (le bandeau des brouillons permet d'envoyer plus tard).
+  async function createDraft(openAfter) {
     const msg = $("ab-msg"), warn = $("ab-warn");
     warn.replaceChildren();
     const kind = $("ab-kind").value, note = $("ab-note").value.trim(), start = $("ab-start").value, end = $("ab-end").value;
     if (!start || !end) return say(msg, "Indiquez les dates de début et de fin.", "error");
     if (end < start) return say(msg, "La fin doit être le même jour ou après le début.", "error");
     if (kind === "autre" && note.length < 2) return say(msg, "Pour le motif « autre », indiquez une précision.", "error");
-    const btn = $("ab-send");
-    btn.disabled = true;
+    const btns = [$("ab-send"), $("ab-save")];
+    btns.forEach((b) => (b.disabled = true));
     say(msg, "Préparation…");
     try {
       const { data, error } = await sb.rpc("absence_request", { p_kind: kind, p_note: note, p_start: start, p_end: end });
       if (error) return say(msg, error.message, "error");
-      say(msg, "");
       $("ab-note").value = "";
-      await loadDrafts();
-      await openSend(data.conflicts);
-    } finally { btn.disabled = false; }
+      if (openAfter) {
+        say(msg, "");
+        await loadDrafts();
+        await openSend((data.conflicts || []).concat(sd.pending || []));
+        sd.pending = [];
+      } else {
+        sd.pending = (data.conflicts || []).concat(sd.pending || []);
+        $("ab-start").value = ""; $("ab-end").value = ""; updateDays();
+        await loadDrafts();
+        say(msg, `Demande du ${period(start, end)} enregistrée en brouillon. Ajoutez-en une autre ou envoyez-les ensemble depuis le bandeau ci-dessous.`, "ok");
+        const w = warnBox(data.conflicts || [], "Attention : trop d'absences en même temps");
+        if (w) warn.append(w);
+      }
+    } finally { btns.forEach((b) => (b.disabled = false)); }
+  }
+  const submitRequest = (ev) => { ev.preventDefault(); return createDraft(true); };
+  // Depuis la fenêtre d'envoi : retour au formulaire, la demande déjà créée reste en brouillon.
+  function addAnother() {
+    sd.pending = (sd.conflicts || []).concat(sd.pending || []);
+    $("sd").close();
+    $("ab-start").value = ""; $("ab-end").value = ""; $("ab-note").value = ""; updateDays();
+    say($("ab-msg"), "Votre demande est gardée en brouillon. Saisissez la suivante, puis « Demander l'absence » pour tout envoyer ensemble.", "ok");
+    $("ab-form").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("ab-start").focus({ preventScroll: true });
   }
   async function afterChange() {
     state.cache.clear();
@@ -681,7 +701,7 @@
   }
 
   // ----- Brouillons et popup d'envoi -----
-  const sd = { info: { validators: [], fallback: false }, conflicts: [] };
+  const sd = { info: { validators: [], fallback: false }, conflicts: [], pending: [] };
   const names = (list) => list.map((v) => v.name).join(", ");
   async function loadDrafts() {
     const [list, appr] = await Promise.all([sb.rpc("absence_list", { p_user: null }), sb.rpc("absence_approvals_all", { p_user: null })]);
@@ -700,8 +720,7 @@
   async function openSend(conflicts) {
     sd.conflicts = conflicts || [];
     $("sd-main").hidden = false; $("sd-confirm").hidden = true; $("sd-done").hidden = true;
-    say($("sd-msg"), ""); say($("sd-addmsg"), "");
-    $("sd-add").open = false;
+    say($("sd-msg"), "");
     const { data } = await sb.rpc("absence_my_validators");
     sd.info = data || { validators: [], fallback: false };
     renderSend();
@@ -733,26 +752,13 @@
       }));
       list.append(li);
     }
-    if (!state.drafts.length) list.append(el("li", "muted", "Aucune demande en brouillon : ajoutez-en une ci-dessous."));
+    if (!state.drafts.length) list.append(el("li", "muted", "Aucune demande en brouillon : utilisez « Ajouter une autre demande »."));
     $("sd-go").disabled = !state.drafts.length;
     const warn = $("sd-warn");
     warn.replaceChildren();
     const w = warnBox(sd.conflicts, "Attention : trop d'absences en même temps");
     if (w) { w.append(el("p", "muted", "La demande peut quand même être envoyée ; les validateurs voient le même avertissement.")); warn.append(w); }
     balanceWarnInto(warn);
-  }
-  async function addToSend(ev) {
-    ev.preventDefault();
-    const out = $("sd-addmsg");
-    const kind = $("sd-kind").value, note = $("sd-note").value.trim(), start = $("sd-start").value, end = $("sd-end").value;
-    if (!start || !end || end < start) return say(out, "Vérifiez les dates.", "error");
-    if (kind === "autre" && note.length < 2) return say(out, "Pour le motif « autre », indiquez une précision.", "error");
-    const { data, error } = await sb.rpc("absence_request", { p_kind: kind, p_note: note, p_start: start, p_end: end });
-    if (error) return say(out, error.message, "error");
-    sd.conflicts = (data.conflicts || []).concat(sd.conflicts);
-    $("sd-note").value = ""; $("sd-start").value = ""; $("sd-end").value = "";
-    say(out, "Ajoutée à l'envoi.", "ok");
-    await loadDrafts(); renderSend();
   }
   function askConfirm() {
     const n = state.drafts.length;
@@ -1934,15 +1940,14 @@
     $("ab-t-todo").addEventListener("click", () => setTab("todo"));
     $("ab-docx").addEventListener("click", exportDocx);
     // Popup d'envoi
-    $("ab-drafts-open").addEventListener("click", () => openSend([]));
-    $("sd-add-form").addEventListener("submit", addToSend);
-    $("sd-start").addEventListener("change", () => { if (!$("sd-end").value || $("sd-end").value < $("sd-start").value) $("sd-end").value = $("sd-start").value; });
+    $("ab-drafts-open").addEventListener("click", () => { const c = sd.pending || []; sd.pending = []; openSend(c); });
+    $("ab-save").addEventListener("click", () => createDraft(false));
+    $("sd-more").addEventListener("click", addAnother);
     $("sd-go").addEventListener("click", askConfirm);
     $("sd-back").addEventListener("click", () => { $("sd-confirm").hidden = true; $("sd-main").hidden = false; });
     $("sd-yes").addEventListener("click", doSend);
     for (const id of ["sd-close", "sd-done-close"]) $(id).addEventListener("click", () => $("sd").close());
     $("sd").addEventListener("close", () => loadDrafts());
-    $("sd-start").min = $("sd-end").min = todayIso().slice(0, 4) + "-01-01";
     // Abonnement à l'agenda
     const subBtn = $("ab-sub-btn"), subBox = $("ab-sub");
     subBtn.addEventListener("click", () => {

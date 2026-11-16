@@ -76,8 +76,14 @@
       all("sl_changes", "kind, specialty, substance, lim_code, ind_code"),
       sb.from("sl_meta").select("source_file, imported_at, product_count, limitation_count").maybeSingle()
     ]);
-    for (const p of products) { p._s = norm(p.substance); p._b = norm(p.specialty); }
     for (const l of limits) { l._s = norm(l.substance); l._body = norm(l.body); }
+    // Texte cherchable des limitations, par spécialité (codes de limitation et d'indication, texte)
+    const limHay = new Map();
+    for (const l of limits) limHay.set(l.specialty, (limHay.get(l.specialty) || "") + " " + norm([l.lim_code, l.ind_code, l.body].join(" ")));
+    for (const p of products) {
+      p._s = norm(p.substance); p._b = norm(p.specialty); p._route = routeOf(p);
+      p._hay = norm([p.specialty, p.galenic, p.substance, p.atc, ROUTES[p._route]].join(" ")) + (limHay.get(p.specialty) || "");
+    }
     for (const r of rx) r._k = stem(norm(r.substance));
     state.products = products; state.limits = limits; state.changes = changes; state.meta = meta.data;
     state.rx = rx.sort((a, b) => a.position - b.position || a.product_line.localeCompare(b.product_line));
@@ -109,6 +115,23 @@
   // « Osimertinibum (mésilate) » → « osimertinibum »
   const shortSubstance = (s) => String(s || "").split(/[,(]/)[0].trim();
 
+  // ----- Voie d'administration, déduite de la forme galénique de la LS -----
+  // La LS distingue bien per os et perfusion ; pour « sol inj », « subst sèche »… elle ne dit pas s'il s'agit d'IV ou de SC.
+  const ROUTES = { po: "per os", iv: "perfusion intraveineuse", sc: "sous-cutanée", inj: "injection (IV ou SC)", other: "autre voie" };
+  function routeOf(p) {
+    const g = norm(p.galenic), b = norm(p.specialty);
+    if (p.peros || /\b(cpr|caps|gran|sir|sol buv|susp buv|sol orale|susp orale|pdr orale|cpr eff|cpr disp)\b/.test(g)) return "po";
+    if (/\b(s\.?c\.?|sous-cutan|subcutan)/.test(g) || /\bs\.?c\.?\b|subcutan/.test(b)) return "sc";
+    if (/perf|\bi\.?v\.?\b|intraveine/.test(g)) return "iv";
+    if (/inj|subst seche|lyoph|\bpdr\b|stylo|seringue|\bser\b|implant/.test(g)) return "inj";
+    return "other";
+  }
+  const freeTokens = () => norm($("ls-free").value).split(" ").filter((t) => t.length >= 2);
+  function productFilter() {
+    const route = $("ls-route").value, toks = freeTokens();
+    return (p) => (!route || p._route === route) && toks.every((t) => p._hay.includes(t));
+  }
+
   // ----- Recherche -----
   function terms() {
     return $("ls-q").value.split(/[,;+\n]|\bet\b/).map((t) => norm(t)).filter((t) => t.length >= 3);
@@ -117,9 +140,9 @@
   // Racine commune français/latin : « capécitabine » ↔ « Capecitabinum », « témozolomide » ↔ « Temozolomidum »
   const stem = (t) => (t.length > 5 ? t.replace(/e$/, "") : t);
 
-  function search(term) {
+  function search(term, keep) {
     const st = stem(term);
-    const hits = state.products.filter((p) => p._s.includes(st) || p._b.includes(term));
+    const hits = state.products.filter((p) => (term === null || p._s.includes(st) || p._b.includes(term)) && (!keep || keep(p)));
     // Regroupement par substance (première DCI), toutes spécialités confondues (originaux et génériques)
     const groups = new Map();
     for (const p of hits) {
@@ -142,18 +165,38 @@
     return [...seen.values()].sort((a, b) => String(a.ind_code || a.lim_code).localeCompare(String(b.ind_code || b.lim_code)));
   }
 
+  const MAX_GROUPS = 40;
   function render() {
     const box = $("ls-results");
-    const ts = terms();
-    if (!ts.length) { box.replaceChildren(); return; }
-    const cancer = cancerRegex();
+    const ts = terms(), toks = freeTokens(), route = $("ls-route").value;
+    const filtering = toks.length > 0 || !!route;
+    if (!ts.length && !toks.length) {
+      box.replaceChildren(...(route ? [el("p", "muted ls-cap", "Saisissez un médicament ou une recherche libre pour afficher les produits de cette voie.")] : []));
+      return;
+    }
+    const cancer = cancerRegex(), keep = filtering ? productFilter() : null;
+    const codes = toks.filter((t) => /\d/.test(t));
     const out = [];
-    for (const t of ts) {
-      const groups = search(t);
-      if (!groups.length) { out.push(notFound(t)); continue; }
-      for (const g of groups) out.push(card(g, cancer));
+    if (ts.length) {
+      for (const t of ts) {
+        const groups = search(t, keep);
+        if (!groups.length) { out.push(filtering && search(t).length ? noneForFilter(t) : notFound(t)); continue; }
+        for (const g of groups) out.push(card(g, cancer, codes));
+      }
+    } else {
+      const groups = search(null, keep).sort((a, b) => a.substance.localeCompare(b.substance, "fr"));
+      if (!groups.length) out.push(el("p", "ls-none", "Aucun produit de la LS ne correspond à cette recherche."));
+      else {
+        out.push(el("p", "muted ls-cap", groups.length > MAX_GROUPS ? `${groups.length} substances correspondent ; les ${MAX_GROUPS} premières sont affichées. Précisez la recherche.` : `${plur(groups.length, "substance correspond", "substances correspondent")} à la recherche.`));
+        groups.slice(0, MAX_GROUPS).forEach((g) => out.push(card(g, cancer, codes)));
+      }
     }
     box.replaceChildren(...out);
+  }
+  function noneForFilter(t) {
+    const c = el("article", "card ls-card");
+    c.append(el("h3", null, t), el("p", "ls-none", "Présent dans la LS, mais aucune présentation ne correspond à la voie ou à la recherche libre choisies."));
+    return c;
   }
 
   function cancerRegex() {
@@ -174,14 +217,18 @@
     return c;
   }
 
-  function card(g, cancer) {
+  function card(g, cancer, codes) {
     const c = el("article", "card ls-card");
     const h = el("h3", null, g.substance);
+    for (const r of [...new Set(g.products.map((p) => p._route))]) h.append(el("span", "ug-badge ls-route-badge", ROUTES[r]));
     c.append(h);
     const specs = [...new Set(g.products.map((p) => p.specialty))];
     const forms = [...new Set(g.products.map((p) => p.galenic).filter(Boolean))];
     c.append(el("p", "muted ls-specs", `${specs.join(", ")} · ${forms.slice(0, 6).join(" ; ")}${forms.length > 6 ? " …" : ""}`));
-    const limits = limitsOf(g);
+    const all = limitsOf(g);
+    // Recherche d'un code précis : seules les limitations portant ce code sont affichées
+    const byCode = codes && codes.length ? all.filter((l) => codes.some((t) => norm(l.ind_code || "").includes(t) || norm(l.lim_code || "").includes(t))) : [];
+    const limits = byCode.length ? byCode : all;
     const limited = g.products.some((p) => p.limited) || limits.length > 0;
 
     if (!limited) {
@@ -562,7 +609,8 @@
     $("ls-tool").hidden = false;
     fillClinics(); fillCancers(); renderMeta(); fillDatalist(); setupCart();
     let t;
-    $("ls-q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(render, 200); });
+    for (const id of ["ls-q", "ls-free"]) $(id).addEventListener("input", () => { clearTimeout(t); t = setTimeout(render, 200); });
+    $("ls-route").addEventListener("change", render);
     const q = new URLSearchParams(location.search).get("q");
     if (q) { $("ls-q").value = q; render(); }
     if (state.admin) {
