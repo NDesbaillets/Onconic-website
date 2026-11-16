@@ -33,7 +33,7 @@
 
   const state = { products: [], limits: [], rx: [], changes: [], meta: null, admin: false, uid: null, pick: {}, rxPick: {}, sitPick: {}, pres: {}, cart: [] };
 
-  const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  const norm = (s) => String(s || "").replace(/œ/g, "oe").replace(/Œ/g, "OE").replace(/æ/g, "ae").replace(/Æ/g, "AE").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
   function el(tag, cls, txt) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -76,13 +76,26 @@
       all("sl_changes", "kind, specialty, substance, lim_code, ind_code"),
       sb.from("sl_meta").select("source_file, imported_at, product_count, limitation_count").maybeSingle()
     ]);
-    for (const l of limits) { l._s = norm(l.substance); l._body = norm(l.body); }
-    // Texte cherchable des limitations, par spécialité (codes de limitation et d'indication, texte)
-    const limHay = new Map();
-    for (const l of limits) limHay.set(l.specialty, (limHay.get(l.specialty) || "") + " " + norm([l.lim_code, l.ind_code, l.body].join(" ")));
+    // Textes cherchables : produit (marque, forme, substance, ATC) et limitation (codes, texte), évalués séparément
+    const bySpec = new Map();
+    for (const l of limits) {
+      l._s = norm(l.substance); l._body = norm(l.body); l._forms = formsOf(l);
+      l._t = norm([l.lim_code, l.ind_code, l.body].join(" "));
+      if (!bySpec.has(l.specialty)) bySpec.set(l.specialty, []);
+      bySpec.get(l.specialty).push(l);
+    }
     for (const p of products) {
-      p._s = norm(p.substance); p._b = norm(p.specialty);
-      p._hay = norm([p.specialty, p.galenic, p.substance, p.atc].join(" ")) + (limHay.get(p.specialty) || "");
+      p._s = norm(p.substance); p._b = norm(p.specialty); p._g = norm(p.galenic);
+      p._n = norm([p.specialty, p.substance].join(" "));
+      p._t = norm([p.specialty, p.galenic, p.substance, p.atc].join(" "));
+    }
+    state.bySpec = bySpec;
+    // Voie des présentations injectables : mention explicite (SC, sous-cutané) ; une « sol inj » d'une spécialité qui a aussi
+    // un concentré pour perfusion est la forme sous-cutanée (Keytruda, Opdivo, Tecentriq…)
+    const perfSpecs = new Set(products.filter((p) => /^(conc perf|sol perf|subst seche)/.test(p._g)).map((p) => p.specialty));
+    for (const p of products) {
+      p._sc = !p.peros && (SC_RE.test(p._t) || (/^sol inj/.test(p._g) && perfSpecs.has(p.specialty)));
+      p._iv = !p.peros && !p._sc && IV_P.test(p._t);
     }
     for (const r of rx) r._k = stem(norm(r.substance));
     state.products = products; state.limits = limits; state.changes = changes; state.meta = meta.data;
@@ -115,10 +128,64 @@
   // « Osimertinibum (mésilate) » → « osimertinibum »
   const shortSubstance = (s) => String(s || "").split(/[,(]/)[0].trim();
 
-  const freeTokens = () => norm($("ls-free").value).split(" ").filter((t) => t.length >= 2);
-  function productFilter() {
-    const toks = freeTokens();
-    return (p) => toks.every((t) => p._hay.includes(t));
+  // ----- Recherche libre -----
+  // Chaque mot doit figurer dans le produit (marque, forme, substance, ATC) ou dans la limitation elle-même.
+  // Un mot correspond au début d'un mot du texte (« oesophag » trouve « oesophagien », « iv » ne trouve pas « nivolumab »).
+  const freeTokens = () => norm($("ls-free").value).split(" ").map((t) => t.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "")).filter((t) => t.length >= 2);
+  const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const wordStem = (t) => (/\d/.test(t) || t.length <= 5 ? t : t.replace(/(es|e|s)$/, ""));
+  const NSCLC = ["cbnpc", "cpnpc", "nsclc", "non a petites cellules", "non-a petites cellules"];
+  const SYN = {
+    cbnpc: NSCLC, cpnpc: NSCLC, nsclc: NSCLC,
+    cppc: ["cppc", "sclc"], sclc: ["cppc", "sclc"],
+    her2: ["her2", "her-2", "erbb2"],
+    orl: ["orl", "tete et cou", "hnscc", "scchn", "voies aerodigestives"],
+    chc: ["chc", "hcc", "hepatocellulaire"], hcc: ["chc", "hcc", "hepatocellulaire"],
+    crc: ["crc", "colorectal"], colorectal: ["crc", "colorectal"],
+    rcc: ["rcc", "cellules renales", "renal"],
+    crpc: ["crpc", "mcrpc", "resistant a la castration"], mcrpc: ["crpc", "mcrpc", "resistant a la castration"],
+    sein: ["sein", "mammaire"], mammaire: ["sein", "mammaire"],
+    neoadjuvant: ["neoadjuvant", "neo-adjuvant", "preoperatoire", "pre-operatoire"],
+    adjuvant: ["adjuvant", "postoperatoire", "post-operatoire"]
+  };
+  const pre = (a) => "(?:^|[^a-z0-9])" + esc(wordStem(a));
+  // Voie : déduite de la forme galénique et des mentions explicites, jamais du « IV » d'un stade
+  const IV_P = /(?:^|[^a-z0-9])(?:conc perf|sol perf|perf|conc inj|subst seche|iv|i\.v\.)(?![a-z])/, IV_L = /intraveineu|(?:^|[^a-z])i\.v\./;
+  const SC_RE = /(?:^|[^a-z0-9])(?:(?:sc|s\.c\.)(?![a-z])|sous-cutan|sous cutan|subcutan)/;
+  function matcher(t) {
+    if (/^(iv|i\.v|intraveineu\w*|perfusion)$/.test(t)) return { route: "_iv", l: (s) => IV_L.test(s) };
+    if (/^(sc|s\.c|sous-cutane\w*|souscutane\w*|subcutane\w*)$/.test(t)) return { route: "_sc", l: (s) => SC_RE.test(s) };
+    const re = new RegExp((SYN[t] || [t]).map(pre).join("|"));
+    return { p: (p) => re.test(p._t), name: (p) => re.test(p._n), l: (s) => re.test(s) };
+  }
+  const appliesTo = (l, p) => !l._forms.length || l._forms.includes(p._g);
+  // Filtre un groupe (une substance) : garde les présentations concernées et note les limitations qui correspondent
+  function freeMatch(g, ms) {
+    const products = [], hits = new Set(), seen = new Set();
+    let name = false;
+    for (const p of g.products) {
+      // Une voie (iv, sc) ne s'applique qu'aux présentations injectables
+      if (ms.some((m) => m.route) && p.peros) continue;
+      const pm = ms.map((m) => (m.route ? p[m.route] : m.p(p)));
+      const whole = pm.every(Boolean);
+      let any = whole;
+      for (const l of state.bySpec.get(p.specialty) || []) {
+        if (!appliesTo(l, p)) continue;
+        seen.add(limKey(l));
+        if (whole || ms.every((m, i) => pm[i] || m.l(l._t))) { hits.add(limKey(l)); any = true; }
+      }
+      if (any) { products.push(p); if (ms.some((m) => m.name && m.name(p))) name = true; }
+    }
+    if (!products.length) return null;
+    // Pertinence : nom du médicament trouvé, puis part des limitations du médicament qui correspondent
+    const share = seen.size ? hits.size / seen.size : 1;
+    return Object.assign({}, g, { products, hits, score: (name ? 10 : 0) + share });
+  }
+  function applyFree(groups, toks) {
+    if (!toks.length) return groups;
+    const ms = toks.map(matcher);
+    return groups.map((g) => freeMatch(g, ms)).filter(Boolean)
+      .sort((a, b) => b.score - a.score || a.substance.localeCompare(b.substance, "fr"));
   }
 
   // ----- Recherche -----
@@ -129,9 +196,9 @@
   // Racine commune français/latin : « capécitabine » ↔ « Capecitabinum », « témozolomide » ↔ « Temozolomidum »
   const stem = (t) => (t.length > 5 ? t.replace(/e$/, "") : t);
 
-  function search(term, keep) {
+  function search(term) {
     const st = term === null ? "" : stem(term);
-    const hits = state.products.filter((p) => (term === null || p._s.includes(st) || p._b.includes(term)) && (!keep || keep(p)));
+    const hits = state.products.filter((p) => term === null || p._s.includes(st) || p._b.includes(term));
     // Regroupement par substance (première DCI), toutes spécialités confondues (originaux et génériques)
     const groups = new Map();
     for (const p of hits) {
@@ -145,6 +212,7 @@
   // Conditionnement choisi dans la liste de la carte : « spécialité|forme », vide = tous
   const presKey = (p) => p.specialty + "|" + (p.galenic || "");
   const formsOf = (l) => String(l.galenics || "").split(";").map((f) => norm(f)).filter(Boolean);
+  const limKey = (l) => (l.ind_code || l.lim_code) + "|" + l._body;
   function limitsOf(group, pres) {
     let specs = new Set(group.products.map((p) => p.specialty));
     let form = null;
@@ -153,8 +221,10 @@
     for (const l of state.limits) {
       if (!specs.has(l.specialty)) continue;
       // La LS indique les formes concernées par chaque limitation ; sans indication, la limitation vaut pour toutes
-      if (form) { const fs = formsOf(l); if (fs.length && !fs.includes(form)) continue; }
-      const k = (l.ind_code || l.lim_code) + "|" + l._body;
+      if (form) { const fs = l._forms; if (fs.length && !fs.includes(form)) continue; }
+      // Recherche libre limitée à certaines présentations (ex. « keytruda sc ») : seules leurs limitations comptent
+      else if (group.hits && !group.products.some((p) => p.specialty === l.specialty && appliesTo(l, p))) continue;
+      const k = limKey(l);
       if (!seen.has(k)) seen.set(k, Object.assign({}, l, { specialties: [l.specialty] }));
       else if (!seen.get(k).specialties.includes(l.specialty)) seen.get(k).specialties.push(l.specialty);
     }
@@ -167,21 +237,20 @@
     const ts = terms(), toks = freeTokens();
     const filtering = toks.length > 0;
     if (!ts.length && !toks.length) { box.replaceChildren(); return; }
-    const cancer = cancerRegex(), keep = filtering ? productFilter() : null;
-    const codes = toks.filter((t) => /\d/.test(t));
+    const cancer = cancerRegex();
     const out = [];
     if (ts.length) {
       for (const t of ts) {
-        const groups = search(t, keep);
-        if (!groups.length) { out.push(filtering && search(t).length ? noneForFilter(t) : notFound(t)); continue; }
-        for (const g of groups) out.push(card(g, cancer, codes));
+        const found = search(t), groups = applyFree(found, toks);
+        if (!groups.length) { out.push(filtering && found.length ? noneForFilter(t) : notFound(t)); continue; }
+        for (const g of groups) out.push(card(g, cancer));
       }
     } else {
-      const groups = search(null, keep).sort((a, b) => a.substance.localeCompare(b.substance, "fr"));
+      const groups = applyFree(search(null), toks);
       if (!groups.length) out.push(el("p", "ls-none", "Aucun produit de la LS ne correspond à cette recherche."));
       else {
         out.push(el("p", "muted ls-cap", groups.length > MAX_GROUPS ? `${groups.length} substances correspondent ; les ${MAX_GROUPS} premières sont affichées. Précisez la recherche.` : `${plur(groups.length, "substance correspond", "substances correspondent")} à la recherche.`));
-        groups.slice(0, MAX_GROUPS).forEach((g) => out.push(card(g, cancer, codes)));
+        groups.slice(0, MAX_GROUPS).forEach((g) => out.push(card(g, cancer)));
       }
     }
     box.replaceChildren(...out);
@@ -210,7 +279,7 @@
     return c;
   }
 
-  function card(g, cancer, codes) {
+  function card(g, cancer) {
     const c = el("article", "card ls-card");
     c.append(el("h3", null, g.substance));
     const specs = [...new Set(g.products.map((p) => p.specialty))];
@@ -230,10 +299,11 @@
       c.append(lab);
     } else if (pres.length === 1) c.append(el("p", "muted ls-specs", "Conditionnement : " + pres[0].galenic));
     const all = limitsOf(g, state.pres[g.key] || null);
-    // Recherche d'un code précis : seules les limitations portant ce code sont affichées
-    const byCode = codes && codes.length ? all.filter((l) => codes.some((t) => norm(l.ind_code || "").includes(t) || norm(l.lim_code || "").includes(t))) : [];
-    const limits = byCode.length ? byCode : all;
-    const limited = g.products.some((p) => p.limited) || limits.length > 0;
+    // Recherche libre : les limitations qui correspondent d'abord, les autres repliées
+    const hit = g.hits ? all.filter((l) => g.hits.has(limKey(l))) : all;
+    const limits = hit.length ? hit : all;
+    const off = limits === all ? [] : all.filter((l) => !g.hits.has(limKey(l)));
+    const limited = g.products.some((p) => p.limited) || all.length > 0;
 
     if (!limited) {
       c.append(el("p", "ls-free", "Aucune limitation en cours : prise en charge dans le cadre de l'autorisation Swissmedic."));
@@ -246,7 +316,7 @@
         c.append(el("p", "ls-none", `Aucune limitation de ce médicament ne mentionne « ${cancer.name} » : indication probablement hors limitation (garantie de prise en charge nécessaire). Limitations en vigueur ci-dessous.`));
       }
       const shown = match.length ? match : limits;
-      const hidden = match.length ? rest : [];
+      const hidden = (match.length ? rest : []).concat(off);
       if (!state.pick[g.key] || !limits.some((l) => key(l) === state.pick[g.key])) state.pick[g.key] = shown.length === 1 ? key(shown[0]) : null;
       const list = el("div", "ls-lims");
       shown.forEach((l) => list.append(limitBox(g, l)));
