@@ -117,7 +117,7 @@
 
   // ----- Voie d'administration, déduite de la forme galénique de la LS -----
   // La LS distingue bien per os et perfusion ; pour « sol inj », « subst sèche »… elle ne dit pas s'il s'agit d'IV ou de SC.
-  const ROUTES = { po: "per os", iv: "perfusion intraveineuse", sc: "sous-cutanée", inj: "injection (IV ou SC)", other: "autre voie" };
+  const ROUTES = { po: "per os", iv: "perfusion IV", sc: "sous-cutanée", inj: "injectable, voie non précisée (IV ou SC)", other: "autre voie" };
   function routeOf(p) {
     const g = norm(p.galenic), b = norm(p.specialty);
     if (p.peros || /\b(cpr|caps|gran|sir|sol buv|susp buv|sol orale|susp orale|pdr orale|cpr eff|cpr disp)\b/.test(g)) return "po";
@@ -129,7 +129,9 @@
   const freeTokens = () => norm($("ls-free").value).split(" ").filter((t) => t.length >= 2);
   function productFilter() {
     const route = $("ls-route").value, toks = freeTokens();
-    return (p) => (!route || p._route === route) && toks.every((t) => p._hay.includes(t));
+    // IV et SC incluent les injectables dont la LS ne précise pas la voie : mieux vaut un résultat de trop qu'un médicament manquant
+    const okRoute = (r) => !route || r === route || (r === "inj" && (route === "iv" || route === "sc"));
+    return (p) => okRoute(p._route) && toks.every((t) => p._hay.includes(t));
   }
 
   // ----- Recherche -----
@@ -141,7 +143,7 @@
   const stem = (t) => (t.length > 5 ? t.replace(/e$/, "") : t);
 
   function search(term, keep) {
-    const st = stem(term);
+    const st = term === null ? "" : stem(term);
     const hits = state.products.filter((p) => (term === null || p._s.includes(st) || p._b.includes(term)) && (!keep || keep(p)));
     // Regroupement par substance (première DCI), toutes spécialités confondues (originaux et génériques)
     const groups = new Map();
