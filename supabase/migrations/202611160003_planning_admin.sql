@@ -117,7 +117,8 @@ insert into public.plan_settings (id, coverage) values (1, '[
 -- ----- Droits -----
 create or replace function public.can_edit_planning() returns boolean
 language sql stable security definer set search_path to 'public' as $$
-  select public.is_admin_lead() or coalesce(public.current_role_name() in ('admin', 'direction'), false);
+  select (public.is_admin_lead() or coalesce(public.current_role_name() in ('admin', 'direction'), false))
+     and public.tool_allowed(auth.uid(), 'planning');
 $$;
 
 -- Outil « planning » : lecture pour tous les membres CHUV validés (exceptions possibles par tool_access)
@@ -269,6 +270,7 @@ language plpgsql security definer set search_path to 'public' as $$
 declare v_code text := upper(trim(p->>'code'));
 begin
   if not public.can_edit_planning() then raise exception 'Réservé aux cadres administratifs.' using errcode = '42501'; end if;
+  if v_code = 'ABS' then raise exception 'Le code ABS est réservé au masquage des motifs d''absence.'; end if;
   insert into public.plan_codes (code, label, grp, bg, fg, kind, private, position, active, updated_at, updated_by)
   values (v_code, coalesce(trim(p->>'label'), ''), coalesce(nullif(trim(p->>'grp'), ''), 'Autres'), upper(coalesce(p->>'bg', '#FFFFFF')),
     upper(coalesce(p->>'fg', '#000000')), coalesce(nullif(p->>'kind', ''), 'poste'), coalesce((p->>'private')::boolean, false),

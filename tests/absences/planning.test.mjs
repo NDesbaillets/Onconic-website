@@ -71,6 +71,7 @@ test('planning administratif : droits, masquage, écriture', async (t) => {
       await db.exec('reset role'); assert.equal(await one("select bg from plan_codes where code='RDV2'"), '#21C5FF');
       await as(3);
       await assert.rejects(db.query(`select plan_code_save('{"code":"bad code"}')`), /check/);
+      await assert.rejects(db.query(`select plan_code_save('{"code":"ABS"}')`), /réservé/);
       await db.query(`select plan_coverage_save('[{"label":"AM","codes":["AM1"],"min":3}]')`);
       await assert.rejects(db.query(`select plan_coverage_save('[{"label":"","codes":[],"min":3}]')`), /invalide/);
       await as(5); await assert.rejects(db.query(`select plan_code_save('{"code":"X1"}')`), /Réservé/);

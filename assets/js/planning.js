@@ -644,7 +644,13 @@
     ws.getRow(1).eachCell((c, col) => { const t = cellText(c.value).toLowerCase().replace(/\.$/, ""); if (t) head[t] = col; });
     const col = (n) => head[n];
     const dates = [];
-    ws.getRow(1).eachCell((c, cn) => { if (c.value instanceof Date) { const d = c.value; dates.push([cn, new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12)]); } });
+    // Une date par jour, sur deux colonnes fusionnées (matin, après-midi) : seule la première colonne de la fusion compte
+    ws.getRow(1).eachCell((c, cn) => {
+      if (!(c.value instanceof Date) || (c.isMerged && c.master && c.master.address !== c.address)) return;
+      const d = c.value, day = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12);
+      if (dates.length && iso(dates[dates.length - 1][1]) === iso(day)) return;
+      dates.push([cn, day]);
+    });
     if (!dates.length || !col("nom")) throw new Error("format non reconnu (ligne 1 : Resp., %, Bloc, Titre, Prénom, Nom, puis les dates)");
     // Légende (2e feuille) : libellé en colonne A, codes colorés sur la même ligne
     const legend = {};
