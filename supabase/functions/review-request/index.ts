@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
   } else {
     ({ error: roleError } = await admin.from("profiles").update({ role }).eq("id", invited.user.id));
   }
-  if (roleError) console.error("role update failed", roleError);
+  if (roleError) console.error("role update failed", (roleError as { message?: string }).message ?? "unknown");
 
   await finish("invited", role);
   return json(req, 200, { ok: true, status: "invited", role, role_set: !roleError, user_id: invited.user.id });
