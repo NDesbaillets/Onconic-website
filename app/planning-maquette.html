@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self'; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Planning admin (maquette) · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
+  <link rel="stylesheet" href="/assets/css/planning-maquette.css?v=20261116a">
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/planning-maquette.js?v=20261116a" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+    </div>
+  </header>
+
+  <main>
+    <section class="pl">
+      <div class="pl-wrap">
+        <span class="eyebrow">Outil des cadres administratifs · maquette</span>
+        <h1>Planning administratif</h1>
+        <p class="pl-mock">Maquette cliquable : collaborateurs fictifs, rien n'est envoyé au serveur. Vos essais restent dans ce navigateur ; « Réinitialiser » rétablit les données de départ.</p>
+
+        <div class="pl-bar">
+          <div class="pl-seg" role="group" aria-label="Point de vue">
+            <button type="button" data-view="cadre" class="on">Cadre admin (édition)</button>
+            <button type="button" data-view="lecture">Admin (lecture seule)</button>
+          </div>
+          <div class="pl-seg" role="group" aria-label="Période">
+            <button type="button" data-span="5">Semaine</button>
+            <button type="button" data-span="10" class="on">2 semaines</button>
+            <button type="button" data-span="month">Mois</button>
+          </div>
+          <div class="pl-nav">
+            <button type="button" class="btn btn-outline" id="pl-prev" aria-label="Période précédente">‹</button>
+            <button type="button" class="btn btn-outline" id="pl-today">Aujourd'hui</button>
+            <button type="button" class="btn btn-outline" id="pl-next" aria-label="Période suivante">›</button>
+            <strong id="pl-range"></strong>
+          </div>
+          <label class="pl-filter">Équipe
+            <select id="pl-team"><option value="">Toutes</option></select>
+          </label>
+          <label class="pl-filter">Nom<input id="pl-q" type="search" autocomplete="off" placeholder="filtrer"></label>
+        </div>
+
+        <div class="pl-tools" id="pl-tools">
+          <div class="pl-palette" id="pl-palette" aria-label="Codes"></div>
+          <div class="pl-actions">
+            <button type="button" class="btn btn-outline" id="pl-undo" title="Ctrl+Z">Annuler</button>
+            <button type="button" class="btn btn-outline" id="pl-copy">Copier la 1re semaine affichée…</button>
+            <button type="button" class="btn btn-outline" id="pl-min">Minimums de couverture…</button>
+            <button type="button" class="btn btn-outline" id="pl-reset">Réinitialiser</button>
+          </div>
+          <p class="pl-help">Choisissez un code, puis cliquez ou glissez sur la grille. Maj + clic remplit le rectangle depuis la dernière cellule. Clic sur un nom : semaine type et absences sur une période. Clic droit ou « Gomme » : effacer.</p>
+        </div>
+        <div class="pl-tools" id="pl-me" hidden>
+          <p class="pl-help">Vue d'une collaboratrice (Léa Rochat) : sa ligne est surlignée, les motifs d'absence des autres (maladie, congé, militaire) sont masqués.
+            <label class="pl-inline"><input type="checkbox" id="pl-only-me"> Seulement ma ligne</label></p>
+        </div>
+
+        <div class="pl-export">
+          <button type="button" class="btn" id="pl-xlsx">Exporter en Excel</button>
+          <select id="pl-xlsx-span" aria-label="Période exportée">
+            <option value="view">Période affichée</option>
+            <option value="all">Nov. 2026 à janv. 2027</option>
+          </select>
+          <span class="muted" id="pl-xlsx-msg" role="status"></span>
+        </div>
+
+        <div class="pl-scroll" id="pl-scroll">
+          <table class="pl-grid" id="pl-grid"></table>
+        </div>
+        <div class="pl-legend" id="pl-legend"></div>
+      </div>
+    </section>
+  </main>
+
+  <dialog class="pl-dlg" id="pl-person">
+    <form method="dialog" id="pl-person-form">
+      <h2 id="pl-person-title"></h2>
+      <p class="muted" id="pl-person-meta"></p>
+      <h3>Semaine type</h3>
+      <div class="pl-week" id="pl-week"></div>
+      <div class="pl-row">
+        <label>du <input type="date" id="pl-wk-from"></label>
+        <label>au <input type="date" id="pl-wk-to"></label>
+        <button type="button" class="btn btn-outline" id="pl-wk-apply">Appliquer la semaine type</button>
+      </div>
+      <p class="muted">Les absences et les jours fériés déjà saisis sont conservés.</p>
+      <h3>Absence sur une période</h3>
+      <div class="pl-row">
+        <select id="pl-abs-code"></select>
+        <label>du <input type="date" id="pl-abs-from"></label>
+        <select id="pl-abs-from-h"><option value="0">matin</option><option value="1">après-midi</option></select>
+        <label>au <input type="date" id="pl-abs-to"></label>
+        <select id="pl-abs-to-h"><option value="1">après-midi</option><option value="0">matin</option></select>
+        <button type="button" class="btn btn-outline" id="pl-abs-apply">Saisir l'absence</button>
+      </div>
+      <p class="form-msg" id="pl-person-msg" role="status"></p>
+      <div class="pl-row pl-end"><button class="btn btn-navy" value="close">Fermer</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="pl-dlg" id="pl-copy-dlg">
+    <form method="dialog">
+      <h2>Copier une semaine</h2>
+      <p id="pl-copy-src"></p>
+      <div class="pl-row">
+        <label>sur les <input type="number" id="pl-copy-n" min="1" max="12" value="3"> semaines suivantes</label>
+      </div>
+      <label class="pl-inline"><input type="checkbox" id="pl-copy-keep" checked> Conserver les absences déjà saisies</label>
+      <div class="pl-row pl-end">
+        <button class="btn btn-outline" value="cancel">Annuler</button>
+        <button class="btn" value="ok" id="pl-copy-ok">Copier</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="pl-dlg" id="pl-min-dlg">
+    <form method="dialog">
+      <h2>Minimums de couverture par demi-journée</h2>
+      <p class="muted">Sous le minimum, le compteur passe en rouge.</p>
+      <div class="pl-mins" id="pl-mins"></div>
+      <div class="pl-row pl-end"><button class="btn" value="ok">Enregistrer</button></div>
+    </form>
+  </dialog>
+</body>
+</html>
