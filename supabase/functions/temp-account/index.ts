@@ -102,12 +102,12 @@ Deno.serve(async (req) => {
   }
 
   // Le profil est créé par le déclencheur d'inscription ; on le complète. En cas d'échec, le compte est retiré.
-  const { error: profileError } = await admin.from("profiles").update({
+  const { data: updated, error: profileError } = await admin.from("profiles").update({
     role: "assistant", first_name: first, last_name: last, full_name: fullName, institution: "CHUV",
     access_until: until, created_by: caller.user.id, admin_lead: false,
-  }).eq("id", userId);
-  if (profileError) {
-    console.error("profile update failed", profileError.message);
+  }).eq("id", userId).select("id");
+  if (profileError || !updated?.length) {
+    console.error("profile update failed", profileError?.message ?? "no row");
     await admin.auth.admin.deleteUser(userId);
     return json(req, 500, { error: "profile_failed" });
   }

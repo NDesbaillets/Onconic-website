@@ -130,7 +130,12 @@ $function$;
 create or replace function public.temp_account_ban(p_user uuid, p_on boolean) returns void
 language plpgsql security definer set search_path to 'public' as $$
 begin
-  update auth.users set banned_until = case when p_on then timestamptz '2999-12-31 00:00+00' else null end where id = p_user;
+  -- Le déblocage ne lève que le blocage posé ici (date repère), jamais un blocage d'une autre origine
+  if p_on then
+    update auth.users set banned_until = timestamptz '2999-12-31 00:00+00' where id = p_user;
+  else
+    update auth.users set banned_until = null where id = p_user and banned_until = timestamptz '2999-12-31 00:00+00';
+  end if;
 end;
 $$;
 revoke execute on function public.temp_account_ban(uuid, boolean) from public, anon, authenticated;
@@ -166,7 +171,7 @@ begin
     select p.id, u.email::text, p.first_name, p.last_name, p.access_until, p.access_until >= public.ch_date(),
            u.created_at, u.last_sign_in_at, public.member_name(p.created_by)
       from public.profiles p join auth.users u on u.id = p.id
-     where p.access_until is not null and p.role = 'assistant'
+     where p.access_until is not null and p.role = 'assistant' and p.created_by is not null
      order by (p.access_until >= public.ch_date()) desc, p.access_until desc, lower(coalesce(p.last_name, ''));
 end;
 $$;
@@ -176,14 +181,15 @@ grant execute on function public.temp_accounts() to authenticated;
 -- Prolonger, raccourcir ou terminer l'accès d'un compte temporaire (jamais d'un compte permanent)
 create or replace function public.temp_account_set_until(p_user uuid, p_until date) returns date
 language plpgsql security definer set search_path to 'public' as $$
-declare v_role text; v_old date; v_lead boolean; v_today date := public.ch_date();
+declare v_role text; v_old date; v_lead boolean; v_by uuid; v_today date := public.ch_date();
 begin
   if not public.can_manage_temps() then raise exception 'Réservé aux cadres administratifs.' using errcode = '42501'; end if;
   if p_until is null then raise exception 'Indiquez une date de fin d''accès.'; end if;
   if p_until > v_today + 366 then raise exception 'Fin d''accès trop lointaine (un an au plus).'; end if;
   if p_until < v_today - 1 then p_until := v_today - 1; end if;
-  select role, access_until, admin_lead into v_role, v_old, v_lead from public.profiles where id = p_user for update;
-  if v_role is null or v_old is null or v_role <> 'assistant' or v_lead then
+  -- Compte temporaire = créé par un cadre administratif (created_by) ; une limite posée par l'admin sur un compte permanent n'en fait pas un
+  select role, access_until, admin_lead, created_by into v_role, v_old, v_lead, v_by from public.profiles where id = p_user for update;
+  if v_role is null or v_old is null or v_by is null or v_role <> 'assistant' or v_lead then
     raise exception 'Ce compte n''est pas un compte temporaire.' using errcode = '42501';
   end if;
   update public.profiles set access_until = p_until where id = p_user;

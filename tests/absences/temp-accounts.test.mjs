@@ -25,8 +25,8 @@ test('comptes temporaires : droits, fin d\'accès, blocage et journal', async (t
       await db.query('insert into auth.users(id,email) values($1,$2)', [uid(n), `t${n}@example.invalid`]);
       await db.query('insert into profiles(id,full_name,role,institution) values($1,$2,$3,$4)', [uid(n), `Test ${n}`, role, 'CHUV']);
     }
-    await db.query("update profiles set access_until = ch_date() + 10 where id=$1", [uid(5)]);
-    await db.query("update profiles set access_until = ch_date() - 1 where id=$1", [uid(6)]);
+    await db.query("update profiles set access_until = ch_date() + 10, created_by=$2 where id=$1", [uid(5), uid(2)]);
+    await db.query("update profiles set access_until = ch_date() - 1, created_by=$2 where id=$1", [uid(6), uid(2)]);
 
     await t.test('fonction cadre administratif : posée par la direction, sur une assistante permanente seulement', async () => {
       await as(4); await assert.rejects(db.query('select admin_set_admin_lead($1,true)', [uid(4)]), /admin only/);
@@ -79,6 +79,16 @@ test('comptes temporaires : droits, fin d\'accès, blocage et journal', async (t
       await db.exec('reset role');
       assert.ok(await one('select banned_until > now() from auth.users where id=$1', [uid(6)]));
       assert.deepEqual((await db.query("select action from temp_account_log where actor=$1 order by id", [uid(3)])).rows.map((r) => r.action), ['extend', 'end']);
+    });
+    await t.test('limite posée par l\'admin sur un compte permanent : hors de portée du cadre, blocage étranger conservé', async () => {
+      await as(2); await db.query('select admin_set_access_until($1, ch_date()-1)', [uid(4)]);
+      await as(3);
+      await assert.rejects(db.query('select temp_account_set_until($1, ch_date()+30)', [uid(4)]), /pas un compte temporaire/);
+      assert.ok(!(await db.query('select id from temp_accounts()')).rows.some((r) => r.id === uid(4)));
+      await db.exec('reset role');
+      await db.query("update auth.users set banned_until = now() + interval '3 days' where id=$1", [uid(7)]);
+      await db.query('select temp_account_ban($1,false)', [uid(7)]);
+      assert.ok(await one('select banned_until is not null from auth.users where id=$1', [uid(7)]));
     });
     await t.test('journal et fonctions internes inaccessibles aux membres', async () => {
       await as(3);
