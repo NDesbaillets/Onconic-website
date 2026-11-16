@@ -721,8 +721,9 @@ p { margin: 0 0 var(--space-3); max-width: var(--measure); }
 .ls-bar { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr) minmax(0, 2fr); gap: var(--space-3); align-items: end; }
 .ls-bar label { display: grid; gap: 4px; font-weight: 500; font-size: .9rem; color: var(--navy-800); min-width: 0; }
 .ls-bar select, .ls-bar input { font: inherit; font-weight: 400; min-height: 44px; padding: 8px 12px; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); color: var(--ink-900); min-width: 0; width: 100%; }
-.ls-bar2 { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr); margin-top: var(--space-3); }
-.ls-route-badge { margin-left: var(--space-2); font-size: .75rem; vertical-align: middle; }
+.ls-bar2 { grid-template-columns: minmax(0, 1fr); margin-top: var(--space-3); }
+.ls-pres { display: grid; gap: 4px; max-width: 520px; margin: var(--space-2) 0 var(--space-3); font-weight: 500; font-size: .9rem; color: var(--navy-800); }
+.ls-pres select { font: inherit; font-weight: 400; min-height: 40px; padding: 6px 10px; border: 1px solid var(--navy-200); background: var(--white); }
 .ls-cap { font-size: .85rem; }
 .ls-help { font-size: .85rem; margin: var(--space-2) 0 var(--space-3); }
 #ls-results { display: grid; gap: var(--space-3); }
