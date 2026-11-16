@@ -1,0 +1,18 @@
+/* Page d'examen d'une demande d'accès */
+.rv-login { background: var(--amber-50); border-left: 3px solid var(--amber-500); padding: var(--space-2) var(--space-3); }
+.rv-form { max-width: 820px; margin-top: var(--space-4); display: grid; gap: var(--space-3); }
+.rv-form h2 { font-size: 1.4rem; margin: 0; }
+.rv-row { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: end; }
+.rv-row > label { display: grid; gap: 4px; font-weight: 500; color: var(--navy-800); }
+.rv-row select { font: inherit; padding: 8px 10px; border: 1px solid var(--navy-200); min-width: 240px; }
+.rv-inst { border: 0; padding: 0; margin: 0; display: flex; gap: var(--space-3); align-items: center; }
+.rv-inst legend { font-weight: 500; color: var(--navy-800); padding: 0; margin-bottom: 4px; }
+.rv-inst label { display: inline-flex; gap: 6px; align-items: center; }
+.rv-box { border: 1px solid var(--navy-100); padding: var(--space-2) var(--space-3) var(--space-3); margin: 0; }
+.rv-box legend { font-weight: 500; color: var(--navy-800); padding: 0 4px; }
+.rv-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px var(--space-3); margin-top: var(--space-2); }
+.rv-check { display: inline-flex; gap: 8px; align-items: center; font-size: .95rem; }
+.rv-note { margin: 0; font-size: .88rem; }
+.rv-result { list-style: none; padding: 0; margin: var(--space-2) 0 0; }
+.rv-result li { padding: 2px 0; }
+.rv-form > .btn { justify-self: start; }

@@ -16,10 +16,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
+  <link rel="stylesheet" href="/assets/css/review.css?v=20261116a">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/review.js?v=20261101p" defer></script>
+  <script src="/assets/js/review.js?v=20261116a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -43,6 +44,30 @@
           </ul>
           <button class="btn" id="review-confirm" type="button"></button>
         </div>
+        <p class="rv-login" id="review-login" hidden>Pour inviter, connectez-vous avec un compte administrateur : <a id="review-login-link" href="/fr/the-hive.html">se connecter</a>. Vous reviendrez ensuite sur cette page.</p>
+        <form class="rv-form" id="review-form" hidden novalidate>
+          <h2>Accès du nouveau membre</h2>
+          <div class="rv-row">
+            <label>Rôle<select id="rv-role"></select></label>
+            <fieldset class="rv-inst"><legend>Institution</legend>
+              <label><input type="radio" name="rv-inst" value="CHUV"> CHUV</label>
+              <label><input type="radio" name="rv-inst" value=""> Hors CHUV</label>
+            </fieldset>
+          </div>
+          <p class="muted rv-note" id="rv-role-note"></p>
+          <fieldset class="rv-box" id="rv-clinics-box"><legend>Cliniques de rattachement (planning et validation des absences)</legend><div class="rv-checks" id="rv-clinics"></div></fieldset>
+          <fieldset class="rv-box" id="rv-kt-box"><legend>Cliniques dont il ou elle modifie et valide les fiches Key trials</legend><div class="rv-checks" id="rv-kt"></div></fieldset>
+          <fieldset class="rv-box" id="rv-val-box"><legend>Validation des absences</legend>
+            <label class="rv-check"><input type="checkbox" id="rv-val"> Validateur·trice des absences</label>
+            <div class="rv-checks" id="rv-val-clinics" hidden></div>
+          </fieldset>
+          <fieldset class="rv-box" id="rv-tools-box"><legend>Outils ouverts d'emblée</legend>
+            <div class="rv-checks" id="rv-tools"></div>
+            <p class="muted rv-note">Cochés selon les droits par défaut du rôle ; toute différence devient une exception visible dans « Membres et accès ».</p>
+          </fieldset>
+          <p class="muted rv-note" id="rv-fixed" hidden>Admin et direction : accès fixés par le rôle.</p>
+          <button class="btn" type="submit" id="rv-submit">Inviter et appliquer ces réglages</button>
+        </form>
         <p class="form-msg" id="review-msg" role="status" aria-live="polite">Chargement…</p>
       </div>
     </section>

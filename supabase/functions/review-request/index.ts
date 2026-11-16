@@ -1,12 +1,18 @@
 // Traitement d'une demande depuis le lien reçu par e-mail (page /admin/review.html).
 // { confirm: false } renvoie le détail de la demande ; { confirm: true } exécute l'action :
-// invite_clinician / invite_assistant / invite_pharmacist (invitation Supabase + rôle) ou decline.
+// - review (16.11.2026) : l'admin, connecté, choisit le rôle et l'institution ; le rôle est posé par admin_set_role
+//   avec SA session (mêmes contrôles que la page Membres). Cliniques, valideurs et outils sont ensuite réglés par la page.
+// - invite_clinician / invite_assistant / invite_pharmacist : anciens liens (encore valables 7 jours), rôle fixe ;
+// - decline.
 // Le lien est signé (REVIEW_SECRET), expire, et ne sert qu'une fois (statut « pending »).
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const SITE = "https://onconic.ch";
 const ORIGINS = [SITE, "https://www.onconic.ch"];
+// Aperçus Cloudflare (projet de test) : l'invitation exige de toute façon le lien signé et, pour « review », une session admin
+const PREVIEW = /^https:\/\/([a-z0-9-]+\.)?onconic\.pages\.dev$/;
 const ROLES: Record<string, string> = { invite_clinician: "clinician", invite_assistant: "assistant", invite_pharmacist: "pharmacist" };
+const REVIEW_ROLES = ["clinician", "cdc", "cadre", "assistant", "nurse", "pharmacist", "direction", "admin"];
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },
@@ -15,7 +21,7 @@ const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE
 function corsHeaders(req: Request) {
   const origin = req.headers.get("origin") ?? "";
   return {
-    "Access-Control-Allow-Origin": ORIGINS.includes(origin) ? origin : SITE,
+    "Access-Control-Allow-Origin": ORIGINS.includes(origin) || PREVIEW.test(origin) ? origin : SITE,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
@@ -59,7 +65,7 @@ Deno.serve(async (req) => {
   const action = String(body.action ?? "");
   const exp = Number(body.exp);
   const sig = String(body.sig ?? "");
-  if (!Number.isInteger(id) || !(action in ROLES || action === "decline") || !Number.isInteger(exp)) {
+  if (!Number.isInteger(id) || !(action in ROLES || action === "decline" || action === "review") || !Number.isInteger(exp)) {
     return json(req, 400, { error: "invalid_link" });
   }
   if (!(await validSignature(`${id}.${action}.${exp}`, sig))) return json(req, 403, { error: "invalid_link" });
@@ -71,6 +77,23 @@ Deno.serve(async (req) => {
 
   if (body.confirm !== true) return json(req, 200, { request, action });
   if (request.status !== "pending") return json(req, 409, { error: "already_handled", status: request.status });
+
+  // « review » : l'appelant doit être connecté comme admin ou direction ; le rôle demandé est vérifié avant toute invitation
+  let caller: ReturnType<typeof createClient> | null = null;
+  let reviewRole = "";
+  if (action === "review") {
+    const jwt = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+    const { data: who } = await admin.auth.getUser(jwt);
+    if (!who?.user) return json(req, 401, { error: "login_required" });
+    caller = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      auth: { persistSession: false }, global: { headers: { Authorization: "Bearer " + jwt } },
+    });
+    const { data: myRole } = await caller.rpc("current_role_name");
+    if (myRole !== "admin" && myRole !== "direction") return json(req, 403, { error: "forbidden" });
+    reviewRole = String(body.role ?? "");
+    if (!REVIEW_ROLES.includes(reviewRole)) return json(req, 400, { error: "invalid_role" });
+    if ((reviewRole === "admin" || reviewRole === "direction") && myRole !== "admin") return json(req, 403, { error: "admin_only_role" });
+  }
 
   // Réserve la demande (évite un double traitement si deux clics arrivent en même temps)
   const { data: claimed } = await admin.from("contact_requests")
@@ -86,7 +109,7 @@ Deno.serve(async (req) => {
     return json(req, 200, { ok: true, status: "declined" });
   }
 
-  const role = ROLES[action];
+  const role = action === "review" ? reviewRole : ROLES[action];
   const { data: invited, error } = await admin.auth.admin.inviteUserByEmail(request.email, {
     redirectTo: SITE + (request.lang === "fr" ? "/fr/nouveau-mot-de-passe.html" : "/reset-password.html"),
     data: { full_name: request.name },
@@ -99,9 +122,18 @@ Deno.serve(async (req) => {
   }
 
   // Le profil est créé par le déclencheur à l'insertion dans auth.users ; on lui donne son rôle.
-  const { error: roleError } = await admin.from("profiles").update({ role }).eq("id", invited.user.id);
+  let roleError: unknown = null;
+  if (caller) {
+    // Institution choisie par l'admin (les droits de plusieurs outils dépendent du CHUV), puis rôle par admin_set_role
+    const institution = body.institution === "CHUV" ? "CHUV" : null;
+    const { error: instError } = await admin.from("profiles").update({ institution }).eq("id", invited.user.id);
+    if (instError) console.error("institution update failed", instError.message);
+    ({ error: roleError } = await caller.rpc("admin_set_role", { p_user: invited.user.id, p_role: role }));
+  } else {
+    ({ error: roleError } = await admin.from("profiles").update({ role }).eq("id", invited.user.id));
+  }
   if (roleError) console.error("role update failed", roleError);
 
   await finish("invited", role);
-  return json(req, 200, { ok: true, status: "invited", role, role_set: !roleError });
+  return json(req, 200, { ok: true, status: "invited", role, role_set: !roleError, user_id: invited.user.id });
 });
