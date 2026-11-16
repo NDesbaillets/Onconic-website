@@ -31,7 +31,7 @@
   const CLINICS = Object.keys(CANCERS);
   const GUARANTEE = /garantie|accord prealable|autorisation prealable|consultation prealable du medecin[- ]conseil/;
 
-  const state = { products: [], limits: [], rx: [], changes: [], meta: null, admin: false, uid: null, pick: {}, rxPick: {}, sitPick: {}, cart: [] };
+  const state = { products: [], limits: [], rx: [], changes: [], meta: null, admin: false, uid: null, pick: {}, rxPick: {}, sitPick: {}, pres: {}, cart: [] };
 
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
   function el(tag, cls, txt) {
@@ -81,8 +81,8 @@
     const limHay = new Map();
     for (const l of limits) limHay.set(l.specialty, (limHay.get(l.specialty) || "") + " " + norm([l.lim_code, l.ind_code, l.body].join(" ")));
     for (const p of products) {
-      p._s = norm(p.substance); p._b = norm(p.specialty); p._route = routeOf(p);
-      p._hay = norm([p.specialty, p.galenic, p.substance, p.atc, ROUTES[p._route]].join(" ")) + (limHay.get(p.specialty) || "");
+      p._s = norm(p.substance); p._b = norm(p.specialty);
+      p._hay = norm([p.specialty, p.galenic, p.substance, p.atc].join(" ")) + (limHay.get(p.specialty) || "");
     }
     for (const r of rx) r._k = stem(norm(r.substance));
     state.products = products; state.limits = limits; state.changes = changes; state.meta = meta.data;
@@ -115,23 +115,10 @@
   // « Osimertinibum (mésilate) » → « osimertinibum »
   const shortSubstance = (s) => String(s || "").split(/[,(]/)[0].trim();
 
-  // ----- Voie d'administration, déduite de la forme galénique de la LS -----
-  // La LS distingue bien per os et perfusion ; pour « sol inj », « subst sèche »… elle ne dit pas s'il s'agit d'IV ou de SC.
-  const ROUTES = { po: "per os", iv: "perfusion IV", sc: "sous-cutanée", inj: "injectable, voie non précisée (IV ou SC)", other: "autre voie" };
-  function routeOf(p) {
-    const g = norm(p.galenic), b = norm(p.specialty);
-    if (p.peros || /\b(cpr|caps|gran|sir|sol buv|susp buv|sol orale|susp orale|pdr orale|cpr eff|cpr disp)\b/.test(g)) return "po";
-    if (/\b(s\.?c\.?|sous-cutan|subcutan)/.test(g) || /\bs\.?c\.?\b|subcutan/.test(b)) return "sc";
-    if (/perf|\bi\.?v\.?\b|intraveine/.test(g)) return "iv";
-    if (/inj|subst seche|lyoph|\bpdr\b|stylo|seringue|\bser\b|implant/.test(g)) return "inj";
-    return "other";
-  }
   const freeTokens = () => norm($("ls-free").value).split(" ").filter((t) => t.length >= 2);
   function productFilter() {
-    const route = $("ls-route").value, toks = freeTokens();
-    // IV et SC incluent les injectables dont la LS ne précise pas la voie : mieux vaut un résultat de trop qu'un médicament manquant
-    const okRoute = (r) => !route || r === route || (r === "inj" && (route === "iv" || route === "sc"));
-    return (p) => okRoute(p._route) && toks.every((t) => p._hay.includes(t));
+    const toks = freeTokens();
+    return (p) => toks.every((t) => p._hay.includes(t));
   }
 
   // ----- Recherche -----
@@ -155,11 +142,18 @@
     return [...groups.values()];
   }
 
-  function limitsOf(group) {
-    const specs = new Set(group.products.map((p) => p.specialty));
+  // Conditionnement choisi dans la liste de la carte : « spécialité|forme », vide = tous
+  const presKey = (p) => p.specialty + "|" + (p.galenic || "");
+  const formsOf = (l) => String(l.galenics || "").split(";").map((f) => norm(f)).filter(Boolean);
+  function limitsOf(group, pres) {
+    let specs = new Set(group.products.map((p) => p.specialty));
+    let form = null;
+    if (pres) { const [sp, gal] = pres.split("|"); specs = new Set([sp]); form = norm(gal); }
     const seen = new Map();
     for (const l of state.limits) {
       if (!specs.has(l.specialty)) continue;
+      // La LS indique les formes concernées par chaque limitation ; sans indication, la limitation vaut pour toutes
+      if (form) { const fs = formsOf(l); if (fs.length && !fs.includes(form)) continue; }
       const k = (l.ind_code || l.lim_code) + "|" + l._body;
       if (!seen.has(k)) seen.set(k, Object.assign({}, l, { specialties: [l.specialty] }));
       else if (!seen.get(k).specialties.includes(l.specialty)) seen.get(k).specialties.push(l.specialty);
@@ -170,12 +164,9 @@
   const MAX_GROUPS = 40;
   function render() {
     const box = $("ls-results");
-    const ts = terms(), toks = freeTokens(), route = $("ls-route").value;
-    const filtering = toks.length > 0 || !!route;
-    if (!ts.length && !toks.length) {
-      box.replaceChildren(...(route ? [el("p", "muted ls-cap", "Saisissez un médicament ou une recherche libre pour afficher les produits de cette voie.")] : []));
-      return;
-    }
+    const ts = terms(), toks = freeTokens();
+    const filtering = toks.length > 0;
+    if (!ts.length && !toks.length) { box.replaceChildren(); return; }
     const cancer = cancerRegex(), keep = filtering ? productFilter() : null;
     const codes = toks.filter((t) => /\d/.test(t));
     const out = [];
@@ -197,7 +188,7 @@
   }
   function noneForFilter(t) {
     const c = el("article", "card ls-card");
-    c.append(el("h3", null, t), el("p", "ls-none", "Présent dans la LS, mais aucune présentation ne correspond à la voie ou à la recherche libre choisies."));
+    c.append(el("h3", null, t), el("p", "ls-none", "Présent dans la LS, mais aucune présentation ne correspond à la recherche libre."));
     return c;
   }
 
@@ -221,13 +212,24 @@
 
   function card(g, cancer, codes) {
     const c = el("article", "card ls-card");
-    const h = el("h3", null, g.substance);
-    for (const r of [...new Set(g.products.map((p) => p._route))]) h.append(el("span", "ug-badge ls-route-badge", ROUTES[r]));
-    c.append(h);
+    c.append(el("h3", null, g.substance));
     const specs = [...new Set(g.products.map((p) => p.specialty))];
-    const forms = [...new Set(g.products.map((p) => p.galenic).filter(Boolean))];
-    c.append(el("p", "muted ls-specs", `${specs.join(", ")} · ${forms.slice(0, 6).join(" ; ")}${forms.length > 6 ? " …" : ""}`));
-    const all = limitsOf(g);
+    c.append(el("p", "muted ls-specs", specs.join(", ")));
+    // Liste des conditionnements : chacun peut avoir ses propres limitations et codes d'indication (ex. Keytruda IV et SC)
+    const pres = [...new Map(g.products.map((p) => [presKey(p), p])).values()]
+      .sort((a, b) => a.specialty.localeCompare(b.specialty, "fr") || String(a.galenic).localeCompare(String(b.galenic), "fr", { numeric: true }));
+    if (state.pres[g.key] && !pres.some((p) => presKey(p) === state.pres[g.key])) delete state.pres[g.key];
+    if (pres.length > 1) {
+      const lab = el("label", "ls-pres");
+      const sel = el("select");
+      const all0 = el("option", null, `Tous les conditionnements (${pres.length})`); all0.value = ""; sel.append(all0);
+      for (const p of pres) { const o = el("option", null, specs.length > 1 ? `${p.specialty} · ${p.galenic}` : p.galenic); o.value = presKey(p); sel.append(o); }
+      sel.value = state.pres[g.key] || "";
+      sel.addEventListener("change", () => { state.pres[g.key] = sel.value; render(); });
+      lab.append(el("span", null, "Conditionnement"), sel);
+      c.append(lab);
+    } else if (pres.length === 1) c.append(el("p", "muted ls-specs", "Conditionnement : " + pres[0].galenic));
+    const all = limitsOf(g, state.pres[g.key] || null);
     // Recherche d'un code précis : seules les limitations portant ce code sont affichées
     const byCode = codes && codes.length ? all.filter((l) => codes.some((t) => norm(l.ind_code || "").includes(t) || norm(l.lim_code || "").includes(t))) : [];
     const limits = byCode.length ? byCode : all;
@@ -612,7 +614,6 @@
     fillClinics(); fillCancers(); renderMeta(); fillDatalist(); setupCart();
     let t;
     for (const id of ["ls-q", "ls-free"]) $(id).addEventListener("input", () => { clearTimeout(t); t = setTimeout(render, 200); });
-    $("ls-route").addEventListener("change", render);
     const q = new URLSearchParams(location.search).get("q");
     if (q) { $("ls-q").value = q; render(); }
     if (state.admin) {
