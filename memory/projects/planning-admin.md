@@ -74,4 +74,15 @@ Le but est de remplacer le tableur Excel des cadres administratifs : une ligne p
   - export Excel au format du tableur, avec la couverture et la légende ;
   - import du tableur : lu dans le navigateur, sans doublon si relancé. Les codes inconnus vont dans le groupe « À définir », avec la couleur de la case et le libellé de la 2e feuille.
 - **Jours fériés vaudois** : calculés dans le navigateur, comme dans Absences.
-- **Plus tard (V2/V3)** : lien avec l'app Absences, abonnement agenda « Mon planning », historique des modifications.
+
+## V2 (16.11.2026, migration `202611160004_planning_v2.sql`, fonction `plan-feed`)
+- **Lien avec Absences** : pour une ligne reliée à un compte, les absences demandées ou validées de l'app Absences s'affichent là où aucune case n'est posée à la main.
+  - Correspondance des codes : vacances → V, congrès → CONG (nouveau code), autre → CA (privé).
+  - Affichage : cadre pointillé ; une demande en attente est pâlie, avec « ? ».
+  - Pour un lecteur, une absence n'apparaît que si la personne l'a rendue visible dans Absences, et le motif privé reste « ABS ».
+  - Une case posée à la main prime toujours sur l'absence.
+  - L'export Excel montre ces absences en italique, avec une note.
+- **Historique** : `plan_cells_log`, rempli par déclencheur à chaque création, modification ou effacement de case. Il est consultable par les éditeurs dans la fiche (`plan_history`). L'import du tableur, antérieur au déclencheur, n'y figure pas.
+- **Mon agenda** : bouton visible si une ligne est reliée au compte.
+  - `plan_calendar_token` réutilise le jeton secret de `calendar_tokens`, partagé avec les autres flux personnels.
+  - Le flux est servi par l'Edge Function `plan-feed` (sans JWT, jeton dans l'adresse) : un événement par jour, de J-30 à J+180.

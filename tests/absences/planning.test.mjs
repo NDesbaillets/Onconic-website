@@ -14,12 +14,16 @@ test('planning administratif : droits, masquage, écriture', async (t) => {
   try {
     await db.exec(await read('tests/absences/fixture.sql'));
     await db.exec('alter table auth.users add column banned_until timestamptz;');
+    // calendar_tokens comme en production (clé primaire et jeton par défaut)
+    await db.exec("alter table public.calendar_tokens add primary key (user_id); alter table public.calendar_tokens alter column token set default replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');");
     for (const f of ['absences.sql', 'cadre_medecin.sql', 'cadre_validateur.sql', 'absences_validation.sql', 'absences_forms.sql', 'absences_cliniques_datees.sql', 'admin_direction.sql', 'absences_export.sql', 'absences_soldes.sql', 'absences_visibilite.sql', 'absences_preavis.sql', 'absences_vue_ensemble.sql'])
       await db.exec(await read('supabase/' + f));
     for (const f of ['202611110001_absence_hardening.sql', '202611120001_nurse_role.sql', '202611120002_assistant_default_tools.sql', '202611130001_securite_advisors.sql', '202611160002_comptes_temporaires.sql'])
       await db.exec(await read('supabase/migrations/' + f));
     const mig = await read('supabase/migrations/202611160003_planning_admin.sql');
     await db.exec(mig); await db.exec(mig);
+    const v2 = await read('supabase/migrations/202611160004_planning_v2.sql');
+    await db.exec(v2); await db.exec(v2);
     // 1 admin, 2 direction, 3 assistante cadre admin, 4 assistante, 5 médecin, 6 médecin hors CHUV, 7 en attente
     for (const [n, role, inst] of [[1, 'admin', 'CHUV'], [2, 'direction', 'CHUV'], [3, 'assistant', 'CHUV'], [4, 'assistant', 'CHUV'], [5, 'clinician', 'CHUV'], [6, 'clinician', null], [7, 'member', 'CHUV']]) {
       await db.query('insert into auth.users(id,email) values($1,$2)', [uid(n), `t${n}@example.invalid`]);
@@ -81,6 +85,36 @@ test('planning administratif : droits, masquage, écriture', async (t) => {
         await as(n);
         for (const tb of ['plan_cells', 'plan_staff', 'plan_codes', 'plan_settings']) await assert.rejects(db.query(`select * from ${tb}`), /permission denied/, tb);
       }
+    });
+    await t.test('V2 : absences reliées, historique, agenda', async () => {
+      await db.exec('reset role');
+      // Absences du compte 4 (relié à la ligne a) : vacances validées, « autre » demandé, brouillon ignoré
+      await db.query("insert into absences(user_id,kind,start_date,end_date,status) values ($1,'vacances','2026-11-23','2026-11-24','approved'),($1,'autre','2026-11-25','2026-11-25','requested'),($1,'vacances','2026-11-26','2026-11-26','draft')", [uid(4)]);
+      const absOf = (g) => g.absences.filter((x) => x[0] === a).map((x) => x.slice(1, 4).join(' ')).join(', ');
+      await as(5); let g = await one("select plan_grid('2026-11-23','2026-11-27')");
+      assert.equal(absOf(g), '2026-11-23 V approved, 2026-11-24 V approved, 2026-11-25 ABS requested', 'lecteur : motif « autre » masqué, brouillon absent');
+      await as(4); g = await one("select plan_grid('2026-11-23','2026-11-27')");
+      assert.equal(absOf(g), '2026-11-23 V approved, 2026-11-24 V approved, 2026-11-25 CA requested', 'la personne voit son motif');
+      await db.exec('reset role'); await db.query('update profiles set absence_visible=false where id=$1', [uid(4)]);
+      await as(5); g = await one("select plan_grid('2026-11-23','2026-11-27')"); assert.equal(absOf(g), '', 'absences masquées si la personne les a rendues invisibles');
+      await as(3); g = await one("select plan_grid('2026-11-23','2026-11-27')"); assert.ok(absOf(g).includes('CA'), 'éditeur : toujours visibles');
+      await db.exec('reset role'); await db.query('update profiles set absence_visible=true where id=$1', [uid(4)]);
+      // Historique
+      await as(3); await db.query('select plan_set_cells($1::jsonb)', [JSON.stringify([{ s: a, d: '2026-11-16', h: 0, c: 'AM2' }])]);
+      const h = (await db.query('select * from plan_history($1, 10)', [a])).rows;
+      assert.equal(h[0].old_code, 'AM1'); assert.equal(h[0].new_code, 'AM2'); assert.equal(h[0].actor, 'Test 3');
+      await as(5); await assert.rejects(db.query('select * from plan_history($1, 10)', [a]), /Réservé/);
+      await assert.rejects(db.query('select * from plan_cells_log'), /permission denied/);
+      // Agenda : réservé à une personne reliée ; flux limité au service
+      await assert.rejects(db.query('select plan_calendar_token()'), /Aucune ligne/);
+      await as(4); const tok = await one('select plan_calendar_token()'); assert.match(tok, /^[0-9a-f]{64}$/);
+      await assert.rejects(db.query('select * from plan_calendar_feed($1)', [tok]), /permission denied/);
+      await db.exec('reset role');
+      await db.exec("create or replace function ch_date() returns date language sql stable as $$ select date '2026-11-20' $$");
+      const feed = (await db.query('select day::text, half, code, source, status from plan_calendar_feed($1)', [tok])).rows;
+      assert.ok(feed.some((r) => r.day === '2026-11-16' && r.code === 'AM2' && r.source === 'planning'));
+      assert.ok(feed.some((r) => r.day === '2026-11-23' && r.code === 'V' && r.source === 'absences' && r.half === 1));
+      assert.ok(feed.some((r) => r.day === '2026-11-25' && r.code === 'CA' && r.status === 'requested'));
     });
     await t.test('fin d\'accès et rôle en attente : plus de planning', async () => {
       await as(1); await db.query('select admin_set_access_until($1, ch_date()-1)', [uid(4)]);

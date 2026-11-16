@@ -51,7 +51,7 @@
 
   // ----- État -----
   const st = {
-    editor: false, codes: [], by: {}, coverage: [], staff: [], cells: new Map(),
+    editor: false, codes: [], by: {}, coverage: [], staff: [], cells: new Map(), abs: new Map(),
     span: 10, winLen: 42, start: monday(today()), tool: null, anchor: null, painting: null, undo: [], onlyMe: false,
     accounts: null, loaded: null
   };
@@ -81,8 +81,13 @@
     const known = new Map(st.staff.map((s) => [s.id, s]));
     for (const s of g.staff || []) known.set(s.id, s);
     st.staff = [...known.values()];
-    if (replaceFrom) for (const k of [...st.cells.keys()]) { const d = k.split("|")[1]; if (d >= replaceFrom && d <= replaceTo) st.cells.delete(k); }
+    if (replaceFrom) {
+      for (const k of [...st.cells.keys()]) { const d = k.split("|")[1]; if (d >= replaceFrom && d <= replaceTo) st.cells.delete(k); }
+      for (const k of [...st.abs.keys()]) { const d = k.split("|")[1]; if (d >= replaceFrom && d <= replaceTo) st.abs.delete(k); }
+    }
     for (const [id, day, h, code] of g.cells || []) st.cells.set(key(id, day, h), code);
+    // Absences de l'app Absences (comptes reliés) : affichées là où aucune case n'est posée à la main
+    for (const [id, day, code, status] of g.absences || []) st.abs.set(id + "|" + day, [code, status]);
   }
   async function load() {
     const ds = days();
@@ -98,6 +103,7 @@
     $("pl-tools").hidden = !st.editor;
     $("pl-reader").hidden = st.editor;
     $("pl-only-me-wrap").hidden = !st.staff.some((s) => s.me);
+    $("pl-feed").hidden = !st.staff.some((s) => s.me);
     if (st.editor) renderPalette();
     renderLegend();
     render();
@@ -115,14 +121,22 @@
     if (code === "ABS") return MASK;
     return st.by[code] || { code, label: code, bg: "#FFFFFF", fg: "#000000" };
   }
+  // Absence reliée (app Absences) pour une demi-journée sans case posée : [code, statut] ou null
+  const absAt = (p, d, h) => (!codeOf(p.id, d, h) && !holidayOf(d) && !isOff(p, d, h) && st.abs.get(p.id + "|" + iso(d))) || null;
   function paintCell(td, p, d, h) {
-    const code = codeOf(p.id, d, h), c = shown(p, code), hol = holidayOf(d), off = isOff(p, d, h), out = !inPeriod(p, d);
+    let code = codeOf(p.id, d, h);
+    const ab = absAt(p, d, h);
+    if (ab) code = ab[0];
+    const c = shown(p, code), hol = holidayOf(d), off = isOff(p, d, h), out = !inPeriod(p, d);
     td.classList.toggle("pl-out", out && !c);
-    td.textContent = c ? c.code : "";
+    td.classList.toggle("pl-fromabs", !!ab);
+    td.classList.toggle("pl-req", !!ab && ab[1] === "requested");
+    td.textContent = c ? c.code + (ab && ab[1] === "requested" ? "?" : "") : "";
     td.style.background = c ? c.bg : out ? "" : hol || off ? GREY : "";
     td.style.color = c ? c.fg : "";
     td.title = nameOf(p) + " · " + DOW[d.getDay()] + " " + fmt(d) + (h ? " après-midi" : " matin") +
-      (c ? " · " + (c.label || c.code) : out ? " · hors période" : hol ? " · " + hol : off ? " · jour off habituel" : "");
+      (c ? " · " + (c.label || c.code) : out ? " · hors période" : hol ? " · " + hol : off ? " · jour off habituel" : "") +
+      (ab ? (ab[1] === "requested" ? " · demande d'absence en attente (app Absences)" : " · absence validée (app Absences)") : "");
   }
   function render() {
     const ds = days(), ps = visible(), t = $("pl-grid");
@@ -299,6 +313,8 @@
     for (const c of st.codes.filter((x) => x.active)) { const i = el("span", "pl-legi"); i.append(chip(c), c.label || ""); list.append(i); }
     if (!st.editor) { const i = el("span", "pl-legi"); i.append(chip(MASK), "Absence (motif non affiché)"); list.append(i); }
     const i = el("span", "pl-legi"); const s = el("span", "pl-chip", ""); s.style.background = GREY; i.append(s, "Jour off habituel ou jour férié"); list.append(i);
+    const j = el("span", "pl-legi"); const t = el("span", "pl-chip pl-fromabs", "V"); t.style.background = (st.by.V || {}).bg || "#FF0000"; t.style.color = (st.by.V || {}).fg || "#FFFFFF";
+    j.append(t, "Cadre pointillé : absence venue de l'app Absences ; « ? » : demande en attente"); list.append(j);
     box.append(list);
   }
 
@@ -344,6 +360,7 @@
       }
     }
     $("pl-plan-part").hidden = isNew;
+    $("pl-hist").hidden = isNew; $("pl-hist").open = false; $("pl-hist-list").replaceChildren();
     codeOptions($("pl-abs-code"), (c) => c.kind === "absence" && c.active);
     const ds = days();
     $("pl-wk-from").value = p.start_date && p.start_date > iso(ds[0]) ? p.start_date : iso(ds[0]);
@@ -352,6 +369,22 @@
     say($("pl-person-msg"), note || "", note ? "ok" : "");
     if (!$("pl-person").open) $("pl-person").showModal();
   }
+  $("pl-hist").addEventListener("toggle", async () => {
+    if (!$("pl-hist").open || !cur || !cur.id) return;
+    const box = $("pl-hist-list"); box.replaceChildren(el("p", "muted", "Chargement…"));
+    const { data, error } = await sb.rpc("plan_history", { p_staff: cur.id, p_limit: 200 });
+    if (error) return box.replaceChildren(el("p", "form-msg error", error.message));
+    if (!data.length) return box.replaceChildren(el("p", "muted", "Aucune modification enregistrée."));
+    const tb = el("table", "pl-histtab");
+    const hr = el("tr"); ["Quand", "Qui", "Demi-journée", "Avant", "Après"].forEach((t) => hr.append(el("th", null, t))); tb.append(hr);
+    for (const r of data) {
+      const tr = el("tr");
+      [new Date(r.at).toLocaleString("fr-CH", { dateStyle: "short", timeStyle: "short" }), r.actor, fmtS(r.day) + (r.half ? " après-midi" : " matin"), r.old_code || "—", r.new_code || "—"]
+        .forEach((t) => tr.append(el("td", null, t)));
+      tb.append(tr);
+    }
+    box.replaceChildren(tb);
+  });
   grid.addEventListener("click", (e) => { const b = e.target.closest("button.pl-who"); if (b) openPerson(st.staff.find((p) => p.id === Number(b.dataset.p))); });
   $("pl-add").addEventListener("click", () => {
     const ds = days();
@@ -503,6 +536,22 @@
     st.coverage = rows; render();
   });
 
+  // ----- « Mon planning » : abonnement agenda -----
+  async function showFeed(reset) {
+    const msg = $("pl-feed-msg");
+    const { data, error } = await sb.rpc("plan_calendar_token", { p_reset: !!reset });
+    if (error) return say(msg, error.message, "error");
+    const url = cfg.supabaseUrl + "/functions/v1/plan-feed?t=" + data;
+    $("pl-feed-url").value = url;
+    $("pl-feed-webcal").href = url.replace(/^https:/, "webcal:");
+    say(msg, reset ? "Nouveau lien créé : l'ancien ne fonctionne plus (ni pour vos autres agendas Onconic)." : "", reset ? "ok" : "");
+  }
+  $("pl-feed").addEventListener("click", async () => { $("pl-feed-dlg").showModal(); await showFeed(false); });
+  $("pl-feed-copy").addEventListener("click", async (e) => {
+    try { await navigator.clipboard.writeText($("pl-feed-url").value); e.target.textContent = "Copié"; } catch (x) { $("pl-feed-url").select(); }
+  });
+  $("pl-feed-reset").addEventListener("click", () => { if (confirm("Créer un nouveau lien ? Les agendas abonnés avec l'ancien lien (planning, absences, congrès) cesseront d'être mis à jour.")) showFeed(true); });
+
   // ----- Navigation -----
   function seg(attr, fn) {
     for (const b of document.querySelectorAll("[data-" + attr + "]")) b.addEventListener("click", () => {
@@ -553,6 +602,7 @@
       const g = await fetchGrid(parse(a), parse(b));
       const by = Object.fromEntries((g.codes || []).map((c) => [c.code, c]));
       const cells = new Map((g.cells || []).map(([id, day, h, code]) => [key(id, day, h), code]));
+      const abs = new Map((g.absences || []).map(([id, day, code, status]) => [id + "|" + day, [code, status]]));
       const ds = workdays(parse(a), parse(b));
       const wb = new window.ExcelJS.Workbook();
       const ws = wb.addWorksheet("Planning", { views: [{ state: "frozen", xSplit: 6, ySplit: 2 }] });
@@ -572,15 +622,21 @@
       let r = 3;
       const staff = (g.staff || []);
       const codeAt = (p, d, h) => cells.get(key(p.id, iso(d), h)) || "";
+      const absAtX = (p, d, h) => (!codeAt(p, d, h) && !holidayOf(d) && !isOff(p, d, h) && abs.get(p.id + "|" + iso(d))) || null;
       for (const team of Object.keys(TEAMS)) for (const p of staff.filter((x) => x.team === team)) {
         [p.resp, p.pct, p.bloc == null ? "" : p.bloc === 0 ? "*" : p.bloc, team + (p.status === "temporaire" ? " (temp.)" : ""), p.first_name, p.last_name.toUpperCase()]
           .forEach((v, i) => (ws.getCell(r, i + 1).value = v));
         ds.forEach((d, j) => {
           for (const h of [0, 1]) {
-            const c = ws.getCell(r, 7 + j * 2 + h), code = codeAt(p, d, h), def = code === "ABS" ? MASK : by[code];
-            c.alignment = { horizontal: "center" }; c.font = { size: 8, color: { argb: argb(def ? def.fg : "#000000") } };
+            const ab = absAtX(p, d, h), code = codeAt(p, d, h) || (ab ? ab[0] : ""), def = code === "ABS" ? MASK : by[code];
+            const c = ws.getCell(r, 7 + j * 2 + h);
+            c.alignment = { horizontal: "center" }; c.font = { size: 8, italic: !!ab, color: { argb: argb(def ? def.fg : "#000000") } };
             c.border = { top: thin, bottom: thin, left: h ? thin : { style: "medium" }, right: thin };
-            if (code) { c.value = code; c.fill = fill(def ? def.bg : "#FFFFFF"); }
+            if (code) {
+              c.value = code + (ab && ab[1] === "requested" ? "?" : "");
+              c.fill = ab && ab[1] === "requested" ? { type: "pattern", pattern: "lightGray", fgColor: { argb: argb(def ? def.bg : "#FFFFFF") }, bgColor: { argb: "FFFFFFFF" } } : fill(def ? def.bg : "#FFFFFF");
+              if (ab) c.note = ab[1] === "requested" ? "Demande d'absence en attente (app Absences)" : "Absence validée (app Absences)";
+            }
             else if (!inPeriod(p, d)) c.fill = { type: "pattern", pattern: "lightUp", fgColor: { argb: "FFBFBFBF" }, bgColor: { argb: "FFFFFFFF" } };
             else if (holidayOf(d) || isOff(p, d, h)) c.fill = fill(GREY);
           }
@@ -612,6 +668,7 @@
       for (const c of (g.codes || []).filter((x) => x.active)) { const row = lg.addRow([c.grp, c.code, c.label]); row.getCell(2).fill = fill(c.bg); row.getCell(2).font = { color: { argb: argb(c.fg) } }; }
       if (!g.editor) { const row = lg.addRow(["Absences", "ABS", "Absence (motif non affiché)"]); row.getCell(2).fill = fill(MASK.bg); }
       const gr = lg.addRow(["", "", "Jour off habituel ou jour férié"]); gr.getCell(2).fill = fill(GREY);
+      lg.addRow(["", "", "Code en italique : absence venue de l'app Absences ; « ? » : demande en attente de validation"]);
       lg.addRow([]); lg.addRow(["* sera attribué à l'un des blocs selon les besoins du jour ou de la semaine"]);
       const buf = await wb.xlsx.writeBuffer();
       const link = document.createElement("a");

@@ -12,11 +12,11 @@
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#001B4D">
   <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
-  <link rel="stylesheet" href="/assets/css/planning.css?v=20261116a">
+  <link rel="stylesheet" href="/assets/css/planning.css?v=20261116b">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/planning.js?v=20261116a" defer></script>
+  <script src="/assets/js/planning.js?v=20261116b" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -64,6 +64,7 @@
             <label class="pl-filter">Équipe<select id="pl-team"><option value="">Toutes</option></select></label>
             <label class="pl-filter">Nom<input id="pl-q" type="search" autocomplete="off" placeholder="filtrer"></label>
             <label class="pl-inline" id="pl-only-me-wrap" hidden><input type="checkbox" id="pl-only-me"> Seulement ma ligne</label>
+            <button type="button" class="btn btn-outline" id="pl-feed" hidden>Mon agenda…</button>
           </div>
 
           <div class="pl-tools" id="pl-tools" hidden>
@@ -79,7 +80,7 @@
             <p class="pl-help">Choisissez un code, puis cliquez ou glissez sur la grille ; chaque modification est enregistrée aussitôt. Maj + clic remplit le rectangle depuis la dernière cellule. Clic droit ou « Gomme » : effacer. Clic sur un nom : fiche, semaine type et absences sur une période.</p>
             <p class="form-msg" id="pl-save" role="status" aria-live="polite"></p>
           </div>
-          <p class="pl-help" id="pl-reader" hidden>Lecture seule. Les motifs d'absence sensibles sont affichés « ABS ».</p>
+          <p class="pl-help" id="pl-reader" hidden>Lecture seule. Les motifs d'absence sensibles sont affichés « ABS ». Les absences saisies dans l'app Absences apparaissent en cadre pointillé.</p>
 
           <div class="pl-export">
             <button type="button" class="btn" id="pl-xlsx">Exporter en Excel</button>
@@ -138,8 +139,24 @@
           <button type="button" class="btn btn-outline" id="pl-abs-apply">Saisir l'absence</button>
         </div>
       </div>
+      <details class="pl-hist" id="pl-hist"><summary>Historique des modifications</summary><div id="pl-hist-list"></div></details>
       <p class="form-msg" id="pl-person-msg" role="status"></p>
       <div class="pl-row pl-end"><button class="btn btn-outline" value="close">Fermer</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="pl-dlg" id="pl-feed-dlg">
+    <form method="dialog">
+      <h2>Mon planning dans mon agenda</h2>
+      <p>Abonnez votre agenda (Outlook, Apple, Google) à ce lien : vos postes et vos absences, de 30 jours en arrière à 6 mois en avant, mis à jour automatiquement.</p>
+      <div class="pl-row"><input id="pl-feed-url" readonly class="pl-feed-url"><button type="button" class="btn btn-outline" id="pl-feed-copy">Copier</button></div>
+      <p><a id="pl-feed-webcal" href="#">S'abonner directement (Apple Calendrier, Outlook)</a></p>
+      <p class="muted">Ce lien est personnel et donne accès à votre planning sans connexion : ne le partagez pas. C'est le même lien secret que vos autres agendas Onconic.</p>
+      <p class="form-msg" id="pl-feed-msg" role="status"></p>
+      <div class="pl-row pl-end">
+        <button type="button" class="btn btn-outline" id="pl-feed-reset">Créer un nouveau lien</button>
+        <button class="btn" value="close">Fermer</button>
+      </div>
     </form>
   </dialog>
 
