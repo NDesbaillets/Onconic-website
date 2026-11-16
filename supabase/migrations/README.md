@@ -31,6 +31,7 @@ Ils supposent déjà les schémas généraux Onconic/Auth/Storage et les autres 
 
    ```sh
    supabase functions deploy notify-absence --project-ref icqrobnqvidusajburcu --no-verify-jwt
+   supabase functions deploy plan-feed --project-ref icqrobnqvidusajburcu --no-verify-jwt   # flux agenda : jeton dans l'adresse, sans session
    ```
 
    La vérification JWT de la passerelle est désactivée pour permettre le worker ; la fonction vérifie elle-même chaque session utilisateur via `auth.getUser`. Le worker n'accepte qu'un secret long et ne donne aucun accès au téléchargement des formulaires. Aucun endpoint de décision n'est exposé par cette Edge Function.
