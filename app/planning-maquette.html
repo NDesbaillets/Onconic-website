@@ -9,9 +9,9 @@
   <title>Planning admin (maquette) · Onconic</title>
   <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
-  <link rel="stylesheet" href="/assets/css/planning-maquette.css?v=20261116a">
+  <link rel="stylesheet" href="/assets/css/planning-maquette.css?v=20261116b">
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/planning-maquette.js?v=20261116a" defer></script>
+  <script src="/assets/js/planning-maquette.js?v=20261116b" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -31,12 +31,22 @@
           <div class="pl-seg" role="group" aria-label="Point de vue">
             <button type="button" data-view="cadre" class="on">Cadre admin (édition)</button>
             <button type="button" data-view="lecture">Admin (lecture seule)</button>
+            <button type="button" data-view="medecin">Médecin (lecture seule)</button>
           </div>
           <div class="pl-seg" role="group" aria-label="Période">
             <button type="button" data-span="5">Semaine</button>
             <button type="button" data-span="10" class="on">2 semaines</button>
             <button type="button" data-span="month">Mois</button>
+            <button type="button" data-span="window">Fenêtre glissante</button>
           </div>
+          <label class="pl-filter" id="pl-win-wrap" hidden>Durée affichée
+            <select id="pl-winlen">
+              <option value="28">4 semaines</option>
+              <option value="42" selected>6 semaines</option>
+              <option value="91">3 mois</option>
+              <option value="182">6 mois</option>
+            </select>
+          </label>
           <div class="pl-nav">
             <button type="button" class="btn btn-outline" id="pl-prev" aria-label="Période précédente">‹</button>
             <button type="button" class="btn btn-outline" id="pl-today">Aujourd'hui</button>
@@ -52,16 +62,17 @@
         <div class="pl-tools" id="pl-tools">
           <div class="pl-palette" id="pl-palette" aria-label="Codes"></div>
           <div class="pl-actions">
+            <button type="button" class="btn btn-navy" id="pl-add">Ajouter une ligne…</button>
             <button type="button" class="btn btn-outline" id="pl-undo" title="Ctrl+Z">Annuler</button>
             <button type="button" class="btn btn-outline" id="pl-copy">Copier la 1re semaine affichée…</button>
             <button type="button" class="btn btn-outline" id="pl-min">Minimums de couverture…</button>
             <button type="button" class="btn btn-outline" id="pl-reset">Réinitialiser</button>
           </div>
-          <p class="pl-help">Choisissez un code, puis cliquez ou glissez sur la grille. Maj + clic remplit le rectangle depuis la dernière cellule. Clic sur un nom : semaine type et absences sur une période. Clic droit ou « Gomme » : effacer.</p>
+          <p class="pl-help">Choisissez un code, puis cliquez ou glissez sur la grille. Maj + clic remplit le rectangle depuis la dernière cellule. Clic sur un nom : fiche du collaborateur (taux, jours off, mission d'un·e temporaire), semaine type et absences sur une période. Clic droit ou « Gomme » : effacer.</p>
         </div>
         <div class="pl-tools" id="pl-me" hidden>
-          <p class="pl-help">Vue d'une collaboratrice (Léa Rochat) : sa ligne est surlignée, les motifs d'absence des autres (maladie, congé, militaire) sont masqués.
-            <label class="pl-inline"><input type="checkbox" id="pl-only-me"> Seulement ma ligne</label></p>
+          <p class="pl-help"><span id="pl-me-text"></span>
+            <label class="pl-inline" id="pl-only-me-wrap"><input type="checkbox" id="pl-only-me"> Seulement ma ligne</label></p>
         </div>
 
         <div class="pl-export">
@@ -85,6 +96,27 @@
     <form method="dialog" id="pl-person-form">
       <h2 id="pl-person-title"></h2>
       <p class="muted" id="pl-person-meta"></p>
+      <h3>Fiche</h3>
+      <div class="pl-fiche">
+        <label>Prénom<input id="pf-first" autocomplete="off"></label>
+        <label>Nom<input id="pf-last" autocomplete="off"></label>
+        <label>Équipe<select id="pf-team"></select></label>
+        <label>Bloc<select id="pf-bloc"><option value="">sans bloc</option><option value="1">bloc 1</option><option value="2">bloc 2</option><option value="3">bloc 3</option><option value="0">flottant (*)</option></select></label>
+        <label>Taux (%)<input id="pf-pct" type="number" min="10" max="100" step="5"></label>
+        <label>Responsable<input id="pf-resp" autocomplete="off"></label>
+        <label>Statut<select id="pf-status"><option value="fixe">fixe</option><option value="temporaire">temporaire (mission)</option></select></label>
+        <label>Début<input id="pf-from" type="date"></label>
+        <label>Fin<input id="pf-to" type="date"></label>
+        <label class="pl-wide">Accès à Onconic<select id="pf-account">
+          <option value="compte">compte Onconic personnel (sa ligne est reconnue)</option>
+          <option value="generique">login générique « Temporaires » (lecture seule du planning)</option>
+          <option value="aucun">aucun accès (ligne de planning seulement)</option>
+        </select></label>
+      </div>
+      <p class="muted">Jours off habituels</p>
+      <div class="pl-week" id="pf-off"></div>
+      <div class="pl-row"><button type="button" class="btn btn-navy" id="pf-save">Enregistrer la fiche</button></div>
+      <div id="pl-plan-part">
       <h3>Semaine type</h3>
       <div class="pl-week" id="pl-week"></div>
       <div class="pl-row">
@@ -101,6 +133,7 @@
         <label>au <input type="date" id="pl-abs-to"></label>
         <select id="pl-abs-to-h"><option value="1">après-midi</option><option value="0">matin</option></select>
         <button type="button" class="btn btn-outline" id="pl-abs-apply">Saisir l'absence</button>
+      </div>
       </div>
       <p class="form-msg" id="pl-person-msg" role="status"></p>
       <div class="pl-row pl-end"><button class="btn btn-navy" value="close">Fermer</button></div>

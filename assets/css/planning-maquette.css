@@ -32,7 +32,9 @@ span.pl-chip { cursor: default; }
 .pl-grid { border-collapse: separate; border-spacing: 0; font-size: .72rem; user-select: none; }
 .pl-grid th, .pl-grid td { border-right: 1px solid var(--navy-100); border-bottom: 1px solid var(--navy-100); }
 .pl-grid thead th { position: sticky; top: 0; z-index: 2; background: var(--white); font-weight: 500; color: var(--navy-800); }
-.pl-grid thead tr:nth-child(2) th { top: 38px; }
+.pl-grid thead tr:nth-child(2) th { top: 22px; }
+.pl-grid thead tr:nth-child(3) th { top: 60px; }
+.pl-month { height: 22px; text-align: left; padding: 0 6px; font-size: .72rem; text-transform: capitalize; color: var(--amber-700) !important; white-space: nowrap; }
 .pl-day { height: 38px; min-width: 60px; text-align: center; line-height: 1.1; }
 .pl-day span { display: block; color: var(--ink-600); font-weight: 400; }
 .pl-day.pl-hol { background: #D9D9D9 !important; }
@@ -71,3 +73,13 @@ button.pl-who:hover { text-decoration: underline; }
 .pl-mins { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-2); }
 .pl-mins label { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); font-size: .9rem; }
 .pl-mins input { width: 64px; font: inherit; padding: 4px 6px; border: 1px solid var(--navy-200); }
+.pl-out { background: repeating-linear-gradient(135deg, #FFFFFF 0 4px, #E4E7EE 4px 6px); cursor: not-allowed; }
+.pl-temp { float: right; margin-top: 2px; padding: 0 5px; font-size: .62rem; font-weight: 600; color: var(--navy-800); background: var(--amber-50); border: 1px solid var(--amber-500); border-radius: 2px; }
+.pl-narrow .pl-c { width: 13px; min-width: 13px; font-size: 0; }
+.pl-narrow .pl-cov .pl-c { font-size: 0; }
+.pl-narrow .pl-day { min-width: 26px; font-size: .62rem; }
+.pl-fiche { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-2); }
+.pl-fiche label { display: grid; gap: 2px; font-size: .82rem; color: var(--ink-600); }
+.pl-fiche input, .pl-fiche select { font: inherit; font-size: .9rem; padding: 4px 6px; border: 1px solid var(--navy-200); color: var(--ink-900); }
+.pl-fiche .pl-wide { grid-column: 1 / -1; }
+.pl-offc { display: inline-flex; justify-content: center; align-items: center; gap: 4px; font-size: .8rem; color: var(--ink-600); }

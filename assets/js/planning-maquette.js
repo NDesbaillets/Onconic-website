@@ -2,7 +2,7 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const EXCELJS = "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js";
-  const STORE = "onconic-planning-maquette-v1";
+  const STORE = "onconic-planning-maquette-v2";
 
   // ----- Catalogue des codes (repris de la légende du tableur) -----
   const P1 = "#FF99FF", P2 = "#21C5FF", P3 = "#FFC000";
@@ -26,7 +26,7 @@
   // off : demi-journées libres de la semaine (0 = lundi matin … 9 = vendredi après-midi)
   const TEAMS = { AM: "Assistantes médecins", SEC: "Secrétariat", DESK: "Desk et back office", ENCAD: "Encadrement" };
   const R1 = "S. Muller", R2 = "N. Favre";
-  const PEOPLE = [
+  const SEED_PEOPLE = [
     ["p1", "Léa", "Rochat", "AM", 1, 100, [], R1], ["p2", "Camille", "Dupuis", "AM", 1, 80, [4, 5], R1], ["p3", "Inès", "Monnier", "AM", 1, 60, [0, 1, 8, 9], R1],
     ["p4", "Sofia", "Ferreira", "AM", 2, 100, [], R1], ["p5", "Julie", "Perret", "AM", 2, 80, [8, 9], R1], ["p6", "Aline", "Chappuis", "AM", 2, 100, [], R1],
     ["p7", "Mélanie", "Jaquet", "AM", 3, 100, [], R1], ["p8", "Sara", "Bianchi", "AM", 3, 60, [2, 3, 4, 5], R1], ["p9", "Laura", "Vonlanthen", "AM", 3, 80, [0, 1], R1],
@@ -47,6 +47,7 @@
   const parse = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
   const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
   const monday = (d) => addDays(d, -((d.getDay() + 6) % 7));
+  const fmtS = (s) => (s ? s.slice(8, 10) + "." + s.slice(5, 7) + "." + s.slice(0, 4) : "…");
   const fmt = (d) => pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear();
   const DOW = ["di", "lu", "ma", "me", "je", "ve", "sa"];
   const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
@@ -59,6 +60,8 @@
   const workdays = (from, to) => { const out = []; for (let d = new Date(from); d <= to; d = addDays(d, 1)) if (d.getDay() % 6) out.push(new Date(d)); return out; };
   const slot = (d, h) => (d.getDay() - 1) * 2 + h;
   const isOff = (p, d, h) => p.off.includes(slot(d, h));
+  // Mission (temporaires) ou dates d'entrée et de départ : hors de cette période, la ligne est hachurée et ne se remplit pas
+  const inMission = (p, d) => (!p.from || iso(d) >= p.from) && (!p.to || iso(d) <= p.to);
   const DATA_FROM = new Date(2026, 10, 2), DATA_TO = new Date(2027, 0, 29);
 
   // ----- Semaine type et données de départ -----
@@ -75,13 +78,16 @@
   }
   function seed() {
     const plan = {}, weeks = {};
-    PEOPLE.forEach((p, i) => { weeks[p.id] = defaultWeek(p, i); plan[p.id] = {}; });
+    const people = SEED_PEOPLE.map((p) => Object.assign({}, p, { status: "fixe", from: null, to: null, account: "compte" }));
+    people.push({ id: "p27", first: "Noah", last: "Girardet", name: "Noah Girardet", team: "DESK", bloc: null, pct: 100, off: [], resp: R2,
+      status: "temporaire", from: "2026-11-23", to: "2026-12-18", account: "generique" });
+    people.forEach((p, i) => { weeks[p.id] = defaultWeek(p, i); plan[p.id] = {}; });
     for (const d of workdays(DATA_FROM, DATA_TO)) {
       if (HOLIDAYS[iso(d)]) continue;
       const wk = Math.floor((d - monday(DATA_FROM)) / 6048e5);
-      PEOPLE.forEach((p, i) => {
+      people.forEach((p, i) => {
         for (const h of [0, 1]) {
-          if (isOff(p, d, h)) continue;
+          if (isOff(p, d, h) || !inMission(p, d)) continue;
           let c = weeks[p.id][slot(d, h)];
           if (p.team === "DESK") c = DESK_ROT[(i + wk) % DESK_ROT.length];
           if (c) plan[p.id][iso(d) + "|" + h] = c;
@@ -93,14 +99,14 @@
     span("p7", "2026-12-21", "2027-01-08", "V"); span("p14", "2026-12-28", "2027-01-08", "V"); span("p18", "2026-12-21", "2026-12-31", "V");
     span("p2", "2026-12-07", "2026-12-11", "MIL"); span("p12", "2026-12-14", "2026-12-15", "CA"); span("p1", "2026-12-28", "2026-12-31", "V");
     span("p21", "2027-01-11", "2027-01-15", "V"); span("p9", "2026-11-30", "2026-11-30", "FOR");
-    return { plan, weeks, mins: { AM1: 2, AM2: 2, AM3: 2, SEC: 4, DA: 2, BO: 3 } };
+    return { people, plan, weeks, mins: { AM1: 2, AM2: 2, AM3: 2, SEC: 4, DA: 2, BO: 3 } };
   }
   let db;
   try { db = JSON.parse(localStorage.getItem(STORE)) || seed(); } catch (e) { db = seed(); }
   const save = () => { try { localStorage.setItem(STORE, JSON.stringify(db)); } catch (e) { /* stockage indisponible : la maquette fonctionne sans */ } };
 
   // ----- État de la vue -----
-  const st = { view: "cadre", span: 10, start: monday(new Date(2026, 10, 16)), tool: "AM1", anchor: null, undo: [], painting: null, onlyMe: false };
+  const st = { view: "cadre", span: 10, winLen: 42, start: monday(new Date(2026, 10, 16)), tool: "AM1", anchor: null, undo: [], painting: null, onlyMe: false };
   const COVER = [["AM1", "AM bloc 1", (c) => c === "AM1"], ["AM2", "AM bloc 2", (c) => c === "AM2"], ["AM3", "AM bloc 3", (c) => c === "AM3"],
     ["SEC", "Secrétariat", (c) => /^SEC/.test(c)], ["DA", "Desk accueil", (c) => /^DA/.test(c)], ["BO", "Back office", (c) => /^BO/.test(c)]];
 
@@ -109,42 +115,57 @@
       const a = new Date(st.start.getFullYear(), st.start.getMonth(), 1), b = new Date(st.start.getFullYear(), st.start.getMonth() + 1, 0);
       return workdays(a, b);
     }
+    if (st.span === "window") return workdays(st.start, addDays(st.start, st.winLen - 1));
     return workdays(st.start, addDays(st.start, st.span === 5 ? 4 : 11));
   }
   function visiblePeople() {
     const team = $("pl-team").value, q = $("pl-q").value.trim().toLowerCase();
-    return PEOPLE.filter((p) => (!team || p.team === team) && (!q || p.name.toLowerCase().includes(q)) && (!(st.view === "lecture" && st.onlyMe) || p.id === ME));
+    const ds = days(), a = iso(ds[0]), b = iso(ds[ds.length - 1]);
+    return db.people.filter((p) => (!team || p.team === team) && (!q || p.name.toLowerCase().includes(q)) && (!(st.view === "lecture" && st.onlyMe) || p.id === ME)
+      && (!p.from || p.from <= b) && (!p.to || p.to >= a));
   }
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   function shown(p, code) {
     if (!code) return null;
     const c = BY[code] || { code, label: code, bg: "#FFFFFF", fg: "#000000" };
-    return st.view === "lecture" && c.priv && p.id !== ME ? MASK : c;
+    // Motif des absences sensibles (maladie, congé, militaire) : visible des seuls cadres admin et de la personne elle-même
+    return st.view !== "cadre" && c.priv && !(st.view === "lecture" && p.id === ME) ? MASK : c;
   }
   function paintCell(td, p, d, h) {
     const k = iso(d) + "|" + h, code = db.plan[p.id][k], c = shown(p, code);
-    const hol = HOLIDAYS[iso(d)], off = isOff(p, d, h);
+    const hol = HOLIDAYS[iso(d)], off = isOff(p, d, h), out = !inMission(p, d);
+    td.classList.toggle("pl-out", out && !c);
     td.textContent = c ? c.code : "";
-    td.style.background = c ? c.bg : hol || off ? GREY : "";
+    td.style.background = c ? c.bg : out ? "" : hol || off ? GREY : "";
     td.style.color = c ? c.fg : "";
-    td.title = p.name + " · " + DOW[d.getDay()] + " " + fmt(d) + (h ? " après-midi" : " matin") + (c ? " · " + c.label : hol ? " · " + hol : off ? " · jour off habituel" : "");
+    td.title = p.name + " · " + DOW[d.getDay()] + " " + fmt(d) + (h ? " après-midi" : " matin") + (c ? " · " + c.label : out ? " · hors période de mission" : hol ? " · " + hol : off ? " · jour off habituel" : "");
   }
 
   // ----- Grille -----
   function render() {
     const ds = days(), ps = visiblePeople(), t = $("pl-grid");
     $("pl-range").textContent = st.span === "month" ? MONTHS[st.start.getMonth()] + " " + st.start.getFullYear() : fmt(ds[0]) + " – " + fmt(ds[ds.length - 1]);
-    const head1 = el("tr"), head2 = el("tr");
-    const th0 = el("th", "pl-name pl-corner", "Collaborateur·rice"); th0.rowSpan = 2; head1.append(th0);
+    const narrow = st.span === "window" && st.winLen >= 91;
+    const head0 = el("tr", "pl-months"), head1 = el("tr"), head2 = el("tr");
+    const th0 = el("th", "pl-name pl-corner", "Collaborateur·rice"); th0.rowSpan = 3; head0.append(th0);
+    // Ligne des mois : utile dès que la fenêtre déborde d'un mois
+    for (let i = 0; i < ds.length;) {
+      let j = i; while (j + 1 < ds.length && ds[j + 1].getMonth() === ds[i].getMonth()) j++;
+      const th = el("th", "pl-month" + (i ? " pl-mon" : ""), MONTHS[ds[i].getMonth()] + " " + ds[i].getFullYear()); th.colSpan = (j - i + 1) * 2; head0.append(th);
+      i = j + 1;
+    }
     for (const d of ds) {
       const th = el("th", "pl-day" + (d.getDay() === 1 ? " pl-mon" : "") + (HOLIDAYS[iso(d)] ? " pl-hol" : ""));
       th.colSpan = 2;
-      th.append(el("span", null, DOW[d.getDay()]), el("b", null, pad(d.getDate()) + "." + pad(d.getMonth() + 1)));
+      if (narrow) th.append(el("b", null, String(d.getDate())));
+      else th.append(el("span", null, DOW[d.getDay()]), el("b", null, pad(d.getDate()) + "." + pad(d.getMonth() + 1)));
+      th.title = (th.title ? th.title + " · " : "") + DOW[d.getDay()] + " " + fmt(d);
       if (HOLIDAYS[iso(d)]) th.title = HOLIDAYS[iso(d)];
       head1.append(th);
-      head2.append(el("th", "pl-h" + (d.getDay() === 1 ? " pl-mon" : ""), "M"), el("th", "pl-h", "A"));
+      head2.append(el("th", "pl-h" + (d.getDay() === 1 ? " pl-mon" : ""), narrow ? "" : "M"), el("th", "pl-h", narrow ? "" : "A"));
     }
-    const thead = el("thead"); thead.append(head1, head2);
+    const thead = el("thead"); thead.append(head0, head1, head2);
+    t.classList.toggle("pl-narrow", narrow);
     const tbody = el("tbody");
     for (const team of Object.keys(TEAMS)) {
       const members = ps.filter((p) => p.team === team);
@@ -156,7 +177,8 @@
         const th = el("th", "pl-name");
         const nm = el(st.view === "cadre" ? "button" : "span", "pl-who", p.name);
         if (st.view === "cadre") { nm.type = "button"; nm.dataset.p = p.id; }
-        th.append(nm, el("small", null, [p.pct + " %", p.bloc != null ? (p.bloc ? "bloc " + p.bloc : "flottant") : "", "resp. " + p.resp].filter(Boolean).join(" · ")));
+        if (p.status === "temporaire") th.append(el("span", "pl-temp", "temp."));
+        th.append(nm, el("small", null, [p.status === "temporaire" ? "mission " + fmtS(p.from) + " – " + fmtS(p.to) : "", p.pct + " %", p.bloc != null ? (p.bloc ? "bloc " + p.bloc : "flottant") : "", "resp. " + p.resp].filter(Boolean).join(" · ")));
         tr.append(th);
         for (const d of ds) for (const h of [0, 1]) {
           const td = el("td", "pl-c" + (h === 0 && d.getDay() === 1 ? " pl-mon" : "") + (h === 1 ? " pl-pm" : ""));
@@ -175,7 +197,7 @@
       for (const d of ds) for (const h of [0, 1]) {
         const td = el("td", "pl-c" + (h === 0 && d.getDay() === 1 ? " pl-mon" : "") + (h === 1 ? " pl-pm" : ""));
         if (HOLIDAYS[iso(d)]) { td.style.background = GREY; tr.append(td); continue; }
-        const n = PEOPLE.filter((p) => test(db.plan[p.id][iso(d) + "|" + h] || "")).length;
+        const n = db.people.filter((p) => test(db.plan[p.id][iso(d) + "|" + h] || "")).length;
         td.textContent = n;
         if (n < db.mins[key]) { td.classList.add("pl-low"); td.title = label + " : " + n + " présent·e·s, minimum " + db.mins[key]; }
         tr.append(td);
@@ -193,7 +215,8 @@
     if (code) db.plan[pid][k] = code; else delete db.plan[pid][k];
   }
   function apply(td, batch, erase) {
-    const p = PEOPLE.find((x) => x.id === td.dataset.p), d = parse(td.dataset.d), h = Number(td.dataset.h);
+    const p = db.people.find((x) => x.id === td.dataset.p), d = parse(td.dataset.d), h = Number(td.dataset.h);
+    if (!inMission(p, d)) return;
     setCell(p.id, td.dataset.d + "|" + h, erase ? "" : st.tool, batch);
     paintCell(td, p, d, h);
   }
@@ -273,10 +296,52 @@
   // ----- Fiche d'une personne : semaine type, absence sur une période -----
   let cur = null;
   const SLOTS = ["lu", "ma", "me", "je", "ve"];
-  function openPerson(pid) {
-    cur = PEOPLE.find((p) => p.id === pid);
+  function fillFiche() {
+    $("pf-team").replaceChildren(...Object.entries(TEAMS).map(([k, v]) => { const o = el("option", null, v); o.value = k; return o; }));
+    $("pf-first").value = cur.first; $("pf-last").value = cur.last; $("pf-team").value = cur.team;
+    $("pf-bloc").value = cur.bloc == null ? "" : String(cur.bloc); $("pf-pct").value = cur.pct; $("pf-resp").value = cur.resp;
+    $("pf-status").value = cur.status; $("pf-from").value = cur.from || ""; $("pf-to").value = cur.to || ""; $("pf-account").value = cur.account;
+    const off = $("pf-off"); off.replaceChildren(el("span"), ...SLOTS.map((s) => el("b", null, s)));
+    for (const h of [0, 1]) {
+      off.append(el("b", null, h ? "après-midi" : "matin"));
+      for (let d = 0; d < 5; d++) {
+        const l = el("label", "pl-offc"); const cb = el("input"); cb.type = "checkbox"; cb.dataset.slot = d * 2 + h; cb.checked = cur.off.includes(d * 2 + h);
+        l.append(cb, "off"); off.append(l);
+      }
+    }
+  }
+  function openNew() {
+    const ds = days();
+    cur = { id: "n" + Date.now(), first: "", last: "", name: "", team: "DESK", bloc: null, pct: 100, off: [], resp: R2, status: "temporaire", from: iso(ds[0]), to: iso(addDays(ds[0], 27)), account: "generique", isNew: true };
+    $("pl-person-title").textContent = "Nouvelle ligne";
+    $("pl-person-meta").textContent = "Un·e temporaire en mission, un nouvel engagement ou un remplacement. La ligne n'apparaît que pendant la période indiquée.";
+    fillFiche();
+    $("pl-plan-part").hidden = true;
+    $("pl-person-msg").textContent = "";
+    $("pl-person").showModal();
+    $("pf-first").focus();
+  }
+  $("pl-add").addEventListener("click", openNew);
+  $("pf-save").addEventListener("click", () => {
+    const first = $("pf-first").value.trim(), last = $("pf-last").value.trim(), from = $("pf-from").value || null, to = $("pf-to").value || null;
+    const status = $("pf-status").value;
+    if (!first || !last) { $("pl-person-msg").textContent = "Prénom et nom sont nécessaires."; return; }
+    if (status === "temporaire" && (!from || !to)) { $("pl-person-msg").textContent = "Une mission temporaire a une date de début et de fin."; return; }
+    if (from && to && to < from) { $("pl-person-msg").textContent = "La fin précède le début."; return; }
+    const isNew = cur.isNew;
+    Object.assign(cur, { first, last, name: first + " " + last, team: $("pf-team").value, bloc: $("pf-bloc").value === "" ? null : Number($("pf-bloc").value),
+      pct: Math.min(100, Math.max(10, Number($("pf-pct").value) || 100)), resp: $("pf-resp").value.trim(), status, from, to, account: $("pf-account").value,
+      off: [...$("pf-off").querySelectorAll("input")].filter((c) => c.checked).map((c) => Number(c.dataset.slot)).sort((a, b) => a - b) });
+    if (isNew) { delete cur.isNew; db.people.push(cur); db.plan[cur.id] = {}; db.weeks[cur.id] = defaultWeek(cur, db.people.length - 1); }
+    save(); render();
+    openPerson(cur.id, isNew ? "Ligne créée. Définissez sa semaine type et appliquez-la sur la mission." : "Fiche enregistrée.");
+  });
+  function openPerson(pid, note) {
+    cur = db.people.find((p) => p.id === pid);
+    $("pl-plan-part").hidden = false;
+    fillFiche();
     $("pl-person-title").textContent = cur.name;
-    $("pl-person-meta").textContent = TEAMS[cur.team] + " · " + cur.pct + " % · responsable " + cur.resp;
+    $("pl-person-meta").textContent = TEAMS[cur.team] + " · " + cur.pct + " % · responsable " + cur.resp + (cur.status === "temporaire" ? " · mission du " + fmtS(cur.from) + " au " + fmtS(cur.to) : "");
     const wk = $("pl-week"); wk.replaceChildren();
     wk.append(el("span"), ...SLOTS.map((s) => el("b", null, s)));
     for (const h of [0, 1]) {
@@ -291,10 +356,11 @@
     }
     const ac = $("pl-abs-code"); ac.replaceChildren(...CODES.filter((c) => c.abs).map((c) => { const o = el("option", null, c.label); o.value = c.code; return o; }));
     const ds = days();
-    $("pl-wk-from").value = iso(ds[0]); $("pl-wk-to").value = iso(addDays(ds[0], 27));
+    $("pl-wk-from").value = cur.from && cur.from > iso(ds[0]) ? cur.from : iso(ds[0]);
+    $("pl-wk-to").value = cur.to || iso(addDays(ds[0], 27));
     $("pl-abs-from").value = iso(ds[0]); $("pl-abs-to").value = iso(ds[0]);
-    $("pl-person-msg").textContent = "";
-    $("pl-person").showModal();
+    $("pl-person-msg").textContent = note || "";
+    if (!$("pl-person").open) $("pl-person").showModal();
   }
   grid.addEventListener("click", (e) => { const b = e.target.closest("button.pl-who"); if (b) openPerson(b.dataset.p); });
   $("pl-wk-apply").addEventListener("click", () => {
@@ -307,6 +373,7 @@
       for (const h of [0, 1]) {
         const k = iso(d) + "|" + h, prev = db.plan[cur.id][k];
         if (prev && BY[prev] && BY[prev].abs) continue;
+        if (!inMission(cur, d)) continue;
         const code = isOff(cur, d, h) ? "" : db.weeks[cur.id][slot(d, h)];
         const before = batch.length; setCell(cur.id, k, code, batch); n += batch.length - before;
       }
@@ -322,7 +389,7 @@
     for (const d of workdays(parse(a), parse(b))) {
       if (HOLIDAYS[iso(d)]) continue;
       for (const h of [0, 1]) {
-        if ((iso(d) === a && h < ha) || (iso(d) === b && h > hb) || isOff(cur, d, h)) continue;
+        if ((iso(d) === a && h < ha) || (iso(d) === b && h > hb) || isOff(cur, d, h) || !inMission(cur, d)) continue;
         setCell(cur.id, iso(d) + "|" + h, code, batch); n++;
       }
     }
@@ -343,7 +410,7 @@
     const batch = [];
     for (const p of visiblePeople()) for (let w = 1; w <= n; w++) for (let i = 0; i < 5; i++) {
       const sd = addDays(src, i), td = addDays(src, w * 7 + i);
-      if (HOLIDAYS[iso(td)]) continue;
+      if (HOLIDAYS[iso(td)] || !inMission(p, td)) continue;
       for (const h of [0, 1]) {
         const code = db.plan[p.id][iso(sd) + "|" + h] || "", k = iso(td) + "|" + h, prev = db.plan[p.id][k];
         if (BY[code] && BY[code].abs) continue;
@@ -380,10 +447,24 @@
       fn(b.dataset[attr]); render();
     });
   }
-  seg("view", (v) => { st.view = v; $("pl-tools").hidden = v !== "cadre"; $("pl-me").hidden = v === "cadre"; });
-  seg("span", (v) => { st.span = v === "month" ? "month" : Number(v); if (v === "month") st.start = new Date(st.start.getFullYear(), st.start.getMonth(), 1); else st.start = monday(st.start); });
+  const ME_TEXT = {
+    lecture: "Vue d'une collaboratrice admin (Léa Rochat) : lecture seule, sa ligne est surlignée, les motifs d'absence sensibles des autres (maladie, congé, militaire) sont masqués.",
+    medecin: "Vue d'un médecin : lecture seule de tout le planning admin (qui est au desk, en AM, au back office), sans les motifs d'absence sensibles."
+  };
+  seg("view", (v) => {
+    st.view = v; $("pl-tools").hidden = v !== "cadre"; $("pl-me").hidden = v === "cadre";
+    if (v !== "cadre") { $("pl-me-text").textContent = ME_TEXT[v]; $("pl-only-me-wrap").hidden = v !== "lecture"; }
+  });
+  seg("span", (v) => {
+    st.span = v === "month" || v === "window" ? v : Number(v);
+    $("pl-win-wrap").hidden = v !== "window";
+    if (v === "month") st.start = new Date(st.start.getFullYear(), st.start.getMonth(), 1); else st.start = monday(st.start);
+  });
+  $("pl-winlen").addEventListener("change", (e) => { st.winLen = Number(e.target.value); render(); });
   function move(dir) {
     if (st.span === "month") st.start = new Date(st.start.getFullYear(), st.start.getMonth() + dir, 1);
+    // Fenêtre glissante : une semaine par clic (un mois au-delà de 3 mois affichés), comme dans Absences
+    else if (st.span === "window") st.start = st.winLen >= 91 ? monday(new Date(st.start.getFullYear(), st.start.getMonth() + dir, st.start.getDate())) : addDays(st.start, 7 * dir);
     else st.start = addDays(st.start, dir * (st.span === 5 ? 7 : 14));
     render();
   }
@@ -428,14 +509,36 @@
       ws.getRow(1).height = 62;
       [8, 5, 6, 7, 12, 14].forEach((w, i) => (ws.getColumn(i + 1).width = w));
       let r = 3;
-      for (const team of Object.keys(TEAMS)) for (const p of PEOPLE.filter((x) => x.team === team)) {
-        [p.resp, p.pct, p.bloc == null ? "" : p.bloc === 0 ? "*" : p.bloc, team, p.first, p.last.toUpperCase()].forEach((v, i) => (ws.getCell(r, i + 1).value = v));
+      const a0 = iso(ds[0]), a1 = iso(ds[ds.length - 1]);
+      for (const team of Object.keys(TEAMS)) for (const p of db.people.filter((x) => x.team === team && (!x.from || x.from <= a1) && (!x.to || x.to >= a0))) {
+        [p.resp, p.pct, p.bloc == null ? "" : p.bloc === 0 ? "*" : p.bloc, team + (p.status === "temporaire" ? " (temp.)" : ""), p.first, p.last.toUpperCase()].forEach((v, i) => (ws.getCell(r, i + 1).value = v));
         ds.forEach((d, j) => {
           for (const h of [0, 1]) {
             const c = ws.getCell(r, 7 + j * 2 + h), code = db.plan[p.id][iso(d) + "|" + h], def = code && BY[code];
             c.alignment = { horizontal: "center" }; c.font = { size: 8, color: { argb: argb(def ? def.fg : "#000000") } }; c.border = { top: thin, bottom: thin, left: h ? thin : { style: "medium" }, right: thin };
             if (code) { c.value = code; if (def) c.fill = fill(def.bg); }
+            else if (!inMission(p, d)) c.fill = { type: "pattern", pattern: "lightUp", fgColor: { argb: "FFBFBFBF" }, bgColor: { argb: "FFFFFFFF" } };
             else if (HOLIDAYS[iso(d)] || isOff(p, d, h)) c.fill = fill(GREY);
+          }
+        });
+        r++;
+      }
+      // Récapitulatif de couverture, comme sous la grille de l'outil
+      r++;
+      const tc = ws.getCell(r, 1); tc.value = "Couverture par demi-journée (minimum entre parenthèses)"; tc.font = { bold: true }; ws.mergeCells(r, 1, r, 6);
+      r++;
+      for (const [key, label, test] of COVER) {
+        const lc = ws.getCell(r, 1); lc.value = label + " (" + db.mins[key] + ")"; ws.mergeCells(r, 1, r, 6); lc.font = { bold: true, size: 9 };
+        ds.forEach((d, j) => {
+          for (const h of [0, 1]) {
+            const c = ws.getCell(r, 7 + j * 2 + h);
+            c.alignment = { horizontal: "center" }; c.border = { top: thin, bottom: thin, left: h ? thin : { style: "medium" }, right: thin };
+            if (HOLIDAYS[iso(d)]) { c.fill = fill(GREY); continue; }
+            const n = db.people.filter((p) => test(db.plan[p.id][iso(d) + "|" + h] || "")).length;
+            c.value = n;
+            const low = n < db.mins[key];
+            c.font = { size: 8, bold: low, color: { argb: low ? "FFB3261E" : "FF333333" } };
+            c.fill = fill(low ? "#F8D7D5" : "#F2F4F8");
           }
         });
         r++;
