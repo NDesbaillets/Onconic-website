@@ -24,10 +24,12 @@
   }
   const fmt = (d) => (d ? new Date(d).toLocaleDateString("fr-CH") : "jamais");
   function say(text, kind) { const m = $("am-msg"); m.className = "form-msg" + (kind ? " " + kind : ""); m.textContent = text; }
+  const todayIso = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+  const fmtD = (s) => (s ? s.slice(8, 10) + "." + s.slice(5, 7) + "." + s.slice(0, 4) : "");
   const nameOf = (r) => [r.first_name, r.last_name].filter(Boolean).join(" ") || r.full_name || "(sans nom)";
 
   async function load() {
-    const [{ data, error }, chRes] = await Promise.all([sb.rpc("admin_members"), sb.rpc("admin_clinic_changes")]);
+    const [{ data, error }, chRes, exRes] = await Promise.all([sb.rpc("admin_members"), sb.rpc("admin_clinic_changes"), sb.rpc("admin_members_extra")]);
     // Changements de cliniques programmés, par membre
     state.changes = new Map();
     for (const x of (chRes && chRes.data) || []) {
@@ -36,6 +38,9 @@
     }
     if (error) throw error;
     state.rows = data || [];
+    // Cadre administratif et fin d'accès (comptes temporaires) ; absents si la migration n'est pas encore appliquée
+    const extra = new Map(((exRes && exRes.data) || []).map((x) => [x.id, x]));
+    for (const r of state.rows) Object.assign(r, extra.get(r.id) || {});
   }
 
   async function renderClinicRequests() {
@@ -97,6 +102,8 @@
     meta.append(el("span", "ug-badge" + (r.role === "member" ? " ug-warn" : ""), r.role === "member" ? "En attente" : ROLE_LABEL[r.role]));
     if (Object.values(r.tools || {}).some((x) => x.custom)) meta.append(el("span", "ug-badge am-exc", "exception"));
     if (r.role === "cadre" && r.absence_validator) meta.append(el("span", "ug-badge", "validateur"));
+    if (r.role === "assistant" && r.admin_lead) meta.append(el("span", "ug-badge", "cadre admin"));
+    if (r.access_until) meta.append(el("span", "ug-badge" + (r.access_until < todayIso() ? " ug-warn" : ""), (r.access_until < todayIso() ? "terminé " : "jusqu'au ") + fmtD(r.access_until)));
     b.append(meta);
     const sub = [r.email, (r.clinics || []).length ? r.clinics.join(", ") : ""].filter(Boolean).join(" · ");
     if (sub) b.append(el("span", "am-row-sub", sub));
@@ -330,6 +337,50 @@
       else info.textContent = "Aucune clinique désignée pour l'instant : ";
       if (r.absence_validator) { const a = el("a", null, "choisir les cliniques"); a.href = "/admin/absences.html"; info.append(a, document.createTextNode(".")); }
       c.append(info);
+    }
+    if (r.role === "assistant" && "admin_lead" in r && !r.access_until) {
+      const fs = el("fieldset", "am-tools am-validator");
+      fs.append(el("legend", null, "Cadre administratif"));
+      const lab = el("label", "cg-check am-tool");
+      const cb = el("input");
+      cb.type = "checkbox"; cb.checked = !!r.admin_lead;
+      cb.addEventListener("change", async () => {
+        cb.disabled = true;
+        const { error } = await sb.rpc("admin_set_admin_lead", { p_user: r.id, p_on: cb.checked });
+        if (error) { cb.checked = !cb.checked; cb.disabled = false; return say("Refusé : " + error.message, "error"); }
+        say(cb.checked ? `${nameOf(r)} est cadre administratif : elle ou il crée et gère les comptes temporaires.` : `${nameOf(r)} n'est plus cadre administratif.`, "ok");
+        await refresh();
+      });
+      lab.append(cb, el("span", null, "Cadre administratif (crée et gère les comptes temporaires)"));
+      fs.append(lab);
+      c.append(fs);
+    }
+    if ("access_until" in r && !["admin", "direction"].includes(r.role) && r.id !== state.me) {
+      // Fin d'accès : comptes temporaires (créés par un cadre administratif) ou tout compte à limiter dans le temps
+      const fs = el("fieldset", "am-tools am-validator");
+      fs.append(el("legend", null, "Fin d'accès"));
+      const row = el("div", "am-until");
+      const inp = el("input"); inp.type = "date"; inp.value = r.access_until || ""; inp.setAttribute("aria-label", "Dernier jour d'accès");
+      const save = el("button", "btn btn-outline ug-copy", "Enregistrer"); save.type = "button";
+      save.addEventListener("click", async () => {
+        save.disabled = true;
+        const { error } = await sb.rpc("admin_set_access_until", { p_user: r.id, p_until: inp.value || null });
+        save.disabled = false;
+        if (error) return say("Refusé : " + error.message, "error");
+        say(inp.value ? `Accès de ${nameOf(r)} limité au ${fmtD(inp.value)} inclus.` : `Accès de ${nameOf(r)} sans limite de durée.`, "ok");
+        await refresh();
+      });
+      row.append(inp, save);
+      if (r.access_until) {
+        const clear = el("button", "btn btn-outline ug-copy", "Sans limite"); clear.type = "button";
+        clear.addEventListener("click", () => { inp.value = ""; save.click(); });
+        row.append(clear);
+      }
+      fs.append(row);
+      c.append(fs);
+      c.append(el("p", "muted am-note", r.access_until
+        ? `Dernier jour d'accès : ${fmtD(r.access_until)}${r.created_by_name ? ", compte temporaire créé par " + r.created_by_name : ""}. Au-delà, le compte n'a plus aucun accès et ne peut plus se connecter.`
+        : "Laissez vide pour un compte permanent."));
     }
     const notes = [];
     if (r.role === "admin") notes.push("Administrateur : accès à tout.");

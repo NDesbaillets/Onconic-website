@@ -1,0 +1,24 @@
+/* Comptes temporaires (cadres administratifs) */
+.tmp-intro { max-width: 70ch; }
+.tmp-form { max-width: 760px; padding: var(--space-4); margin: var(--space-4) 0 var(--space-5); }
+.tmp-form h2 { font-size: 1.4rem; }
+.tmp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-3); }
+.tmp-grid label, .tmp-row label { display: grid; gap: 4px; font-weight: 500; font-size: .92rem; color: var(--navy-800); }
+.tmp-grid input, .tmp-row input { font: inherit; padding: 8px 10px; border: 1px solid var(--navy-200); background: var(--white); color: var(--ink-900); }
+.tmp-wide { grid-column: 1 / -1; }
+.tmp-mode { border: 1px solid var(--navy-100); padding: var(--space-2) var(--space-3); margin: 0 0 var(--space-3); }
+.tmp-mode legend { font-weight: 500; color: var(--navy-800); padding: 0 4px; }
+.tmp-mode label { display: flex; gap: var(--space-2); align-items: flex-start; margin: 6px 0; font-size: .92rem; }
+.tmp-pass { margin-top: var(--space-3); padding: var(--space-3); background: var(--amber-50); border-left: 3px solid var(--amber-500); }
+.tmp-pass code { font-size: 1.15rem; letter-spacing: .04em; padding: 2px 6px; background: var(--white); border: 1px solid var(--navy-100); }
+.tmp-h2 { font-size: 1.5rem; margin-top: var(--space-5); }
+.tmp-list { display: grid; gap: var(--space-2); }
+.tmp-item { border: 1px solid var(--navy-100); background: var(--white); padding: var(--space-3); display: grid; gap: var(--space-2); }
+.tmp-item.tmp-off { background: var(--mist); }
+.tmp-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.tmp-head strong { font-weight: 500; color: var(--navy-800); }
+.tmp-meta { font-size: .85rem; color: var(--ink-600); margin: 0; max-width: none; }
+.tmp-row { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-2); }
+.tmp-row .btn { padding: 7px 14px; font-size: .9rem; }
+.tmp-on { background: #E3F1EA; color: var(--success); }
+.tmp-end { background: var(--navy-100); color: var(--ink-600); }

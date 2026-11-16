@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Comptes temporaires · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
+  <link rel="stylesheet" href="/assets/css/temporaires.css?v=20261116a">
+  <script src="/assets/js/site.js?v=20261110b" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/temporaires.js?v=20261116a" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug">
+      <div class="container">
+        <a class="hive-back" href="/fr/app/">← The Hive</a>
+        <span class="eyebrow">Outil des cadres administratifs</span>
+        <h1>Comptes temporaires</h1>
+        <hr class="rule">
+        <p class="form-msg" id="tmp-status" role="status">Chargement…</p>
+
+        <div id="tmp-tool" hidden>
+          <p class="tmp-intro">Créez ici le compte d'un·e temporaire avant son arrivée : il est actif tout de suite, sans validation par l'administrateur, avec les mêmes outils que les autres assistantes, et s'arrête seul après la date de fin d'accès (dernier jour inclus). Un an au plus, prolongeable.</p>
+
+          <form class="card tmp-form" id="tmp-form" novalidate>
+            <h2>Nouveau compte</h2>
+            <div class="tmp-grid">
+              <label>Prénom<input id="tmp-first" autocomplete="off" maxlength="80" required></label>
+              <label>Nom<input id="tmp-last" autocomplete="off" maxlength="80" required></label>
+              <label class="tmp-wide">Adresse e-mail (sert d'identifiant)<input id="tmp-email" type="email" autocomplete="off" maxlength="254" required></label>
+              <label>Dernier jour d'accès<input id="tmp-until" type="date" required></label>
+            </div>
+            <fieldset class="tmp-mode">
+              <legend>Premier accès</legend>
+              <label><input type="radio" name="tmp-mode" value="invite" checked> Envoyer une invitation par e-mail : la personne choisit elle-même son mot de passe</label>
+              <label><input type="radio" name="tmp-mode" value="password"> Créer un mot de passe provisoire, que je lui transmets (affiché une seule fois)</label>
+            </fieldset>
+            <button class="btn" type="submit" id="tmp-create">Créer le compte</button>
+            <p class="form-msg" id="tmp-msg" role="status" aria-live="polite"></p>
+            <div class="tmp-pass" id="tmp-pass" hidden>
+              <p><strong>Mot de passe provisoire</strong> (ne sera plus affiché) :</p>
+              <p><code id="tmp-pass-value"></code> <button class="btn btn-outline" type="button" id="tmp-pass-copy">Copier</button></p>
+              <p class="muted">Transmettez-le de vive voix ou par un autre canal que l'e-mail. La personne pourra le changer dans « Mon compte ».</p>
+            </div>
+          </form>
+
+          <h2 class="tmp-h2">Comptes temporaires</h2>
+          <p class="muted" id="tmp-count"></p>
+          <div class="tmp-list" id="tmp-list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>
