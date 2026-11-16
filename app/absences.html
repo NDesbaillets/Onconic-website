@@ -47,7 +47,7 @@
         <div id="ab-tool" hidden>
           <form class="card ab-new" id="ab-form" novalidate>
             <h2>Demander une absence</h2>
-            <p class="muted ab-flow">Un popup vous indique qui sera prévenu et vous laisse ajouter d'autres demandes ; rien n'est envoyé aux validateurs avant votre confirmation.</p>
+            <p class="muted ab-flow">« Demander l'absence » ouvre une fenêtre qui indique qui sera prévenu ; rien n'est envoyé aux validateurs avant votre confirmation. « Enregistrer en brouillon » garde la demande sans l'envoyer, pour en ajouter d'autres et tout envoyer ensemble.</p>
             <div class="ab-fields">
               <label>Motif
                 <select id="ab-kind" required>
@@ -61,7 +61,10 @@
               </label>
               <label>Du <input id="ab-start" type="date" required></label>
               <label>Au (inclus) <input id="ab-end" type="date" required></label>
+            </div>
+            <div class="btn-row">
               <button class="btn" type="submit" id="ab-send">Demander l'absence</button>
+              <button class="btn btn-outline" type="button" id="ab-save">Enregistrer en brouillon</button>
             </div>
             <p class="muted ab-days" id="ab-days" aria-live="polite"></p>
             <div id="ab-warn" role="alert"></div>
@@ -261,25 +264,11 @@
       <p id="sd-to"></p>
       <p class="muted" id="sd-rule"></p>
       <ul class="ab-draft-list" id="sd-list" aria-label="Demandes à envoyer"></ul>
-      <details class="ab-add" id="sd-add">
-        <summary>Ajouter une autre absence avant d'envoyer</summary>
-        <form id="sd-add-form" novalidate>
-          <div class="ab-fields">
-            <label>Motif
-              <select id="sd-kind"><option value="vacances">Vacances</option><option value="congres">Congrès</option><option value="autre">Autre</option></select>
-            </label>
-            <label class="ab-note">Précision <input id="sd-note" type="text" maxlength="200" autocomplete="off"></label>
-            <label>Du <input id="sd-start" type="date" required></label>
-            <label>Au (inclus) <input id="sd-end" type="date" required></label>
-            <button class="btn btn-outline" type="submit">Ajouter à l'envoi</button>
-          </div>
-          <p class="form-msg" id="sd-addmsg" role="status" aria-live="polite"></p>
-        </form>
-      </details>
       <div id="sd-warn" role="alert"></div>
       <p class="form-msg" id="sd-msg" role="status" aria-live="polite"></p>
       <div class="btn-row">
         <button class="btn" type="button" id="sd-go">Envoyer…</button>
+        <button class="btn btn-outline" type="button" id="sd-more">Ajouter une autre demande</button>
         <button class="btn btn-outline" type="button" id="sd-close">Plus tard (garder en brouillon)</button>
       </div>
     </div>
