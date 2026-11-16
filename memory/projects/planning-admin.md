@@ -1,6 +1,6 @@
 # Planning administratif
 
-**État :** maquette cliquable (16.11.2026), branche `maquette-planning`, aperçu `maquette-planning.onconic.pages.dev/app/planning-maquette`. Données fictives, aucun appel au serveur. Cette branche ne se fusionne pas.
+**État :** V1 développée le 16.11.2026 : `/app/planning.html`, migration `202611160003_planning_admin.sql`, tests `tests/absences/planning.test.mjs`. Elle est appliquée au projet de test ; la production attend le feu vert. La maquette d'origine reste sur la branche `maquette-planning` (non fusionnée).
 
 Le but est de remplacer le tableur Excel des cadres administratifs : une ligne par collaborateur·rice, deux colonnes par jour ouvrable (matin, après-midi), un code couleur par poste. Le tableur réel contient de vrais noms : il ne va jamais dans le dépôt.
 
@@ -55,3 +55,23 @@ Le but est de remplacer le tableur Excel des cadres administratifs : une ligne p
   - la connexion est bloquée (`banned_until`) par `temp_accounts_expire()`, à l'ouverture de la page et chaque nuit en production (`supabase/temp_accounts_cron.sql`, production seulement).
 - **Administration** : la direction et l'admin peuvent limiter dans le temps n'importe quel compte non admin ou lever la limite (`admin_set_access_until`).
 - **Tests** : `tests/absences/temp-accounts.test.mjs` (PGlite). Parcours complet vérifié sur le projet de test le 16.11.2026. L'invitation par e-mail ne part pas depuis le projet de test, qui n'envoie pas d'e-mails.
+
+## V1 (16.11.2026)
+- **Tables** : `plan_staff` (effectif, lien facultatif `user_id`, semaine type, jours off, période pour les temporaires), `plan_codes` (catalogue, groupe, couleurs, absence, « privé », actif), `plan_cells` (personne, jour, demi-journée) et `plan_settings` (lignes de couverture et minimums). La RLS est activée sans accès direct : tout passe par les fonctions.
+- **Fonctions** :
+  - `plan_grid(from, to)` : lecture (400 jours au plus) ;
+  - `plan_set_cells(jsonb)` : écriture par lot (jours ouvrables, période de présence, code connu) ;
+  - `plan_staff_save`, `plan_code_save` et `plan_coverage_save` ;
+  - `plan_accounts` : comptes qu'on peut relier à une ligne ;
+  - `can_edit_planning()` : cadres administratifs, admin et direction.
+- **Outil `planning`** (`tool_allowed`) : lecture pour tous les membres CHUV validés (médecins, assistantes, infirmier·ères, pharmaciens, direction, admin). Les cadres administratifs l'ont toujours.
+- **Masquage** : les codes « privés » (ML, CA, MIL) apparaissent « ABS » pour les lecteurs, sauf sur leur propre ligne (compte relié).
+- **Page** :
+  - périodes : semaine, 2 semaines, mois, fenêtre glissante (4 ou 6 semaines, 3 ou 6 mois) ;
+  - pinceau, rectangle, gomme, annulation ; enregistrement par lot ;
+  - fiche (semaine type, absence sur une période, compte relié) ;
+  - copie de semaine ; catalogue modifiable ; couverture ;
+  - export Excel au format du tableur, avec la couverture et la légende ;
+  - import du tableur : lu dans le navigateur, sans doublon si relancé. Les codes inconnus vont dans le groupe « À définir », avec la couleur de la case et le libellé de la 2e feuille.
+- **Jours fériés vaudois** : calculés dans le navigateur, comme dans Absences.
+- **Plus tard (V2/V3)** : lien avec l'app Absences, abonnement agenda « Mon planning », historique des modifications.
