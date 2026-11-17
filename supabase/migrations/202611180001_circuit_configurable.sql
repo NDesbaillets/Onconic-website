@@ -768,7 +768,7 @@ $$;
 
 create or replace function public.absence_submit() returns jsonb
 language plpgsql security definer set search_path = public, pg_temp as $$
-declare uid uuid := auth.uid(); ids bigint[]; rec uuid[]; who jsonb; fb boolean; op uuid[];
+declare uid uuid := auth.uid(); ids bigint[]; rec uuid[]; who jsonb; fb boolean; rcp uuid; oi bigint[];
 begin
   perform public.absence_guard();
   perform public.absence_purge();
@@ -781,11 +781,14 @@ begin
   perform public.absence_open_round(i) from unnest(ids) i;
   select coalesce(array_agg((x ->> 'id')::uuid), '{}') into rec from jsonb_array_elements(who -> 'validators') x;
   perform public.absence_enqueue('to_validate', r, ids, jsonb_build_object('owner', public.member_name(uid))) from unnest(rec) r;
-  -- Pré-avis de la direction, en parallèle et sans bloquer : pas de doublon pour qui reçoit déjà le message de validation
-  if exists (select 1 from public.absences x where x.id = any (ids) and public.absence_preavis_of(x)) then
-    op := array(select x from unnest(public.absence_opinion_recipients(uid)) x where not (x = any (rec)));
-    perform public.absence_enqueue('to_opinion', r, ids, jsonb_build_object('owner', public.member_name(uid))) from unnest(op) r;
-  end if;
+  -- Pré-avis de la direction, en parallèle et sans bloquer : demande par demande, sans doublon pour qui reçoit déjà le message de validation de cette demande
+  foreach rcp in array public.absence_opinion_recipients(uid) loop
+    oi := array(select x.id from public.absences x where x.id = any (ids) and public.absence_preavis_of(x)
+                   and not (rcp = any (public.absence_step_people(x, public.absence_step_of(x)))) order by x.start_date, x.id);
+    if coalesce(array_length(oi, 1), 0) > 0 then
+      perform public.absence_enqueue('to_opinion', rcp, oi, jsonb_build_object('owner', public.member_name(uid)));
+    end if;
+  end loop;
   return jsonb_build_object('count', array_length(ids, 1), 'ids', to_jsonb(ids), 'fallback', fb, 'validators', who -> 'validators');
 end;
 $$;
@@ -1292,7 +1295,8 @@ begin
           when 'create' then 'Circuit créé'
           when 'rename' then 'Renommé : « ' || coalesce(l.before ->> 'name', '') || ' » en « ' || coalesce(l.after ->> 'name', '') || ' »'
           when 'delete' then 'Circuit supprimé'
-          when 'assign' then 'Attributions (' || case l.after ->> 'type' when 'member' then 'membres' when 'role' then 'rôles' else 'cliniques' end || ') : '
+          when 'reorder' then 'Ordre des circuits modifié'
+          when 'assign' then 'Attributions (' || case l.after ->> 'type' when 'member' then 'membres' when 'role' then 'rôles' when 'all' then 'tous types' else 'cliniques' end || ') : '
                              || coalesce((select string_agg(x, ', ' order by x) from jsonb_array_elements_text(coalesce(l.after -> 'targets', '[]'::jsonb)) x), 'aucune')
           else 'Étapes actives : ' || coalesce((select string_agg(e ->> 'label', ', ' order by (e ->> 'pos')::int)
                                                 from jsonb_array_elements(coalesce(l.after, '[]'::jsonb)) e where (e ->> 'active')::boolean), 'aucune') end)
@@ -1386,20 +1390,17 @@ begin
     raise exception 'La liste des circuits est incomplète ou invalide.';
   end if;
   update public.absence_circuits c set pos = 10 * t.o from unnest(p_ids) with ordinality t(id, o) where c.id = t.id;
+  -- une ligne par circuit alternatif (et une pour le circuit général), pour que l'ordre apparaisse dans chaque journal
   insert into public.absence_circuit_log (changed_by, before, after, circuit_id, action)
-    values (auth.uid(), to_jsonb(alt), to_jsonb(p_ids), null, 'reorder');
+    select auth.uid(), to_jsonb(alt), to_jsonb(p_ids), c.id, 'reorder' from public.absence_circuits c;
 end;
 $$;
 
--- Attributions d'un circuit alternatif pour un type de cible : remplace toutes les attributions de ce circuit pour ce type
-create or replace function public.absence_circuit_assign(p_circuit bigint, p_type text, p_targets text[]) returns jsonb
+-- Remplace les attributions d'un circuit pour un type de cible (sans contrôle de droit ni journal) ; renvoie les libellés des cibles
+create or replace function public.absence_circuit_assign_apply(p_circuit bigint, p_type text, p_targets text[]) returns text[]
 language plpgsql security definer set search_path = public, pg_temp as $$
-declare c public.absence_circuits; x text; tg text[] := '{}'; o text; lbl text; labels text[] := '{}';
+declare x text; tg text[] := '{}'; o text; lbl text; labels text[] := '{}';
 begin
-  if not public.is_direction_admin() then raise exception 'Réservé à l''administration.' using errcode = '42501'; end if;
-  select * into c from public.absence_circuits where id = p_circuit for update;
-  if not found then raise exception 'Circuit introuvable.'; end if;
-  if c.is_default then raise exception 'Le circuit général ne s''attribue pas : retirez l''attribution d''un circuit alternatif pour y revenir.'; end if;
   if p_type is null or p_type not in ('member', 'role', 'clinic') then raise exception 'Type d''attribution inconnu.'; end if;
   if cardinality(coalesce(p_targets, '{}')) > 500 then raise exception 'Trop de cibles (500 au plus).'; end if;
   for x in select distinct lower(btrim(v)) from unnest(coalesce(p_targets, '{}')) v where btrim(v) <> '' order by 1 loop
@@ -1416,6 +1417,7 @@ begin
       if lbl is null then raise exception 'Clinique inconnue : %.', x; end if;
       x := lbl;
     end if;
+    o := null;
     select ac.name into o from public.absence_circuit_assignments a join public.absence_circuits ac on ac.id = a.circuit_id
      where a.target_type = p_type and a.target = x and a.circuit_id <> p_circuit;
     if o is not null then raise exception 'La cible « % » suit déjà le circuit « % ».', lbl, o; end if;
@@ -1423,8 +1425,45 @@ begin
   end loop;
   delete from public.absence_circuit_assignments where circuit_id = p_circuit and target_type = p_type;
   insert into public.absence_circuit_assignments (circuit_id, target_type, target) select p_circuit, p_type, t from unnest(tg) t;
+  return labels;
+end;
+$$;
+
+-- Circuit alternatif modifiable : existant, pas le circuit général (verrouillé)
+create or replace function public.absence_circuit_assign_guard(p_circuit bigint) returns void
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare c public.absence_circuits;
+begin
+  if not public.is_direction_admin() then raise exception 'Réservé à l''administration.' using errcode = '42501'; end if;
+  select * into c from public.absence_circuits where id = p_circuit for update;
+  if not found then raise exception 'Circuit introuvable.'; end if;
+  if c.is_default then raise exception 'Le circuit général ne s''attribue pas : retirez l''attribution d''un circuit alternatif pour y revenir.'; end if;
+end;
+$$;
+
+create or replace function public.absence_circuit_assign(p_circuit bigint, p_type text, p_targets text[]) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare labels text[];
+begin
+  perform public.absence_circuit_assign_guard(p_circuit);
+  labels := public.absence_circuit_assign_apply(p_circuit, p_type, p_targets);
   insert into public.absence_circuit_log (changed_by, before, after, circuit_id, action)
     values (auth.uid(), null, jsonb_build_object('type', p_type, 'targets', to_jsonb(labels)), p_circuit, 'assign');
+  return public.absence_circuit_assignments_json(p_circuit);
+end;
+$$;
+
+-- Les trois types d'un coup : une transaction, une ligne de journal
+create or replace function public.absence_circuit_assign_all(p_circuit bigint, p_members text[], p_roles text[], p_clinics text[]) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare lm text[]; lr text[]; lc text[];
+begin
+  perform public.absence_circuit_assign_guard(p_circuit);
+  lm := public.absence_circuit_assign_apply(p_circuit, 'member', p_members);
+  lr := public.absence_circuit_assign_apply(p_circuit, 'role', p_roles);
+  lc := public.absence_circuit_assign_apply(p_circuit, 'clinic', p_clinics);
+  insert into public.absence_circuit_log (changed_by, before, after, circuit_id, action)
+    values (auth.uid(), null, jsonb_build_object('type', 'all', 'targets', to_jsonb(lm || lr || lc)), p_circuit, 'assign');
   return public.absence_circuit_assignments_json(p_circuit);
 end;
 $$;
@@ -1574,6 +1613,10 @@ begin
     warns := warns || to_jsonb('Circuit « ' || ca.name || ' » : aucune attribution, il ne s''applique à personne');
   end loop;
   for ca in select ac.name, a.target from public.absence_circuit_assignments a join public.absence_circuits ac on ac.id = a.circuit_id
+             where a.target_type = 'clinic' and not exists (select 1 from public.absence_clinic_settings s where s.clinic = a.target) order by ac.pos, ac.id, a.target loop
+    warns := warns || to_jsonb('Circuit « ' || ca.name || ' » : la clinique « ' || ca.target || ' » n''existe plus, cette attribution ne s''applique à personne');
+  end loop;
+  for ca in select ac.name, a.target from public.absence_circuit_assignments a join public.absence_circuits ac on ac.id = a.circuit_id
              where a.target_type = 'member' and a.target ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
                and not exists (select 1 from public.profiles p where p.id = a.target::uuid and p.role <> 'member' and public.tool_allowed(p.id, 'absences'))
              order by ac.pos, ac.id, a.target loop
@@ -1640,7 +1683,8 @@ revoke execute on function
   public.absence_open_round_core(bigint, boolean), public.absence_circuit_steps_named(bigint), public.absence_peer_people(public.absences), public.absence_step_label(public.absences, int),
   public.absence_decision_rows(public.absences), public.absence_in_personnes_step(uuid, public.absences),
   public.absence_circuit_default_id(), public.absence_circuit_resolve(uuid, date, date), public.absence_circuit_check_id(bigint),
-  public.absence_circuit_assignments_json(bigint), public.absence_circuit_who_core()
+  public.absence_circuit_assignments_json(bigint), public.absence_circuit_who_core(),
+  public.absence_circuit_assign_apply(bigint, text, text[]), public.absence_circuit_assign_guard(bigint)
   from public, anon, authenticated;
 
 revoke execute on function
@@ -1661,7 +1705,7 @@ revoke execute on function
   public.absence_direction_update(bigint, text, text, date, date, boolean),
   public.absence_circuit_get(bigint), public.absence_circuit_save(jsonb, bigint), public.absence_circuit_simulate(uuid, date, date, text, jsonb, bigint), public.absence_circuit_overview(),
   public.absence_circuit_list(), public.absence_circuit_create(text, bigint), public.absence_circuit_rename(bigint, text), public.absence_circuit_delete(bigint),
-  public.absence_circuit_reorder(bigint[]), public.absence_circuit_assign(bigint, text, text[]), public.absence_circuit_who()
+  public.absence_circuit_reorder(bigint[]), public.absence_circuit_assign(bigint, text, text[]), public.absence_circuit_assign_all(bigint, text[], text[], text[]), public.absence_circuit_who()
   from public, anon;
 grant execute on function
   public.absence_decide(bigint, boolean, text), public.absence_my_validators(), public.absence_submit(),
@@ -1671,7 +1715,7 @@ grant execute on function
   public.absence_direction_update(bigint, text, text, date, date, boolean),
   public.absence_circuit_get(bigint), public.absence_circuit_save(jsonb, bigint), public.absence_circuit_simulate(uuid, date, date, text, jsonb, bigint), public.absence_circuit_overview(),
   public.absence_circuit_list(), public.absence_circuit_create(text, bigint), public.absence_circuit_rename(bigint, text), public.absence_circuit_delete(bigint),
-  public.absence_circuit_reorder(bigint[]), public.absence_circuit_assign(bigint, text, text[]), public.absence_circuit_who()
+  public.absence_circuit_reorder(bigint[]), public.absence_circuit_assign(bigint, text, text[]), public.absence_circuit_assign_all(bigint, text[], text[], text[]), public.absence_circuit_who()
   to authenticated;
 
 do $$

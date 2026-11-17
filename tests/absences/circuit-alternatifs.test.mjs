@@ -390,3 +390,56 @@ test('14. migration réexécutable avec des données, et par-dessus l\'ancienne 
     await t.as(1); assert.equal((await t.rpc('absence_circuit_get')).steps.length, 3);
   } finally { await t.db.close(); }
 });
+
+test('15. assign_all : une transaction, un refus ne laisse rien d\'enregistré, un seul journal, droits', async () => {
+  const t = await mk();
+  try {
+    const a = await circuit(t, 'Cadres'), b = await circuit(t, 'Autre');
+    await t.as(2); await t.rpc('absence_circuit_assign', [b, 'role', ['direction']]);
+    // le premier type est valide, le deuxième est pris par un autre circuit : rien ne reste
+    await assert.rejects(t.rpc('absence_circuit_assign_all', [a, [uid(4)], ['direction'], []]), /suit déjà le circuit « Autre »/);
+    assert.deepEqual((await t.rpc('absence_circuit_get', [a])).assignments, []);
+    const before = (await t.rpc('absence_circuit_get', [a])).log.length;
+    const res = await t.rpc('absence_circuit_assign_all', [a, [uid(4)], ['cadre'], ['Urologie']]);
+    assert.deepEqual(res.map((x) => [x.type, x.target]), [['clinic', 'Urologie'], ['member', uid(4)], ['role', 'cadre']]);
+    const log = (await t.rpc('absence_circuit_get', [a])).log;
+    assert.equal(log.length, before + 1); assert.equal(log[0].action, 'assign');
+    await assert.rejects(t.rpc('absence_circuit_assign_all', [1, [], [], []]), /ne s'attribue pas/);
+    // remplace tout, y compris en vidant
+    assert.deepEqual(await t.rpc('absence_circuit_assign_all', [a, [], [], []]), []);
+    await t.as(4); await assert.rejects(t.rpc('absence_circuit_assign_all', [a, [], ['cadre'], []]), /Réservé/);
+  } finally { await t.db.close(); }
+});
+
+test('16. pré-avis par demande : qui valide A reçoit l\'avis pour B', async () => {
+  const t = await mk();
+  try {
+    // circuit alternatif pour Urologie : la direction (2) valide en premier
+    const uro = await circuit(t, 'Urologie', [...DIRECT.slice(0, 1), { pos: 10, kind: 'personnes', label: 'Direction', rule: 'any', blocking: true, active: true, persons: [uid(2)] }, DIRECT[1]]);
+    await t.as(2); await t.rpc('absence_circuit_assign', [uro, 'clinic', ['Urologie']]);
+    await t.sup(); await t.db.query("insert into member_clinic_changes(user_id, valid_from, clinics) values ($1,'2027-06-01','{Urologie}')", [uid(4)]);
+    await t.as(4);
+    const gen = (await t.rpc('absence_request', ['vacances', null, ...D1])).id, alt = (await t.rpc('absence_request', ['vacances', null, '2027-07-05', '2027-07-07'])).id;
+    await t.rpc('absence_submit');
+    const op = (await t.outbox('to_opinion')).filter((r) => r.recipient === uid(2));
+    assert.equal(op.length, 1);
+    assert.deepEqual(op[0].absence_ids.map(Number), [gen]);
+    assert.ok((await t.outbox('to_validate')).some((r) => r.recipient === uid(2) && r.absence_ids.map(Number).includes(alt)));
+  } finally { await t.db.close(); }
+});
+
+test('17. avertissement : attribution vers une clinique disparue ; journal des réordonnancements', async () => {
+  const t = await mk();
+  try {
+    const a = await circuit(t, 'A'), b = await circuit(t, 'B');
+    await t.as(2); await t.rpc('absence_circuit_assign', [a, 'clinic', ['Urologie']]);
+    await t.sup(); await t.db.exec("delete from absence_clinic_settings where clinic='Urologie'");
+    await t.as(2);
+    assert.ok((await t.rpc('absence_circuit_overview')).warnings.some((w) => /Circuit « A » : la clinique « Urologie » n'existe plus/.test(w)));
+    await t.rpc('absence_circuit_reorder', [[b, a]]);
+    for (const id of [a, b, 1]) {
+      const g = await t.rpc('absence_circuit_get', [id === 1 ? null : id]);
+      assert.ok(g.log.some((l) => l.action === 'reorder'), 'journal ' + id);
+    }
+  } finally { await t.db.close(); }
+});

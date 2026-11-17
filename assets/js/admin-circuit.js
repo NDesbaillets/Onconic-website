@@ -19,7 +19,7 @@
   const names = (list) => (list || []).map((x) => x.name).join(", ");
   const REASONS = { member: "nommé", role: "rôle", clinic: "clinique", default: "défaut", draft: "brouillon du circuit sélectionné" };
   const ROLE_CODES = ["clinician", "cdc", "cadre", "assistant", "pharmacist", "admin", "direction", "nurse"];
-  const state = { overview: null, steps: [], orig: "", circuits: [], sel: null, detail: null, assign: { member: new Set(), role: new Set(), clinic: new Set() }, assignOrig: "", who: [] };
+  const state = { overview: null, steps: [], orig: "", circuits: [], sel: null, detail: null, assign: { member: new Set(), role: new Set(), clinic: new Set() }, assignOrig: "", who: [], req: 0 };
   const current = () => state.circuits.find((c) => c.id === state.sel) || state.circuits[0] || { id: null, name: "", is_default: true };
 
   // ----- Schéma (étapes enregistrées) -----
@@ -399,7 +399,9 @@
     await loadCircuit();
   }
   async function loadCircuit() {
+    const tok = ++state.req;
     const { data, error } = await sb.rpc("absence_circuit_get", { p_circuit: state.sel });
+    if (tok !== state.req) return; // réponse d'un clic plus ancien : ignorée
     if (error) return say("cc-ed-msg", "Chargement impossible : " + error.message, "error");
     state.detail = data;
     renderTabs();
@@ -442,7 +444,8 @@
     } else {
       const { error } = await sb.rpc("absence_circuit_rename", { p_circuit: state.sel, p_name: name });
       if (error) return say("cc-box-msg", error.message, "error");
-      closeBox(); await refreshOverview(); await loadCircuit();
+      // renommage : seul le nom affiché change, les étapes et attributions en cours d'édition sont conservées
+      closeBox(); await refreshOverview();
     }
   }
   async function deleteCircuit() {
@@ -509,14 +512,12 @@
     const c = current();
     if (c.is_default) return;
     $("cc-as-save").disabled = true;
-    for (const [type, set] of Object.entries(state.assign)) {
-      const { error } = await sb.rpc("absence_circuit_assign", { p_circuit: c.id, p_type: type, p_targets: [...set] });
-      if (error) { renderAssign(); return say("cc-as-msg", error.message, "error"); }
-    }
-    state.assignOrig = assignSnapshot();
+    const { error } = await sb.rpc("absence_circuit_assign_all", { p_circuit: c.id, p_members: [...state.assign.member], p_roles: [...state.assign.role], p_clinics: [...state.assign.clinic] });
+    // dans tous les cas, l'écran est remis d'accord avec la base
     await refreshOverview();
     const { data } = await sb.rpc("absence_circuit_get", { p_circuit: c.id });
-    if (data) { state.detail = data; loadAssign(data.assignments || []); log(data.log || []); }
+    if (data && c.id === state.sel) { state.detail = data; loadAssign(data.assignments || []); log(data.log || []); }
+    if (error) return say("cc-as-msg", error.message, "error");
     say("cc-as-msg", "Attributions enregistrées.", "ok");
   }
 

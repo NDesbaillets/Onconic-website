@@ -64,6 +64,12 @@ const sb = {
     if (name === 'absence_circuit_rename') { byId(args.p_circuit).name = args.p_name; return { data: null, error: null }; }
     if (name === 'absence_circuit_delete') { circuits.splice(circuits.findIndex((c) => c.id === args.p_circuit), 1); return { data: null, error: null }; }
     if (name === 'absence_circuit_reorder') { args.p_ids.forEach((id, i) => { byId(id).pos = 10 * (i + 1); }); circuits.sort((a, b) => (b.is_default - a.is_default) || a.pos - b.pos); return { data: null, error: null }; }
+    if (name === 'absence_circuit_assign_all') {
+      if (args.p_roles.includes('direction')) return { data: null, error: { message: 'La cible « direction » suit déjà le circuit « Urologie ».' } };
+      const c = byId(args.p_circuit);
+      c.assignments = [].concat(args.p_members.map((t) => ({ type: 'member', target: t, name: t })), args.p_roles.map((t) => ({ type: 'role', target: t, name: t })), args.p_clinics.map((t) => ({ type: 'clinic', target: t, name: t })));
+      return { data: c.assignments, error: null };
+    }
     if (name === 'absence_circuit_assign') {
       if (args.p_targets.includes('direction')) return { data: null, error: { message: 'La cible « direction » suit déjà le circuit « Urologie ».' } };
       const c = byId(args.p_circuit);
@@ -189,8 +195,8 @@ try {
   await members.locator('.cc-check:visible input').check();
   await p.click('#cc-as-save');
   await p.locator('#cc-as-msg.ok').waitFor();
-  const asg = (await calls(p, 'absence_circuit_assign')).slice(-3).map((c) => [c[1].p_circuit, c[1].p_type, c[1].p_targets]);
-  assert.deepEqual(asg, [[2, 'member', ['33333333-3333-4333-8333-333333333333']], [2, 'role', ['cadre']], [2, 'clinic', []]]);
+  const asg = (await calls(p, 'absence_circuit_assign_all')).pop()[1];
+  assert.deepEqual(asg, { p_circuit: 2, p_members: ['33333333-3333-4333-8333-333333333333'], p_roles: ['cadre'], p_clinics: [] });
   ok('attributions : erreur dans .form-msg, enregistrement des trois types');
 
   // Nouveau circuit (copie), erreur de nom, renommage, ordre, suppression
@@ -208,10 +214,12 @@ try {
   const ro = (await calls(p, 'absence_circuit_reorder')).pop()[1].p_ids;
   assert.deepEqual(ro, [2, 13, 3]);
   assert.deepEqual(await p.locator('#cc-tabs .cc-tab').allInnerTexts(), ['Circuit général', 'Cadres', 'Nouveau test', 'Urologie']);
+  await p.locator('#cc-editor .cc-ed').first().locator('input[type=text]').fill('Édition en cours');
   await p.click('#cc-rename');
   assert.equal(await p.inputValue('#cc-box-name'), 'Nouveau test');
   await p.fill('#cc-box-name', 'Renommé'); await p.locator('#cc-box button[type=submit]').click();
   await p.locator('#cc-tabs .cc-tab.active', { hasText: 'Renommé' }).waitFor();
+  assert.equal(await p.locator('#cc-editor .cc-ed').first().locator('input[type=text]').inputValue(), 'Édition en cours', 'le renommage garde les modifications');
   await p.click('#cc-delete');
   await p.locator('#cc-tabs .cc-tab.active', { hasText: 'Circuit général' }).waitFor();
   assert.deepEqual(await p.locator('#cc-tabs .cc-tab').allInnerTexts(), ['Circuit général', 'Cadres', 'Urologie']);
