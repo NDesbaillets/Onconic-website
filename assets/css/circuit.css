@@ -59,7 +59,26 @@
 .cc-dirty { color: var(--amber-700); font-weight: 600; }
 .cc-log-list { margin: 0; padding-left: 1.2em; }
 .cc-log-list li { margin: var(--space-1) 0; overflow-wrap: anywhere; }
+/* Circuits alternatifs */
+.cc-tabs { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-2) 0; }
+.cc-tab { min-height: 40px; height: 40px; padding: 0 16px; box-sizing: border-box; border: 1px solid var(--navy-200); border-radius: 999px; background: var(--white); color: var(--ink-900); font: inherit; cursor: pointer; max-width: 100%; overflow-wrap: anywhere; }
+.cc-tab.active { background: var(--navy-700); border-color: var(--navy-700); color: var(--white); font-weight: 600; }
+.cc-circuit-actions .btn { min-height: 40px; height: 40px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.cc-circuit-actions .btn[hidden], .card.cc-box[hidden] { display: none; }
+.cc-circuit-actions #cc-up, .cc-circuit-actions #cc-down { min-width: 40px; padding: 0; }
+.card.cc-box { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3); max-width: 520px; min-width: 0; }
+.cc-box input, .cc-box select, .cc-who-filters input, .cc-who-filters select { height: 40px; box-sizing: border-box; padding: 0 var(--space-2); max-width: 100%; min-width: 0; }
+.cc-box .btn { min-height: 40px; height: 40px; padding: 0 16px; display: inline-flex; align-items: center; box-sizing: border-box; }
+.cc-as-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: var(--space-3); margin-top: var(--space-2); }
+.cc-as-set { display: flex; flex-direction: column; gap: var(--space-2); }
+.cc-as-set input[type="search"] { height: 40px; box-sizing: border-box; padding: 0 var(--space-2); max-width: 100%; min-width: 0; }
+.cc-applied { margin: var(--space-2) 0 0; }
+.cc-pill.warn { background: var(--amber-50); border-color: var(--amber-500); color: var(--amber-700); font-weight: 600; margin-left: var(--space-1); }
+.cc-who { min-width: 640px; }
+.cc-who td:first-child { white-space: normal; }
 @media (max-width: 700px) {
+  .cc-circuit-actions .btn { flex: 1 1 auto; }
+  .cc-circuit-actions #cc-up, .cc-circuit-actions #cc-down { flex: 0 0 40px; }
   .cc-ed-actions .btn { width: 100%; justify-content: center; }
   .cc-ed-head, .cc-ed-row { align-items: stretch; }
   .cc-field.grow { flex-basis: 100%; }

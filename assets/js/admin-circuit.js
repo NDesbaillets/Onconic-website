@@ -1,5 +1,5 @@
-// Circuit de validation des absences : schéma, édition des étapes, simulateur et journal. Réservé à l'administration (contrôlé aussi en base).
-// Les validateurs restent désignés par clinique dans /admin/absences.html ; cette page règle les étapes, leur ordre et leurs conditions.
+// Circuits de validation des absences : circuit général et circuits alternatifs (membres, rôles, cliniques), schéma, édition des étapes, simulateur et journal.
+// Réservé à l'administration (contrôlé aussi en base). Les validateurs restent désignés par clinique dans /admin/absences.html ; cette page règle les étapes, leur ordre et leurs conditions.
 (function () {
   const cfg = window.ONCONIC_CONFIG || {};
   const sb = window.supabase && cfg.supabaseUrl ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
@@ -17,7 +17,10 @@
   }
   const pill = (txt, cls) => el("span", "cc-pill" + (cls ? " " + cls : ""), txt);
   const names = (list) => (list || []).map((x) => x.name).join(", ");
-  const state = { overview: null, steps: [], orig: "" };
+  const REASONS = { member: "nommé", role: "rôle", clinic: "clinique", default: "défaut", draft: "brouillon du circuit sélectionné" };
+  const ROLE_CODES = ["clinician", "cdc", "cadre", "assistant", "pharmacist", "admin", "direction", "nurse"];
+  const state = { overview: null, steps: [], orig: "", circuits: [], sel: null, detail: null, assign: { member: new Set(), role: new Set(), clinic: new Set() }, assignOrig: "", who: [] };
+  const current = () => state.circuits.find((c) => c.id === state.sel) || state.circuits[0] || { id: null, name: "", is_default: true };
 
   // ----- Schéma (étapes enregistrées) -----
   function conditions(s) {
@@ -53,8 +56,8 @@
     if (c.length) n.append(el("p", "cc-cond", c.join(" · ")));
     return n;
   }
-  function flow(o) {
-    const steps = [...(o.steps || [])].sort((a, b) => a.pos - b.pos);
+  function flow(o, stepList) {
+    const steps = [...(stepList || [])].sort((a, b) => a.pos - b.pos);
     const pre = steps.find((s) => s.kind === "preavis");
     const rest = steps.filter((s) => s.kind !== "preavis");
     const arrow = () => el("span", "cc-arrow", "→");
@@ -157,7 +160,7 @@
     const box = el("div", "cc-persons");
     const known = new Map();
     for (const m of state.overview.members || []) known.set(m.id, memberLabel(m));
-    for (const st of state.overview.steps || []) for (const p of st.persons || []) if (!known.has(p.id)) known.set(p.id, p.name || p.id);
+    for (const st of (state.detail && state.detail.steps) || []) for (const p of st.persons || []) if (!known.has(p.id)) known.set(p.id, p.name || p.id);
     const filter = el("input"); filter.type = "search"; filter.placeholder = "Filtrer par nom"; filter.setAttribute("aria-label", "Filtrer les personnes");
     const list = el("div", "cc-person-list");
     const rows = [];
@@ -265,11 +268,12 @@
     try { payload = serialize(); } catch (e) { return say("cc-ed-msg", e.message, "error"); }
     if (!confirm("Les demandes déjà envoyées gardent leur circuit ; les nouvelles suivront celui-ci.")) return;
     $("cc-save").disabled = true;
-    const { data, error } = await sb.rpc("absence_circuit_save", { p_steps: payload });
+    const { data, error } = await sb.rpc("absence_circuit_save", { p_steps: payload, p_circuit: state.sel });
     if (error) { dirty(); return say("cc-ed-msg", error.message, "error"); }
-    const { data: o } = await sb.rpc("absence_circuit_overview");
-    if (o) { state.overview = o; render(o); }
-    loadSteps(o ? o.steps : data.steps);
+    state.detail = data;
+    await refreshOverview();
+    loadSteps(data.steps);
+    flow(state.overview, data.steps); renderAssign();
     log((data && data.log) || []);
     say("cc-ed-msg", "Circuit enregistré.", "ok");
     if (data && data.warning) { const m = $("cc-ed-msg"); m.append(" "); const w = el("span", null, data.warning); w.style.color = "var(--amber-700)"; m.append(w); }
@@ -315,6 +319,7 @@
     const args = { p_user: sel.value, p_from: from, p_to: to, p_kind: kind };
     if (draft) {
       try { args.p_steps = serialize(); } catch (e) { say("cc-ed-msg", e.message, "error"); return; }
+      args.p_circuit = state.sel;
     }
     const { data, error } = await sb.rpc("absence_circuit_simulate", args);
     if (error) {
@@ -342,6 +347,10 @@
   function result(r, from, to, draft) {
     const box = $("cc-result");
     const head = el("p", null, (draft ? "Circuit en cours de modification (non enregistré) · " : "Circuit enregistré · ") + r.member.name + " (" + (ROLES[r.member.role] || r.member.role) + ") · " + ((r.clinics || []).length ? r.clinics.join(", ") : "aucune clinique à ces dates") + " · " + (KIND_NAME[r.kind] || r.kind) + " · du " + fr(from) + " au " + fr(to));
+    const applied = el("p", "cc-applied");
+    if (r.circuit) {
+      applied.append(el("strong", null, "Circuit appliqué : " + r.circuit.name), " (" + (REASONS[r.circuit.reason] || r.circuit.reason) + (r.circuit.reason === "role" && r.circuit.detail ? " : " + (ROLES[r.circuit.detail] || r.circuit.detail) : r.circuit.detail && r.circuit.reason !== "member" ? " : " + r.circuit.detail : "") + ")");
+    }
     const wrap = el("div", "cc-steps");
     r.steps.forEach((s, i) => {
       const n = el("div", "card cc-node" + (s.blocking ? "" : " optional"));
@@ -353,13 +362,189 @@
       if (s.note) n.append(el("p", null, s.note));
       wrap.append(n);
     });
-    box.replaceChildren(head, wrap);
+    box.replaceChildren(head, applied, wrap);
+    if (draft && r.resolved && r.circuit && r.resolved.id !== r.circuit.id) box.append(el("p", "muted", "Ce membre suit en réalité le circuit « " + r.resolved.name + " » (" + (REASONS[r.resolved.reason] || r.resolved.reason) + ")."));
     if ((r.excluded || []).length) box.append(el("p", "muted", "Étapes non appliquées à cette demande : " + r.excluded.map((x) => x.label + " (" + x.reason + ")").join(", ") + "."));
     if (r.self_excluded) box.append(el("p", "muted", "Ce membre est lui-même désigné validateur d'une de ses cliniques : il est exclu de sa propre validation."));
     box.append(el("p", "muted", r.admin_override));
   }
 
-  function render(o) { flow(o); warnings(o); table(o); }
+  // ----- Circuits : sélecteur et gestion -----
+  function renderTabs() {
+    const box = $("cc-tabs");
+    box.replaceChildren(...state.circuits.map((c) => {
+      const b = el("button", "cc-tab" + (c.id === state.sel ? " active" : ""), c.name);
+      b.type = "button"; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", c.id === state.sel ? "true" : "false");
+      b.addEventListener("click", () => selectCircuit(c.id));
+      return b;
+    }));
+    const c = current();
+    $("cc-rename").hidden = c.is_default; $("cc-delete").hidden = c.is_default;
+    const alt = state.circuits.filter((x) => !x.is_default), i = alt.findIndex((x) => x.id === c.id);
+    $("cc-up").hidden = c.is_default; $("cc-down").hidden = c.is_default;
+    $("cc-up").disabled = i <= 0; $("cc-down").disabled = i < 0 || i >= alt.length - 1;
+    $("cc-flow-title").textContent = "Schéma du circuit : " + c.name;
+    $("cc-edit-title").textContent = "Modifier le circuit : " + c.name;
+    $("cc-assign-box").hidden = c.is_default;
+    const filter = $("cc-who-circuit"), keep = filter.value;
+    filter.replaceChildren(...[["", "Tous les circuits"], ...state.circuits.map((x) => [String(x.id), x.name])].map(([v, t]) => { const o = el("option", null, t); o.value = v; return o; }));
+    filter.value = [...filter.options].some((o) => o.value === keep) ? keep : "";
+  }
+  function confirmLeave() { return (snapshot() === state.orig && assignSnapshot() === state.assignOrig) || confirm("Des modifications ne sont pas enregistrées. Les abandonner ?"); }
+  async function selectCircuit(id) {
+    if (id === state.sel) return;
+    if (!confirmLeave()) return;
+    state.sel = id;
+    say("cc-ed-msg", ""); say("cc-as-msg", ""); say("cc-box-msg", "");
+    await loadCircuit();
+  }
+  async function loadCircuit() {
+    const { data, error } = await sb.rpc("absence_circuit_get", { p_circuit: state.sel });
+    if (error) return say("cc-ed-msg", "Chargement impossible : " + error.message, "error");
+    state.detail = data;
+    renderTabs();
+    flow(state.overview, data.steps);
+    loadSteps(data.steps);
+    loadAssign(data.assignments || []);
+    log(data.log || []);
+  }
+  async function refreshOverview() {
+    const { data: o } = await sb.rpc("absence_circuit_overview");
+    if (o) { state.overview = o; state.circuits = o.circuits || state.circuits; if (!state.circuits.some((c) => c.id === state.sel)) state.sel = (current() || {}).id; warnings(o); table(o); renderTabs(); }
+    await loadWho();
+  }
+
+  let boxMode = null;
+  function openBox(mode) {
+    boxMode = mode;
+    const c = current();
+    $("cc-box").hidden = false;
+    $("cc-box-title").textContent = mode === "create" ? "Nouveau circuit" : "Renommer « " + c.name + " »";
+    $("cc-box-name").value = mode === "rename" ? c.name : "";
+    $("cc-box-copy-wrap").hidden = mode !== "create";
+    const copy = $("cc-box-copy");
+    copy.replaceChildren(...state.circuits.map((x) => { const o = el("option", null, "Copier : " + x.name); o.value = String(x.id); return o; }));
+    copy.value = String(state.sel);
+    say("cc-box-msg", "");
+    $("cc-box-name").focus();
+  }
+  function closeBox() { boxMode = null; $("cc-box").hidden = true; say("cc-box-msg", ""); }
+  async function submitBox(ev) {
+    ev.preventDefault();
+    const name = $("cc-box-name").value.trim();
+    if (!name) return say("cc-box-msg", "Indiquez un nom (60 caractères au plus).", "error");
+    if (boxMode === "create") {
+      if (!confirmLeave()) return;
+      const { data, error } = await sb.rpc("absence_circuit_create", { p_name: name, p_copy_from: Number($("cc-box-copy").value) || null });
+      if (error) return say("cc-box-msg", error.message, "error");
+      closeBox(); await refreshOverview(); state.sel = Number(data); await loadCircuit();
+      say("cc-ed-msg", "Circuit créé : attribuez-le puis ajustez ses étapes.", "ok");
+    } else {
+      const { error } = await sb.rpc("absence_circuit_rename", { p_circuit: state.sel, p_name: name });
+      if (error) return say("cc-box-msg", error.message, "error");
+      closeBox(); await refreshOverview(); await loadCircuit();
+    }
+  }
+  async function deleteCircuit() {
+    const c = current();
+    if (c.is_default) return;
+    if (!confirm("Supprimer le circuit « " + c.name + " » ? Ses membres suivront le circuit général pour leurs nouvelles demandes ; les demandes en cours gardent leur circuit.")) return;
+    const { error } = await sb.rpc("absence_circuit_delete", { p_circuit: c.id });
+    if (error) return say("cc-ed-msg", error.message, "error");
+    state.orig = snapshot(); state.assignOrig = assignSnapshot();
+    state.sel = null; await refreshOverview(); state.sel = (state.circuits.find((x) => x.is_default) || state.circuits[0]).id; await loadCircuit();
+  }
+  async function moveCircuit(d) {
+    const alt = state.circuits.filter((x) => !x.is_default).map((x) => x.id), i = alt.indexOf(state.sel);
+    if (i < 0 || i + d < 0 || i + d >= alt.length) return;
+    [alt[i], alt[i + d]] = [alt[i + d], alt[i]];
+    const { error } = await sb.rpc("absence_circuit_reorder", { p_ids: alt });
+    if (error) return say("cc-ed-msg", error.message, "error");
+    await refreshOverview();
+  }
+
+  // ----- Attributions : « Qui suit ce circuit » -----
+  const assignSnapshot = () => JSON.stringify(["member", "role", "clinic"].map((k) => [...state.assign[k]].sort()));
+  function loadAssign(list) {
+    state.assign = { member: new Set(), role: new Set(), clinic: new Set() };
+    for (const a of list) state.assign[a.type].add(a.target);
+    state.assignOrig = assignSnapshot();
+    renderAssign();
+  }
+  // cibles déjà prises par un autre circuit : nom de ce circuit
+  function takenBy(type, target) {
+    for (const c of state.circuits) if (c.id !== state.sel) for (const a of c.assignments || []) if (a.type === type && a.target === target) return c.name;
+    return null;
+  }
+  function pickList(type, title, items) {
+    const fs = el("fieldset", "cc-cond-box cc-as-set");
+    fs.append(el("legend", null, title));
+    const filter = el("input"); filter.type = "search"; filter.placeholder = "Filtrer"; filter.setAttribute("aria-label", "Filtrer : " + title);
+    const list = el("div", "cc-person-list"), rows = [];
+    const count = el("span", "muted");
+    const upd = () => { const n = state.assign[type].size; count.textContent = n + " coché" + (n > 1 ? "s" : ""); $("cc-as-save").disabled = assignSnapshot() === state.assignOrig; $("cc-as-dirty").hidden = assignSnapshot() === state.assignOrig; };
+    for (const it of items) {
+      const other = takenBy(type, it.id);
+      const row = check(it.label + (other ? " · déjà dans « " + other + " »" : ""), state.assign[type].has(it.id), (on) => {
+        if (on) state.assign[type].add(it.id); else state.assign[type].delete(it.id);
+        upd();
+      });
+      row.dataset.name = it.label.toLowerCase();
+      rows.push(row); list.append(row);
+    }
+    filter.addEventListener("input", () => { const q = filter.value.trim().toLowerCase(); for (const r of rows) r.hidden = !!q && !r.dataset.name.includes(q); });
+    fs.append(filter, count, list);
+    upd();
+    return fs;
+  }
+  function renderAssign() {
+    const o = state.overview || {};
+    const members = [...(o.members || [])].sort((a, b) => a.name.localeCompare(b.name, "fr")).map((m) => ({ id: m.id, label: memberLabel(m) }));
+    const roles = ROLE_CODES.map((r) => ({ id: r, label: ROLES[r] || r }));
+    const clinics = (o.clinics || []).map((c) => ({ id: c.clinic, label: c.clinic }));
+    $("cc-as-lists").replaceChildren(pickList("member", "Membres", members), pickList("role", "Rôles", roles), pickList("clinic", "Cliniques", clinics));
+  }
+  async function saveAssign() {
+    say("cc-as-msg", "");
+    const c = current();
+    if (c.is_default) return;
+    $("cc-as-save").disabled = true;
+    for (const [type, set] of Object.entries(state.assign)) {
+      const { error } = await sb.rpc("absence_circuit_assign", { p_circuit: c.id, p_type: type, p_targets: [...set] });
+      if (error) { renderAssign(); return say("cc-as-msg", error.message, "error"); }
+    }
+    state.assignOrig = assignSnapshot();
+    await refreshOverview();
+    const { data } = await sb.rpc("absence_circuit_get", { p_circuit: c.id });
+    if (data) { state.detail = data; loadAssign(data.assignments || []); log(data.log || []); }
+    say("cc-as-msg", "Attributions enregistrées.", "ok");
+  }
+
+  // ----- Qui suit quel circuit -----
+  async function loadWho() {
+    const { data, error } = await sb.rpc("absence_circuit_who");
+    if (error) return ($("cc-who-msg").textContent = "Chargement impossible : " + error.message);
+    state.who = data || [];
+    renderWho();
+  }
+  function renderWho() {
+    const q = $("cc-who-q").value.trim().toLowerCase(), cid = $("cc-who-circuit").value;
+    const t = $("cc-who-table");
+    const head = el("tr");
+    for (const h of ["Membre", "Rôle", "Cliniques", "Circuit", "Raison"]) head.append(el("th", null, h));
+    const thead = el("thead"); thead.append(head);
+    const body = el("tbody");
+    const rows = state.who.filter((w) => (!cid || String(w.circuit_id) === cid) && (!q || (w.name || "").toLowerCase().includes(q) || (w.circuit_name || "").toLowerCase().includes(q)));
+    for (const w of rows) {
+      const tr = el("tr");
+      const reason = el("td", null, REASONS[w.reason] || w.reason);
+      if (w.conflict) { const p = pill("conflit", "warn"); p.title = "Plusieurs cliniques mènent à des circuits différents : le mieux placé s'applique"; reason.append(" ", p); }
+      tr.append(el("td", null, w.name || ""), el("td", null, ROLES[w.role] || w.role), el("td", null, (w.clinics || []).join(", ")), el("td", null, w.circuit_name || ""), reason);
+      body.append(tr);
+    }
+    t.replaceChildren(thead, body);
+    $("cc-who-msg").textContent = rows.length ? rows.length + " membre" + (rows.length > 1 ? "s" : "") : "Aucun membre ne correspond.";
+  }
 
   (async () => {
     if (!sb) return ($("ug-status").textContent = "Service indisponible.");
@@ -370,15 +555,26 @@
     if (role !== "admin" && role !== "direction") return ($("ug-status").textContent = "Page réservée à l'administration.");
     const { data: o, error } = await sb.rpc("absence_circuit_overview");
     if (error) return ($("ug-status").textContent = "Chargement impossible : " + error.message);
-    state.overview = o;
+    state.overview = o; state.circuits = o.circuits || [];
+    state.sel = (state.circuits.find((c) => c.is_default) || state.circuits[0] || {}).id;
     $("ug-status").hidden = true;
     $("cc-tool").hidden = false;
-    render(o); form(o);
-    loadSteps(o.steps);
+    warnings(o); table(o); form(o);
     $("cc-add").addEventListener("click", addStep);
     $("cc-save").addEventListener("click", save);
     $("cc-cancel").addEventListener("click", cancel);
-    const { data: g } = await sb.rpc("absence_circuit_get");
-    log((g && g.log) || []);
+    $("cc-new").addEventListener("click", () => openBox("create"));
+    $("cc-rename").addEventListener("click", () => openBox("rename"));
+    $("cc-delete").addEventListener("click", deleteCircuit);
+    $("cc-up").addEventListener("click", () => moveCircuit(-1));
+    $("cc-down").addEventListener("click", () => moveCircuit(1));
+    $("cc-box").addEventListener("submit", submitBox);
+    $("cc-box-cancel").addEventListener("click", closeBox);
+    $("cc-as-save").addEventListener("click", saveAssign);
+    $("cc-who-q").addEventListener("input", renderWho);
+    $("cc-who-circuit").addEventListener("change", renderWho);
+    renderTabs();
+    await loadCircuit();
+    await loadWho();
   })();
 })();

@@ -16,11 +16,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
-  <link rel="stylesheet" href="/assets/css/circuit.css?v=20261118a">
+  <link rel="stylesheet" href="/assets/css/circuit.css?v=20261118b">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/admin-circuit.js?v=20261118b" defer></script>
+  <script src="/assets/js/admin-circuit.js?v=20261118c" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -44,15 +44,44 @@
         <hr class="rule">
         <p class="form-msg" id="ug-status" role="status">Chargement…</p>
         <div id="cc-tool" hidden>
-          <p class="muted">Ce schéma montre le circuit enregistré. Les validateurs restent désignés par clinique dans <a href="/admin/absences.html">Absences : valideurs par clinique</a> ; les rôles et accès se règlent dans <a href="/admin/membres.html">Membres et accès</a>.</p>
-          <h2>Schéma du circuit</h2>
+          <p class="muted">Le circuit général s'applique à tous, sauf aux membres, rôles et cliniques attribués à un circuit alternatif. Priorité : membre nommé, puis rôle, puis clinique (le circuit le mieux placé dans l'ordre l'emporte), puis circuit général. Les validateurs restent désignés par clinique dans <a href="/admin/absences.html">Absences : valideurs par clinique</a> ; les rôles et accès se règlent dans <a href="/admin/membres.html">Membres et accès</a>.</p>
+          <h2>Circuits</h2>
+          <div class="cc-tabs" id="cc-tabs" role="tablist" aria-label="Circuits de validation"></div>
+          <div class="btn-row cc-ed-actions cc-circuit-actions">
+            <button class="btn btn-outline" id="cc-new" type="button">Nouveau circuit</button>
+            <button class="btn btn-outline" id="cc-rename" type="button" hidden>Renommer</button>
+            <button class="btn btn-outline lt-danger" id="cc-delete" type="button" hidden>Supprimer</button>
+            <button class="btn btn-outline" id="cc-up" type="button" aria-label="Monter le circuit dans l'ordre" title="Monter dans l'ordre" hidden>↑</button>
+            <button class="btn btn-outline" id="cc-down" type="button" aria-label="Descendre le circuit dans l'ordre" title="Descendre dans l'ordre" hidden>↓</button>
+          </div>
+          <form class="card cc-box" id="cc-box" hidden novalidate>
+            <h3 id="cc-box-title">Nouveau circuit</h3>
+            <label class="cc-field">Nom (60 caractères au plus)<input id="cc-box-name" type="text" maxlength="60" autocomplete="off"></label>
+            <label class="cc-field" id="cc-box-copy-wrap">Point de départ<select id="cc-box-copy"></select></label>
+            <div class="btn-row cc-ed-actions">
+              <button class="btn" type="submit">Valider</button>
+              <button class="btn btn-outline" id="cc-box-cancel" type="button">Annuler</button>
+            </div>
+            <p class="form-msg" id="cc-box-msg" role="status" aria-live="polite"></p>
+          </form>
+          <div id="cc-assign-box" hidden>
+            <h2>Qui suit ce circuit</h2>
+            <p class="muted">Une cible (membre, rôle ou clinique) ne suit qu'un circuit. Pour revenir au circuit général, retirez la cible de ce circuit.</p>
+            <div class="cc-as-lists" id="cc-as-lists"></div>
+            <p class="form-msg" id="cc-as-msg" role="status" aria-live="polite"></p>
+            <div class="btn-row cc-ed-actions">
+              <button class="btn" id="cc-as-save" type="button" disabled>Enregistrer les attributions</button>
+              <span class="cc-dirty" id="cc-as-dirty" hidden>modifications non enregistrées</span>
+            </div>
+          </div>
+          <h2 id="cc-flow-title">Schéma du circuit</h2>
           <div id="cc-flow" class="cc-flow"></div>
           <p class="muted" id="cc-admin-note">Un administrateur peut valider à toute étape ; sa validation conclut la demande.</p>
           <h2>Avertissements</h2>
           <div id="cc-warn" class="card cc-warn"></div>
           <h2>Cliniques</h2>
           <div class="cc-scroll"><table class="cc-table" id="cc-table"></table></div>
-          <h2>Modifier le circuit</h2>
+          <h2 id="cc-edit-title">Modifier le circuit</h2>
           <p class="muted">Les demandes déjà envoyées gardent leur circuit ; les nouvelles suivront celui enregistré ici. Le pré-avis reste en tête. Pour une étape de clinique, les validateurs sont désignés dans <a href="/admin/absences.html">Absences : valideurs par clinique</a>.</p>
           <div id="cc-editor" class="cc-editor"></div>
           <div class="btn-row cc-ed-actions">
@@ -65,6 +94,14 @@
             <button class="btn btn-outline" id="cc-cancel" type="button" disabled>Annuler les modifications</button>
             <span class="cc-dirty" id="cc-dirty" hidden>modifications non enregistrées</span>
           </div>
+          <h2>Qui suit quel circuit</h2>
+          <p class="muted">Situation d'aujourd'hui, pour les membres qui ont l'outil Absences.</p>
+          <div class="card cc-sim cc-who-filters">
+            <label>Rechercher<input id="cc-who-q" type="search" placeholder="Nom ou circuit" autocomplete="off"></label>
+            <label>Circuit<select id="cc-who-circuit"></select></label>
+          </div>
+          <p class="muted" id="cc-who-msg" role="status" aria-live="polite"></p>
+          <div class="cc-scroll"><table class="cc-table cc-who" id="cc-who-table"></table></div>
           <h2>Simulateur</h2>
           <form class="card cc-sim" id="cc-form" novalidate>
             <label>Membre <select id="cc-member"></select></label>
