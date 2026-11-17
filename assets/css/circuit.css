@@ -21,9 +21,18 @@
 .cc-sim label { display: flex; flex-direction: column; gap: var(--space-1); font-size: .9rem; }
 .cc-sim select, .cc-sim input { height: 40px; box-sizing: border-box; padding: 0 var(--space-2); }
 .cc-sim .btn { height: 40px; min-height: 0; padding: 0 16px; display: inline-flex; align-items: center; box-sizing: border-box; }
+.card.cc-sim { flex-direction: row; flex-wrap: wrap; align-items: flex-end; justify-content: flex-start; }
+.cc-sim .btn { margin-top: 0; align-self: flex-end; }
+.cc-sim label { min-width: 0; max-width: 100%; }
+.cc-sim select { max-width: 100%; min-width: 0; }
 .cc-steps { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-3); }
+.cc-node .cc-pill, .cc-steps .cc-pill { align-self: flex-start; }
+.cc-table td { overflow-wrap: normal; }
+.cc-table td:first-child { white-space: nowrap; }
 @media (max-width: 700px) {
   .cc-flow { flex-direction: column; }
   .cc-arrow { transform: rotate(90deg); }
   .cc-sim { flex-direction: column; align-items: stretch; }
+  .card.cc-sim { flex-direction: column; align-items: stretch; }
+  .cc-sim select, .cc-sim input { width: 100%; }
 }
