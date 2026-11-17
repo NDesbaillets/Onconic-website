@@ -139,7 +139,7 @@ begin
     if rl not in ('all', 'any') then raise exception 'La règle d''une étape doit être « all » (tous) ou « any » (un seul).'; end if;
     bl := case when jsonb_typeof(e -> 'blocking') = 'boolean' then (e ->> 'blocking')::boolean else true end;
     ac := case when jsonb_typeof(e -> 'active') = 'boolean' then (e ->> 'active')::boolean else true end;
-    if k = 'visa' then rl := 'any'; end if;
+    if k = 'visa' then rl := 'any'; bl := true; end if;
     if k = 'preavis' then bl := false; rl := 'all'; end if;
     pers := '{}';
     if k = 'personnes' and e -> 'persons' is not null and jsonb_typeof(e -> 'persons') <> 'null' then
@@ -419,7 +419,7 @@ begin
   foreach r in array public.absence_peer_people(a) loop
     if r is distinct from p_by then
       perform public.absence_enqueue('peer_rejected', r, array[p_id], jsonb_build_object('owner', public.member_name(a.user_id), 'by', public.member_name(p_by),
-        'comment', p_comment, 'step_label', public.absence_step_label(a, a.stage)));
+        'step_label', public.absence_step_label(a, a.stage)));
     end if;
   end loop;
   -- un refus peut être la dernière décision d'un envoi dont les autres absences sont déjà validées
@@ -637,7 +637,7 @@ begin
     fb := fs -> 'step' ->> 'kind' = 'visa';
     v := array(select p::uuid from jsonb_array_elements_text(fs -> 'people') p);
   end if;
-  return jsonb_build_object('fallback', fb, 'step_kind', first_step ->> 'kind', 'step_label', first_step ->> 'label',
+  return jsonb_build_object('fallback', fb, 'step_kind', first_step ->> 'kind', 'step_label', first_step ->> 'label', 'step_rule', coalesce(first_step ->> 'rule', 'all'),
     'validators', coalesce((select jsonb_agg(jsonb_build_object('id', x, 'name', public.member_name(x)) order by public.member_name(x)) from unnest(v) x), '[]'::jsonb));
 end;
 $$;

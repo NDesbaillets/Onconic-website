@@ -91,7 +91,7 @@ function b64(bytes: Uint8Array): string {
 
 // Adresses de la boîte commune de la direction (secret ABSENCE_FORMS_TO, séparées par une virgule)
 const sharedBox = () => (Deno.env.get("ABSENCE_FORMS_TO") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-const DIRECTION_KINDS = ["to_direction", "to_opinion"]; // peer_rejected va à chaque personne concernée, pas à la boîte commune
+const DIRECTION_KINDS = ["to_direction"]; // peer_rejected va à chaque personne concernée ; to_opinion : voir toDirection
 const VALIDATE_KINDS = ["to_validate", "to_validate_change"];
 
 async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createTransport> | null, sentShared: Set<string>): Promise<string | null> {
@@ -150,7 +150,8 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
   if (!wantsEmail) return pushSent ? null : "__skip__";
 
   // E-mail : boîte commune de la direction pour ses messages (un seul envoi par message), sinon adresse du destinataire
-  const toDirection = DIRECTION_KINDS.includes(row.kind) || (VALIDATE_KINDS.includes(row.kind) && prof?.role === "direction");
+  // to_opinion : boîte commune seulement pour le pré-avis de la direction (destinataire direction, sans step_label) ; une personne d'une étape reçoit l'avis à son adresse
+  const toDirection = DIRECTION_KINDS.includes(row.kind) || (row.kind === "to_opinion" && prof?.role === "direction" && !row.payload.step_label) || (VALIDATE_KINDS.includes(row.kind) && prof?.role === "direction");
   const box = toDirection ? sharedBox() : [];
   let to: string | string[] | undefined;
   if (box.length) {

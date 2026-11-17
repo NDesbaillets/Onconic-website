@@ -267,6 +267,16 @@ test('absence_circuit_save : contrôles, droits et journal', async () => {
   } finally { await t.db.close(); }
 });
 
+test('visa envoyé non bloquant : enregistré bloquant', async () => {
+  const t = await mk();
+  try {
+    await t.as(2);
+    const sv = steps(); sv.find((x) => x.kind === 'visa').blocking = false;
+    const saved = await t.rpc('absence_circuit_save', [JSON.stringify(sv)]);
+    assert.equal(saved.steps.find((x) => x.kind === 'visa').blocking, true);
+  } finally { await t.db.close(); }
+});
+
 test('simulation sur un circuit non enregistré', async () => {
   const t = await mk();
   try {

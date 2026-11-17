@@ -738,7 +738,8 @@
       : sd.info.fallback ? `Aucun validateur n'est désigné pour vos cliniques : votre demande sera envoyée à l'administration (${names(v)}).`
       : `Vous allez envoyer une demande de validation à : ${names(v)}.`;
     $("sd-rule").textContent = v.length > 1 && !sd.info.fallback
-      ? "Chaque absence doit être validée par tous ces validateurs. Ils reçoivent un seul e-mail pour l'ensemble de vos demandes ; vous êtes prévenu·e dès que tout est validé, ou dès qu'un validateur refuse."
+      ? (sd.info.step_rule === "any" ? "Un seul de ces validateurs suffit à valider chaque absence." : "Chaque absence doit être validée par tous ces validateurs.")
+      + " Ils reçoivent un seul e-mail pour l'ensemble de vos demandes ; vous êtes prévenu·e dès que tout est validé, ou dès qu'un validateur refuse."
       : "Le validateur reçoit un seul e-mail pour l'ensemble de vos demandes ; vous êtes prévenu·e de sa décision.";
     const list = $("sd-list");
     list.replaceChildren();

@@ -128,7 +128,7 @@
       if (s.min_days != null && !(Number.isInteger(s.min_days) && s.min_days >= 1 && s.min_days <= 365)) throw new Error("Étape « " + s.label.trim() + " » : la durée minimale va de 1 à 365 jours ouvrables.");
       const p = s.kind === "preavis" ? 0 : (pos += 10);
       return {
-        pos: p, kind: s.kind, label: s.label.trim(), rule: s.kind === "visa" ? "any" : s.rule, blocking: s.kind === "preavis" ? false : s.blocking, active: s.active,
+        pos: p, kind: s.kind, label: s.label.trim(), rule: s.kind === "visa" ? "any" : s.rule, blocking: s.kind === "preavis" ? false : s.kind === "visa" ? true : s.blocking, active: s.active,
         persons: s.kind === "personnes" ? s.persons : [], kinds: s.kinds && s.kinds.length < 3 ? s.kinds : null, min_days: s.min_days, pdf_slot: s.kind === "personnes" ? s.pdf_slot : null,
       };
     });
@@ -203,9 +203,10 @@
       rule.value = s.kind === "visa" ? "any" : s.rule; rule.disabled = s.kind === "visa";
       rule.addEventListener("change", () => { s.rule = rule.value; dirty(); });
       opts.append(field("Règle", rule));
+      if (s.kind === "visa") s.blocking = true;
       const bl = el("select");
       for (const [v, t] of [["1", "Bloquant"], ["0", "Consultatif"]]) { const o = el("option", null, t); o.value = v; bl.append(o); }
-      bl.value = s.blocking ? "1" : "0";
+      bl.value = s.blocking ? "1" : "0"; bl.disabled = s.kind === "visa";
       bl.addEventListener("change", () => { s.blocking = bl.value === "1"; dirty(); });
       opts.append(field("Type d'avis", bl));
     } else opts.append(el("p", "muted", "Facultatif et consultatif, toujours en tête et en parallèle de la première étape bloquante."));
@@ -271,6 +272,7 @@
     loadSteps(o ? o.steps : data.steps);
     log((data && data.log) || []);
     say("cc-ed-msg", "Circuit enregistré.", "ok");
+    if (data && data.warning) { const m = $("cc-ed-msg"); m.append(" "); const w = el("span", null, data.warning); w.style.color = "var(--amber-700)"; m.append(w); }
   }
   function loadSteps(steps) {
     state.steps = fromServer(steps);
