@@ -68,7 +68,8 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 - Aucun lien GitHub automatique entre le dépôt et Supabase : les migrations s'appliquent à la main, selon la règle ci-dessus.
 
 ## Agents et sessions
-- Agents du dépôt : `relecteur-securite` (ici, `.claude/agents/`), `redacteur-clinique` et `verificateur-references` (dans onconic-content).
+- Agents du dépôt : `developpeur` (Sonnet), `developpeur-rapide` (Haiku), `relecteur-code` et `relecteur-securite` (Sonnet) (ici, `.claude/agents/`), `redacteur-clinique` et `verificateur-references` (dans onconic-content).
+- **Génération du code par sous-agents** (décision du 17.11.2026) : la session chef conçoit et rédige un cahier des charges précis ; `developpeur` écrit le code et les tests (`developpeur-rapide` pour une petite modification mécanique) ; `relecteur-code` relit la justesse, `relecteur-securite` la sécurité. La session chef corrige par un nouvel appel au développeur, applique le SQL et merge.
 - Seule la session chef d'orchestre merge une PR et exécute du SQL sur Supabase (projet de test d'emblée, production sur feu vert, voir Préférences de travail). Les sessions enfants et les sous-agents ouvrent une PR et s'arrêtent. Aucun sous-agent ne reçoit `execute_sql`.
 - Avant tout merge, la session chef lance `relecteur-securite` ; tout point bloquant empêche la fusion.
 
