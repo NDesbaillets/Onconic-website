@@ -29,7 +29,7 @@
     const visaWho = o.visa_fallback_admins ? "Repli : administrateurs (" + names(o.admins) + ")" : "Direction : " + dirNames;
     const col2 = el("div", "cc-col");
     col2.append(
-      node("Pré-avis de la direction", "consultatif", false, "Facultatif, non bloquant, en parallèle de la 1re ligne", o.visa_fallback_admins ? "Aucun pré-avis demandé" : "Direction : " + dirNames, true),
+      node("Pré-avis de la direction", "consultatif", false, "Facultatif, non bloquant, en parallèle de la 1re ligne. Pas de pré-avis si la clinique n'a aucun validateur (la direction vise directement)", o.visa_fallback_admins ? "Aucun pré-avis demandé" : "Direction : " + dirNames, true),
       node("1re ligne : validateurs de clinique", "bloquant", true, "Tous doivent valider ; un refus suffit", "Désignés par clinique (voir le tableau)"));
     const c1 = el("div", "cc-col"); c1.append(node("Envoi de la demande", null, false, null, null));
     const c3 = el("div", "cc-col"); c3.append(node("2e ligne : visa de la direction", "bloquant", true, "Un seul visa suffit", visaWho));
@@ -86,21 +86,23 @@
     }));
     const mon = nextMonday(), fri = new Date(mon); fri.setDate(mon.getDate() + 4);
     $("cc-from").value = iso(mon); $("cc-to").value = iso(fri);
-    $("cc-from").addEventListener("change", () => { if (!$("cc-to").value || $("cc-to").value < $("cc-from").value) $("cc-to").value = $("cc-from").value; });
+    $("cc-to").min = $("cc-from").value;
+    $("cc-from").addEventListener("change", () => { $("cc-to").min = $("cc-from").value; if (!$("cc-to").value || $("cc-to").value < $("cc-from").value) $("cc-to").value = $("cc-from").value; });
     $("cc-form").addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const msg = $("cc-msg"); msg.className = "form-msg"; msg.textContent = "";
       $("cc-result").replaceChildren();
       if (!sel.value || !$("cc-from").value || !$("cc-to").value) { msg.className = "form-msg error"; msg.textContent = "Choisissez un membre et deux dates."; return; }
-      const { data, error } = await sb.rpc("absence_circuit_simulate", { p_user: sel.value, p_from: $("cc-from").value, p_to: $("cc-to").value });
+      const from = $("cc-from").value, to = $("cc-to").value;
+      const { data, error } = await sb.rpc("absence_circuit_simulate", { p_user: sel.value, p_from: from, p_to: to });
       if (error) { msg.className = "form-msg error"; msg.textContent = "Simulation impossible : " + error.message; return; }
-      result(data);
+      result(data, from, to);
     });
   }
 
-  function result(r) {
+  function result(r, from, to) {
     const box = $("cc-result");
-    const head = el("p", null, r.member.name + " (" + (ROLES[r.member.role] || r.member.role) + ") · " + ((r.clinics || []).length ? r.clinics.join(", ") : "aucune clinique à ces dates") + " · du " + fr($("cc-from").value) + " au " + fr($("cc-to").value));
+    const head = el("p", null, r.member.name + " (" + (ROLES[r.member.role] || r.member.role) + ") · " + ((r.clinics || []).length ? r.clinics.join(", ") : "aucune clinique à ces dates") + " · du " + fr(from) + " au " + fr(to));
     const wrap = el("div", "cc-steps");
     r.steps.forEach((s, i) => {
       const n = el("div", "card cc-node" + (s.blocking ? "" : " optional"));

@@ -11,6 +11,9 @@ begin
   if dir_active = 0 then
     warns := warns || to_jsonb('Visa et pré-avis : aucun membre direction, le visa revient aux administrateurs et aucun pré-avis n''est demandé'::text);
   end if;
+  if dir_active = 0 and not exists (select 1 from public.profiles p where p.role = 'admin') then
+    warns := warns || to_jsonb('Visa : aucun membre direction ni administrateur, personne ne peut viser les demandes'::text);
+  end if;
   for c in select s.clinic from public.absence_clinic_settings s order by s.pos loop
     select count(*) into n_active from public.absence_validators av
       join public.profiles p on p.id = av.user_id
@@ -67,20 +70,24 @@ begin
   if not found then raise exception 'Membre introuvable.'; end if;
   cl := public.member_clinics(p_user, p_from, p_to);
   req := public.absence_required_validators(p_user, p_from, p_to);
-  op := array(select x from unnest(public.absence_opinion_recipients(p_user)) x where not (x = any (req)));
+  op := array(select x from unnest(public.absence_opinion_recipients(p_user)) x where not (x = any (public.absence_validator_ids(p_user, p_from, p_to))));
   vis := public.absence_direction_recipients(p_user);
   vis_admin := exists (select 1 from public.profiles p where p.id = any (vis) and p.role = 'admin');
-  selfx := exists (select 1 from public.absence_validators av where av.user_id = p_user and av.clinic = any (cl));
+  selfx := exists (select 1 from public.absence_validators av join public.profiles p on p.id = av.user_id
+    where av.user_id = p_user and av.clinic = any (cl) and p.role in ('cadre', 'direction') and p.absence_validator and public.tool_allowed(p_user, 'absences'));
   steps := jsonb_build_array(
     jsonb_build_object('key', 'preavis', 'label', 'Pré-avis de la direction', 'rule', 'facultatif', 'blocking', false, 'parallel_with', 'clinique',
       'people', coalesce((select jsonb_agg(jsonb_build_object('id', x, 'name', public.member_name(x)) order by lower(public.member_name(x))) from unnest(op) x), '[]'::jsonb),
-      'note', case when coalesce(array_length(op, 1), 0) = 0 then 'Aucun pré-avis demandé' end),
+      'note', case when coalesce(array_length(op, 1), 0) > 0 then null
+                   when coalesce(array_length(req, 1), 0) = 0 then 'Aucun pré-avis : la direction reçoit déjà la demande au visa'
+                   else 'Aucun pré-avis demandé' end),
     jsonb_build_object('key', 'clinique', 'label', 'Validateurs de clinique', 'rule', 'tous doivent valider ; un refus suffit', 'blocking', true, 'parallel_with', null,
       'people', coalesce((select jsonb_agg(jsonb_build_object('id', x, 'name', public.member_name(x)) order by lower(public.member_name(x))) from unnest(req) x), '[]'::jsonb),
       'note', case when coalesce(array_length(req, 1), 0) = 0 then 'Aucun validateur actif : étape sautée, la demande va directement au visa' end),
     jsonb_build_object('key', 'visa', 'label', 'Visa de la direction', 'rule', 'un seul visa suffit ; signe le formulaire PDF', 'blocking', true, 'parallel_with', null,
       'people', coalesce((select jsonb_agg(jsonb_build_object('id', x, 'name', public.member_name(x)) order by lower(public.member_name(x))) from unnest(vis) x), '[]'::jsonb),
-      'note', case when vis_admin then 'Personne de la direction : le visa revient aux administrateurs' end));
+      'note', case when coalesce(array_length(vis, 1), 0) = 0 then 'Aucun membre direction ni administrateur : personne ne peut viser'
+                   when vis_admin then 'Personne de la direction : le visa revient aux administrateurs' end));
   return jsonb_build_object(
     'member', jsonb_build_object('id', p_user, 'name', public.member_name(p_user), 'role', r),
     'clinics', to_jsonb(cl),

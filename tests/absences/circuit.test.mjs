@@ -71,7 +71,7 @@ test('circuit des absences : droits, aperçu, simulateur', async (t) => {
     });
     await t.test('simulation : cadre validateur de sa propre clinique', async () => {
       await db.exec('reset role'); await db.query("update profiles set clinics='{Thoracique}' where id=$1", [uid(3)]);
-      await db.query("insert into member_clinic_changes(user_id,valid_from,clinics) values ($1,'2026-01-01','{Thoracique}')", [uid(3)]).catch(() => {});
+      await db.query("insert into member_clinic_changes(user_id,valid_from,clinics) values ($1,'2026-01-01','{Thoracique}')", [uid(3)]);
       await as(1); const r = await sim(3);
       if (r.clinics.includes('Thoracique')) { assert.equal(r.self_excluded, true); assert.ok(!names(step(r, 'clinique')).includes('Circuit 3')); }
       else assert.fail('le cadre devrait être rattaché à Thoracique : ' + JSON.stringify(r.clinics));
@@ -81,6 +81,22 @@ test('circuit des absences : droits, aperçu, simulateur', async (t) => {
       assert.deepEqual(step(r, 'clinique').people, []);
       assert.match(step(r, 'clinique').note, /étape sautée/);
       assert.deepEqual(names(step(r, 'visa')), ['Circuit 2']);
+      assert.deepEqual(step(r, 'preavis').people, []);
+      assert.equal(step(r, 'preavis').note, 'Aucun pré-avis : la direction reçoit déjà la demande au visa');
+    });
+    await t.test('membre désigné mais décoché : non exclu', async () => {
+      await db.exec('reset role'); await db.query("update profiles set clinics='{Urologie}' where id=$1", [uid(8)]);
+      await as(1); const r = await sim(8);
+      assert.deepEqual(r.clinics, ['Urologie']); assert.equal(r.self_excluded, false);
+    });
+    await t.test('cas daté : changement de clinique futur', async () => {
+      await db.exec('reset role');
+      await db.query("insert into member_clinic_changes(user_id,valid_from,clinics) values ($1,'2026-12-01','{Thoracique}')", [uid(6)]);
+      await as(1);
+      const before = await sim(6, '2026-11-23', '2026-11-27'), after = await sim(6, '2026-12-07', '2026-12-11');
+      assert.deepEqual(step(before, 'clinique').people, []);
+      assert.deepEqual(names(step(after, 'clinique')), ['Circuit 3']);
+      await db.exec('reset role'); await db.query('delete from member_clinic_changes where user_id=$1', [uid(6)]);
     });
     await t.test('dates inversées et membre inconnu', async () => {
       await as(1);
