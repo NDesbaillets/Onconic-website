@@ -218,6 +218,32 @@
     const meta = el("p", "muted am-meta", [r.institution ? "Institution : " + r.institution : "Hors CHUV",
       "inscrit le " + fmt(r.created_at), "dernière connexion : " + fmt(r.last_sign_in_at)].join(" · "));
     who.append(meta);
+    // Jamais connecté : renvoi du lien de premier accès (l'invitation a pu expirer ou s'égarer)
+    if (!r.last_sign_in_at && r.id !== state.me && !(state.role === "direction" && RESERVED.includes(r.role))) {
+      const row = el("div", "am-resend");
+      const out = el("span", "muted am-resend-msg");
+      const b = el("button", "btn btn-outline ug-copy", "Renvoyer l'invitation"); b.type = "button";
+      b.addEventListener("click", async () => {
+        if (!confirm(`Renvoyer à ${r.email} un lien pour choisir son mot de passe et activer son compte ?`)) return;
+        b.disabled = true; out.textContent = "Envoi…";
+        const { data, error } = await sb.functions.invoke("resend-invite", { body: { user_id: r.id } });
+        b.disabled = false;
+        if (error) {
+          let code = "";
+          try { code = (await error.context.json()).error; } catch (x) { /* réponse non JSON */ }
+          out.textContent = {
+            rate_limited: "Un lien vient déjà d'être envoyé : réessayez dans une minute.",
+            already_signed_in: "Ce membre s'est déjà connecté : il peut utiliser « Mot de passe oublié ».",
+            admin_only: "Seul un administrateur renvoie le lien d'un compte admin ou direction.",
+            forbidden: "Réservé à l'administration."
+          }[code] || "Envoi impossible (" + (code || "erreur réseau") + ").";
+          return;
+        }
+        out.textContent = `Lien envoyé à ${r.email} (${data.mode === "invite" ? "nouvelle invitation" : "lien de choix du mot de passe"}). Valable un temps limité : qu'il ou elle l'ouvre rapidement, et vérifie les indésirables.`;
+      });
+      row.append(b, out);
+      who.append(row);
+    }
     head.append(who);
 
     const rl = el("label", "am-rolebox", "Rôle");
