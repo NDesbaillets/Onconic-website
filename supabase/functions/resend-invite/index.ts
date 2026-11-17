@@ -6,8 +6,9 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const SITE = "https://onconic.ch";
 const ORIGINS = [SITE, "https://www.onconic.ch"];
-const PREVIEW = /^https:\/\/([a-z0-9-]+\.)?onconic\.pages\.dev$/;
 const URL_ = Deno.env.get("SUPABASE_URL")!, ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
+// Aperçus Cloudflare acceptés seulement sur le projet de test : en production, un lien ne mène jamais vers une branche non relue
+const PREVIEW = URL_.includes("uubowlcyekbgmizrlyxb") ? /^https:\/\/([a-z0-9-]+\.)?onconic\.pages\.dev$/ : /^$/;
 const admin = createClient(URL_, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
 function corsHeaders(req: Request) {
@@ -45,7 +46,7 @@ Deno.serve(async (req) => {
   if (!u?.email) return json(req, 404, { error: "not_found" });
   if (u.last_sign_in_at) return json(req, 409, { error: "already_signed_in" });
   const { data: prof } = await admin.from("profiles").select("role, lang").eq("id", id).maybeSingle();
-  if ((prof?.role === "admin" || prof?.role === "direction") && myRole !== "admin") return json(req, 403, { error: "admin_only" });
+  if ((!prof || prof.role === "admin" || prof.role === "direction") && myRole !== "admin") return json(req, 403, { error: "admin_only" });
 
   const origin = req.headers.get("origin") ?? "";
   const site = PREVIEW.test(origin) ? origin : SITE;
@@ -62,7 +63,7 @@ Deno.serve(async (req) => {
   }
   if (error) {
     const limited = error.status === 429 || /rate|seconds/i.test(error.message ?? "");
-    console.error("resend failed", mode, error.code ?? "", error.message ?? "");
+    console.error("resend failed", mode, error.code ?? "", error.status ?? "");
     return json(req, limited ? 429 : 502, { error: limited ? "rate_limited" : "send_failed" });
   }
   return json(req, 200, { ok: true, mode });
