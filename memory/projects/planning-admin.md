@@ -1,6 +1,6 @@
 # Planning administratif
 
-**État :** V1 développée le 16.11.2026 : `/app/planning.html`, migration `202611160003_planning_admin.sql`, tests `tests/absences/planning.test.mjs`. Elle est appliquée au projet de test ; la production attend le feu vert. La maquette d'origine reste sur la branche `maquette-planning` (non fusionnée).
+**État :** V1 développée le 16.11.2026 : `/app/planning.html`, migration `202611160003_planning_admin.sql`, tests `tests/absences/planning.test.mjs`. En production depuis le 17.11.2026, V2 comprise. La maquette d'origine reste sur la branche `maquette-planning` (non fusionnée).
 
 Le but est de remplacer le tableur Excel des cadres administratifs : une ligne par collaborateur·rice, deux colonnes par jour ouvrable (matin, après-midi), un code couleur par poste. Le tableur réel contient de vrais noms : il ne va jamais dans le dépôt.
 
@@ -86,3 +86,10 @@ Le but est de remplacer le tableur Excel des cadres administratifs : une ligne p
 - **Mon agenda** : bouton visible si une ligne est reliée au compte.
   - `plan_calendar_token` réutilise le jeton secret de `calendar_tokens`, partagé avec les autres flux personnels.
   - Le flux est servi par l'Edge Function `plan-feed` (sans JWT, jeton dans l'adresse) : un événement par jour, de J-30 à J+180.
+
+## Mise en production (17.11.2026)
+- Migrations `202611160003` et `202611160004` appliquées après la sauvegarde nocturne du jour. Fonctions identiques au projet de test (empreintes comparées). Fonction `plan-feed` déployée sans vérification JWT.
+- Réglages de confidentialité gardés par défaut, en attente de la confirmation de Nicolas :
+  - les demandes d'absence en attente sont visibles des lecteurs, avec « ? » ;
+  - les éditeurs voient les motifs et les absences masquées.
+- Reste à faire : désigner les cadres administratifs dans l'admin, puis importer le tableur réel par la page ; à faire uniquement en production.
