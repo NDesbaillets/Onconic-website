@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Planning admin · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
+  <link rel="stylesheet" href="/assets/css/planning.css?v=20261116e">
+  <script src="/assets/js/site.js?v=20261110b" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/planning.js?v=20261116c" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="pl">
+      <div class="pl-wrap">
+        <a class="hive-back" href="/fr/app/">← The Hive</a>
+        <span class="eyebrow">Équipe administrative</span>
+        <h1>Planning admin</h1>
+        <p class="form-msg" id="pl-status" role="status">Chargement…</p>
+
+        <div id="pl-tool" hidden>
+          <div class="pl-bar">
+            <div class="pl-seg" role="group" aria-label="Période">
+              <button type="button" data-span="5">Semaine</button>
+              <button type="button" data-span="10" class="on">2 semaines</button>
+              <button type="button" data-span="month">Mois</button>
+              <button type="button" data-span="window">Fenêtre glissante</button>
+            </div>
+            <label class="pl-filter" id="pl-win-wrap" hidden>Durée affichée
+              <select id="pl-winlen">
+                <option value="28">4 semaines</option>
+                <option value="42" selected>6 semaines</option>
+                <option value="91">3 mois</option>
+                <option value="182">6 mois</option>
+              </select>
+            </label>
+            <div class="pl-nav">
+              <button type="button" class="btn btn-outline" id="pl-prev" aria-label="Période précédente">‹</button>
+              <button type="button" class="btn btn-outline" id="pl-today">Aujourd'hui</button>
+              <button type="button" class="btn btn-outline" id="pl-next" aria-label="Période suivante">›</button>
+              <strong id="pl-range"></strong>
+            </div>
+            <label class="pl-filter">Équipe<select id="pl-team"><option value="">Toutes</option></select></label>
+            <label class="pl-filter">Nom<input id="pl-q" type="search" autocomplete="off" placeholder="filtrer"></label>
+            <label class="pl-inline" id="pl-only-me-wrap" hidden><input type="checkbox" id="pl-only-me"> Seulement ma ligne</label>
+            <button type="button" class="btn btn-outline" id="pl-feed" hidden>Mon agenda…</button>
+          </div>
+
+          <div class="pl-tools" id="pl-tools" hidden>
+            <div class="pl-palette" id="pl-palette" aria-label="Codes"></div>
+            <div class="pl-actions">
+              <button type="button" class="btn btn-navy" id="pl-add">Ajouter une ligne…</button>
+              <button type="button" class="btn btn-outline" id="pl-undo" title="Ctrl+Z" disabled>Annuler</button>
+              <button type="button" class="btn btn-outline" id="pl-copy">Copier la 1re semaine affichée…</button>
+              <button type="button" class="btn btn-outline" id="pl-codes">Codes et couleurs…</button>
+              <button type="button" class="btn btn-outline" id="pl-min">Couverture…</button>
+              <button type="button" class="btn btn-outline" id="pl-import">Importer le tableur Excel…</button>
+            </div>
+            <p class="pl-help">Choisissez un code, puis cliquez ou glissez sur la grille ; chaque modification est enregistrée aussitôt. Maj + clic remplit le rectangle depuis la dernière cellule. Clic droit ou « Gomme » : effacer. Clic sur un nom : fiche, semaine type et absences sur une période.</p>
+            <p class="form-msg" id="pl-save" role="status" aria-live="polite"></p>
+          </div>
+          <p class="pl-help" id="pl-reader" hidden>Lecture seule. Les motifs d'absence sensibles sont affichés « ABS ». Les absences saisies dans l'app Absences apparaissent en cadre pointillé.</p>
+
+          <div class="pl-export">
+            <button type="button" class="btn" id="pl-xlsx">Exporter en Excel</button>
+            <label class="pl-inline">du <input type="date" id="pl-x-from"></label>
+            <label class="pl-inline">au <input type="date" id="pl-x-to"></label>
+            <span class="muted" id="pl-xlsx-msg" role="status"></span>
+          </div>
+
+          <div class="pl-scroll" id="pl-scroll">
+            <table class="pl-grid" id="pl-grid"></table>
+          </div>
+          <div class="pl-legend" id="pl-legend"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog class="pl-dlg" id="pl-person">
+    <form method="dialog">
+      <h2 id="pl-person-title"></h2>
+      <p class="muted" id="pl-person-meta"></p>
+      <h3>Fiche</h3>
+      <div class="pl-fiche">
+        <label>Prénom<input id="pf-first" autocomplete="off" maxlength="80"></label>
+        <label>Nom<input id="pf-last" autocomplete="off" maxlength="80"></label>
+        <label>Équipe<select id="pf-team"></select></label>
+        <label>Bloc<select id="pf-bloc"><option value="">sans bloc</option><option value="1">bloc 1</option><option value="2">bloc 2</option><option value="3">bloc 3</option><option value="0">flottant (*)</option></select></label>
+        <label>Taux (%)<input id="pf-pct" type="number" min="5" max="100" step="5"></label>
+        <label>Responsable<input id="pf-resp" autocomplete="off" maxlength="80"></label>
+        <label>Statut<select id="pf-status"><option value="fixe">fixe</option><option value="temporaire">temporaire (mission)</option></select></label>
+        <label>Début<input id="pf-from" type="date"></label>
+        <label>Fin<input id="pf-to" type="date"></label>
+        <label>Ordre d'affichage<input id="pf-pos" type="number" min="0" max="9999"></label>
+        <label class="pl-wide">Compte Onconic (facultatif)<select id="pf-account"></select></label>
+      </div>
+      <p class="muted">Jours off habituels</p>
+      <div class="pl-week" id="pf-off"></div>
+      <h3>Semaine type</h3>
+      <div class="pl-week" id="pl-week"></div>
+      <div class="pl-row"><button type="button" class="btn btn-navy" id="pf-save">Enregistrer la fiche</button></div>
+      <div id="pl-plan-part">
+        <h3>Appliquer la semaine type</h3>
+        <div class="pl-row">
+          <label>du <input type="date" id="pl-wk-from"></label>
+          <label>au <input type="date" id="pl-wk-to"></label>
+          <button type="button" class="btn btn-outline" id="pl-wk-apply">Appliquer</button>
+        </div>
+        <p class="muted">Les absences déjà saisies sont conservées ; jours off et fériés restent vides.</p>
+        <h3>Absence sur une période</h3>
+        <div class="pl-row">
+          <select id="pl-abs-code"></select>
+          <label>du <input type="date" id="pl-abs-from"></label>
+          <select id="pl-abs-from-h"><option value="0">matin</option><option value="1">après-midi</option></select>
+          <label>au <input type="date" id="pl-abs-to"></label>
+          <select id="pl-abs-to-h"><option value="1">après-midi</option><option value="0">matin</option></select>
+          <button type="button" class="btn btn-outline" id="pl-abs-apply">Saisir l'absence</button>
+        </div>
+      </div>
+      <details class="pl-hist" id="pl-hist"><summary>Historique des modifications</summary><div id="pl-hist-list"></div></details>
+      <p class="form-msg" id="pl-person-msg" role="status"></p>
+      <div class="pl-row pl-end"><button class="btn btn-outline" value="close">Fermer</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="pl-dlg" id="pl-feed-dlg">
+    <form method="dialog">
+      <h2>Mon planning dans mon agenda</h2>
+      <p>Abonnez votre agenda (Outlook, Apple, Google) à ce lien : vos postes et vos absences, de 30 jours en arrière à 6 mois en avant, mis à jour automatiquement.</p>
+      <div class="pl-row"><input id="pl-feed-url" readonly class="pl-feed-url"><button type="button" class="btn btn-outline" id="pl-feed-copy">Copier</button></div>
+      <p><a id="pl-feed-webcal" href="#">S'abonner directement (Apple Calendrier, Outlook)</a></p>
+      <p class="muted">Ce lien est personnel et donne accès à votre planning sans connexion : ne le partagez pas. C'est le même lien secret que vos autres agendas Onconic.</p>
+      <p class="form-msg" id="pl-feed-msg" role="status"></p>
+      <div class="pl-row pl-end">
+        <button type="button" class="btn btn-outline" id="pl-feed-reset">Créer un nouveau lien</button>
+        <button class="btn" value="close">Fermer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="pl-dlg" id="pl-copy-dlg">
+    <form method="dialog">
+      <h2>Copier une semaine</h2>
+      <p id="pl-copy-src"></p>
+      <div class="pl-row"><label>sur les <input type="number" id="pl-copy-n" min="1" max="12" value="3"> semaines suivantes</label></div>
+      <label class="pl-inline"><input type="checkbox" id="pl-copy-keep" checked> Conserver les absences déjà saisies</label>
+      <div class="pl-row pl-end">
+        <button class="btn btn-outline" value="cancel">Annuler</button>
+        <button class="btn" value="ok">Copier</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="pl-dlg pl-dlg-wide" id="pl-codes-dlg">
+    <form method="dialog">
+      <h2>Codes et couleurs</h2>
+      <p class="muted">« Privé » : motif masqué (« ABS ») pour tous sauf les cadres administratifs et la personne concernée. Un code inactif disparaît de la palette mais reste affiché là où il est déjà posé.</p>
+      <div id="pl-codes-list"></div>
+      <div class="pl-row"><button type="button" class="btn btn-outline" id="pl-code-add">Nouveau code</button></div>
+      <p class="form-msg" id="pl-codes-msg" role="status"></p>
+      <div class="pl-row pl-end"><button class="btn btn-outline" value="close">Fermer</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="pl-dlg" id="pl-min-dlg">
+    <form method="dialog">
+      <h2>Lignes de couverture</h2>
+      <p class="muted">Pour chaque ligne, les codes comptés (séparés par des virgules) et le minimum par demi-journée ; sous le minimum, le compteur passe en rouge.</p>
+      <div id="pl-mins"></div>
+      <div class="pl-row"><button type="button" class="btn btn-outline" id="pl-min-add">Ajouter une ligne</button></div>
+      <p class="form-msg" id="pl-min-msg" role="status"></p>
+      <div class="pl-row pl-end">
+        <button class="btn btn-outline" value="cancel">Annuler</button>
+        <button class="btn" type="button" id="pl-min-save">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="pl-dlg" id="pl-import-dlg">
+    <form method="dialog">
+      <h2>Importer le tableur Excel</h2>
+      <p class="muted">Le fichier est lu dans votre navigateur ; seuls l'effectif, les codes et les cases remplies sont enregistrés. Une case vide du tableur n'efface rien. Les codes inconnus sont ajoutés au catalogue (groupe « À définir ») avec la couleur de la case.</p>
+      <label class="pl-inline">Fichier (.xlsx)<input type="file" id="pl-import-file" accept=".xlsx"></label>
+      <div id="pl-import-preview"></div>
+      <p class="form-msg" id="pl-import-msg" role="status"></p>
+      <div class="pl-row pl-end">
+        <button class="btn btn-outline" value="cancel">Fermer</button>
+        <button class="btn" type="button" id="pl-import-go" disabled>Importer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>
