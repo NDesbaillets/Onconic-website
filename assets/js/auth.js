@@ -191,6 +191,8 @@
         const other = active && gid !== "common" && gid !== active;
         // Outils « médecin plus » : invisibles pour tous les autres, même grisés
         group.querySelectorAll("[data-plus]").forEach((el) => { if (!plus) el.remove(); });
+        // Outils de fonction (cadre administratif) : invisibles pour qui n'y a pas droit, même grisés
+        group.querySelectorAll("[data-private]").forEach((el) => { if (!myTools || !myTools.includes(el.dataset.tool)) el.remove(); });
         let anyAllowed = false;
         group.querySelectorAll("[data-roles]").forEach((el) => {
           const tool = el.dataset.tool;

@@ -55,3 +55,7 @@
   .is-detail .am-requests, .is-detail .am-msg:empty { display: none; }
   .am-detail-body { padding: 0 var(--space-3) var(--space-3); }
 }
+.am-until { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.am-until input { font: inherit; padding: 6px 8px; border: 1px solid var(--navy-200); }
+.am-resend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+.am-resend-msg { font-size: .88rem; }

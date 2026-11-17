@@ -758,7 +758,6 @@
     warn.replaceChildren();
     const w = warnBox(sd.conflicts, "Attention : trop d'absences en même temps");
     if (w) { w.append(el("p", "muted", "La demande peut quand même être envoyée ; les validateurs voient le même avertissement.")); warn.append(w); }
-    balanceWarnInto(warn);
   }
   function askConfirm() {
     const n = state.drafts.length;
@@ -795,71 +794,9 @@
     if (state.who) state.whoApprovals = groupApprovals(r.data); else state.approvals = groupApprovals(r.data);
     fillYears();
     renderMine();
-    loadBalance();
   }
 
-  // ----- Soldes de vacances et de congrès (jamais bloquants : avertissement seulement) -----
-  const fmtD = (n) => String(Math.round(Number(n) * 10) / 10).replace(".", ",");
-  const BAL_YEAR = new Date().getFullYear();
-  function balanceLines(b, who) {
-    const you = who ? "Le solde" : "Votre solde";
-    const out = [], warn = [];
-    const v = b.vacation, c = b.congress;
-    out.push(`Vacances : ${v.manual ? "solde inscrit par la direction au " + fmtCH(v.as_of) + " : " + fmtD(v.baseline) + " j, " : "droit " + fmtD(v.allowance) + " j, "}posés ${fmtD(v.used)} j, reste ${fmtD(v.remaining)} j`);
-    if (Number(v.remaining) < 0) warn.push(`${you} de vacances ${b.year} est dépassé de ${fmtD(-v.remaining)} jour${Math.abs(v.remaining) > 1 ? "s" : ""}.`);
-    if (c.unlimited) out.push(`Congrès et formation : sans limite, posés ${fmtD(c.used)} j`);
-    else {
-      out.push(`Congrès et formation : ${c.manual ? "solde inscrit par la direction au " + fmtCH(c.as_of) + " : " + fmtD(c.baseline) + " j, " : "droit " + fmtD(c.allowance) + " j, "}posés ${fmtD(c.used)} j, reste ${fmtD(c.remaining)} j`);
-      if (Number(c.remaining) < 0) warn.push(`${you} de congrès et formation ${b.year} est dépassé de ${fmtD(-c.remaining)} jour${Math.abs(c.remaining) > 1 ? "s" : ""}.`);
-    }
-    return { out, warn };
-  }
-  async function loadBalance() {
-    const box = $("ab-balance");
-    if (!box) return;
-    const year = state.balYear || BAL_YEAR;
-    const { data: b, error } = await sb.rpc("absence_balance", { p_user: state.who || null, p_year: year });
-    if (error || !b) { box.hidden = true; return; }
-    box.hidden = false;
-    box.replaceChildren();
-    const head = el("div", "ab-bar-sub");
-    head.append(el("strong", null, state.who ? "Soldes de ce membre" : "Mes soldes"));
-    const sel = el("select");
-    [BAL_YEAR - 1, BAL_YEAR, BAL_YEAR + 1, BAL_YEAR + 2].forEach((y) => { const o = el("option", null, String(y)); o.value = String(y); sel.append(o); });
-    sel.value = String(year);
-    sel.setAttribute("aria-label", "Année des soldes");
-    sel.addEventListener("change", () => { state.balYear = Number(sel.value); loadBalance(); });
-    head.append(sel);
-    box.append(head);
-    const { out, warn } = balanceLines(b, !!state.who);
-    out.forEach((l) => box.append(el("p", null, l)));
-    box.append(el("p", "muted ab-item-meta", "Jours ouvrables (lundi à vendredi, fériés vaudois déduits) des absences demandées ou validées. Un solde insuffisant ne bloque aucune demande."));
-    if (warn.length) {
-      const w = el("div", "ab-warn");
-      w.append(el("strong", null, "Attention : solde insuffisant"));
-      warn.forEach((t) => w.append(el("p", null, t)));
-      w.append(el("p", "muted", "La demande n'est pas bloquée ; la direction en est informée."));
-      box.append(w);
-    }
-  }
-  // Avertissement dans la fenêtre d'envoi : solde de l'année de chaque brouillon (les brouillons comptent pour leur auteur)
-  async function balanceWarnInto(warnBox2) {
-    const years = [...new Set(state.drafts.filter((a) => a.kind === "vacances" || a.kind === "congres").flatMap((a) => {
-      const out = []; for (let y = Number(a.start_date.slice(0, 4)); y <= Number(a.end_date.slice(0, 4)); y++) out.push(y); return out; }))];
-    const msgs = [];
-    for (const y of years) {
-      const { data: b } = await sb.rpc("absence_balance", { p_user: null, p_year: y });
-      if (!b) continue;
-      const { warn } = balanceLines(b, false);
-      msgs.push(...warn);
-    }
-    if (!msgs.length) return;
-    const w = el("div", "ab-warn");
-    w.append(el("strong", null, "Attention : solde insuffisant avec ces demandes"));
-    msgs.forEach((t) => w.append(el("p", null, t)));
-    w.append(el("p", "muted", "La demande peut quand même être envoyée ; les validateurs et la direction voient le même avertissement."));
-    warnBox2.append(w);
-  }
+  // Les soldes de vacances et de congrès ne sont plus affichés (17.11.2026) : le décompte officiel se fait dans le logiciel RH.
   function fillYears() {
     const sel = $("ab-year");
     const keep = sel.value;
@@ -914,11 +851,6 @@
       say($("ab-mine-msg"), mode === "change" ? "Demande de modification envoyée aux validateurs : l'absence reste validée aux anciennes dates jusqu'à leur décision (tous doivent l'accepter)." : "Demande modifiée : elle repasse en brouillon, envoyez-la pour relancer la validation.", "ok");
       if (mode === "direction") {
         say($("ab-mine-msg"), a.user_id === state.ctx.me ? "Absence modifiée." : "Absence modifiée par la direction : notification mise en file.", "ok"); mailer();
-        const bw = (data.balance || []).map((x) => `Solde ${x.kind === "vacances" ? "de vacances" : "de congrès"} ${x.year} dépassé (après : ${fmtD(x.remaining_after)} j).`);
-        if (bw.length) {
-          const w = el("div", "ab-warn"); w.append(el("strong", null, "Attention : solde insuffisant (la modification n'est pas bloquée)")); bw.forEach((t) => w.append(el("p", null, t)));
-          if (state.mineWarn) state.mineWarn.append(w); else state.mineWarn = w;
-        }
       }
       if (mode === "change") mailer();
       await afterChange();
@@ -1332,19 +1264,6 @@
       if (ops) card.append(ops);
       const w = warnBox(a.conflicts, "Attention : trop d'absences en même temps si vous validez");
       if (w) card.append(w);
-      const wantKind = a.change_type === "modify" ? a.change_kind : a.kind, wantStart = a.change_type === "modify" ? a.change_start : a.start_date, wantEnd = a.change_type === "modify" ? a.change_end : a.end_date;
-      if (a.change_type !== "delete" && (wantKind === "vacances" || wantKind === "congres")) {
-        const slot = el("div");
-        card.append(slot);
-        sb.rpc("absence_balance_check", { p_user: a.user_id, p_kind: wantKind, p_start: wantStart, p_end: wantEnd, p_exclude: a.id }).then(({ data }) => {
-          for (const x of data || []) {
-            const bw = el("div", "ab-warn");
-            bw.append(el("strong", null, `Solde ${wantKind === "vacances" ? "de vacances" : "de congrès et formation"} ${x.year} insuffisant`),
-              el("p", null, `Cette absence compte ${x.needed} jour${x.needed > 1 ? "s" : ""} ouvrable${x.needed > 1 ? "s" : ""} ; reste avant : ${fmtD(x.remaining_before)} j, après : ${fmtD(x.remaining_after)} j. Ce n'est pas un motif de blocage.`));
-            slot.append(bw);
-          }
-        });
-      }
       const comment = el("input"); comment.type = "text"; comment.maxLength = 500; comment.placeholder = "Commentaire (obligatoire pour un refus)";
       const lab = el("label", "ab-comment", "Commentaire");
       lab.append(comment);
@@ -1788,62 +1707,10 @@
       say(msg, `Absence enregistrée pour ${name} (sans validation ni formulaire).`, "ok");
       const w = warnBox(data.conflicts, "Attention : trop d'absences en même temps");
       if (w) warn.append(w);
-      for (const x of data.balance || []) {
-        const bw = el("div", "ab-warn");
-        bw.append(el("strong", null, `Attention : solde ${x.kind === "vacances" ? "de vacances" : "de congrès et formation"} ${x.year} insuffisant pour ${name}`),
-          el("p", null, `Cette absence compte ${x.needed} jour${x.needed > 1 ? "s" : ""} ouvrable${x.needed > 1 ? "s" : ""} ; reste avant : ${fmtD(x.remaining_before)} j, après : ${fmtD(x.remaining_after)} j. L'absence est enregistrée : rien n'est bloqué.`));
-        warn.append(bw);
-      }
       note.value = ""; start.value = ""; end.value = ""; conf.checked = false;
       mailer();
-      await Promise.all([afterChange(), loadBalances()]);
+      await afterChange();
     });
-    // Soldes
-    const ysel = $("ab-bal-year");
-    [BAL_YEAR - 1, BAL_YEAR, BAL_YEAR + 1, BAL_YEAR + 2].forEach((y) => { const o = el("option", null, String(y)); o.value = String(y); ysel.append(o); });
-    ysel.value = String(BAL_YEAR);
-    ysel.addEventListener("change", loadBalances);
-    loadBalances();
-  }
-
-  async function loadBalances() {
-    const year = Number($("ab-bal-year").value) || BAL_YEAR;
-    const body = $("ab-bal-table").tBodies[0];
-    const { data, error } = await sb.rpc("absence_balances_overview", { p_year: year });
-    if (error) return say($("ab-bal-msg"), "Chargement impossible : " + error.message, "error");
-    body.replaceChildren();
-    let neg = 0;
-    for (const r of data || []) {
-      const tr = el("tr");
-      const bad = Number(r.vac_remaining) < 0 || (!r.cong_unlimited && Number(r.cong_remaining) < 0);
-      if (bad) { neg++; tr.className = "ab-bal-neg"; }
-      tr.append(el("td", null, r.name + ((r.clinics || []).length ? " · " + r.clinics.join(", ") : "")));
-      const vacTxt = `${r.vac_manual ? "saisi" : "droit " + fmtD(r.vac_allowance)} · posés ${fmtD(r.vac_used)} · reste `;
-      const vTd = el("td", null, vacTxt); vTd.append(el("strong", Number(r.vac_remaining) < 0 ? "ab-bal-bad" : null, fmtD(r.vac_remaining)));
-      const vIn = el("input"); vIn.type = "number"; vIn.step = "0.5"; vIn.min = "-100"; vIn.max = "200"; vIn.className = "ab-bal-in";
-      vIn.placeholder = "défaut"; vIn.value = r.vac_baseline == null ? "" : String(r.vac_baseline);
-      vIn.setAttribute("aria-label", `Vacances restantes inscrites, ${r.name}`);
-      const cTd = el("td");
-      const cIn = el("input"); cIn.type = "number"; cIn.step = "0.5"; cIn.min = "-100"; cIn.max = "200"; cIn.className = "ab-bal-in";
-      cIn.placeholder = r.cong_unlimited ? "sans limite" : "défaut"; cIn.value = r.cong_baseline == null ? "" : String(r.cong_baseline);
-      cIn.setAttribute("aria-label", `Congrès restants inscrits, ${r.name}`);
-      cTd.append(r.cong_unlimited && !r.cong_manual ? `sans limite · posés ${fmtD(r.cong_used)}` : `${r.cong_manual ? "saisi" : "droit " + fmtD(r.cong_allowance)} · posés ${fmtD(r.cong_used)} · reste `);
-      if (!(r.cong_unlimited && !r.cong_manual)) cTd.append(el("strong", Number(r.cong_remaining) < 0 ? "ab-bal-bad" : null, fmtD(r.cong_remaining)));
-      const save = button("Enregistrer", "btn btn-outline ab-mini", async () => {
-        save.disabled = true;
-        const { error: e2 } = await sb.rpc("absence_balance_set", { p_user: r.user_id, p_year: year, p_vacation: vIn.value === "" ? null : Number(vIn.value), p_congress: cIn.value === "" ? null : Number(cIn.value) });
-        save.disabled = false;
-        if (e2) return say($("ab-bal-msg"), e2.message, "error");
-        say($("ab-bal-msg"), `${r.name} : soldes ${year} enregistrés.`, "ok");
-        await loadBalances();
-      });
-      tr.append(vTd, el("td"), cTd, el("td"), el("td"));
-      tr.children[2].append(vIn); tr.children[4].append(cIn); tr.children[5].append(save);
-      body.append(tr);
-    }
-    if (!body.children.length) { const tr = el("tr"); tr.append(el("td", "muted", "Aucun membre de l'institution CHUV.")); body.append(tr); }
-    if (neg) say($("ab-bal-msg"), `${neg} membre${neg > 1 ? "s" : ""} avec un solde ${year} négatif (ligne en surbrillance). Rien n'est bloqué.`, "");
-    else say($("ab-bal-msg"), "", "");
   }
 
   function setTab(name) {

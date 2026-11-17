@@ -42,3 +42,16 @@ Le but est de remplacer le tableur Excel des cadres administratifs : une ligne p
   - Une Edge Function crée un compte déjà validé, au rôle assistant uniquement, avec une date de fin d'accès (`access_until`).
   - L'accès est refusé après cette date dans les fonctions d'accès, et une tâche nocturne désactive le compte (production uniquement).
 - **Import du tableur 2026** directement dans le navigateur : effectif, codes et planning déjà saisi.
+
+## Comptes temporaires (en place depuis le 16.11.2026, PR « comptes temporaires »)
+- **Migration** `202611160002_comptes_temporaires.sql`. Nouvelles colonnes dans `profiles` : `admin_lead`, `access_until` (dernier jour inclus, heure suisse) et `created_by`. Journal `temp_account_log`.
+- **Fonction « cadre administratif »** : case à cocher dans `/admin/membres.html`, sur une assistante permanente. Elle donne l'outil `temporaires`, page `/app/temporaires.html`. La tuile The Hive n'apparaît qu'aux cadres administratifs, à la direction et à l'admin.
+- **Création** : Edge Function `temp-account`. Le compte est créé au rôle assistant, avec l'institution CHUV, actif tout de suite et sans validation par l'admin. Fin d'accès dans un an au plus. Deux modes :
+  - invitation par e-mail : la personne choisit son mot de passe ;
+  - mot de passe provisoire, affiché une seule fois au cadre.
+- **Gestion** : le cadre administratif prolonge, raccourcit, termine ou réactive un compte temporaire avec `temp_account_set_until`. Il n'agit sur aucun compte permanent.
+- **Fin d'accès** :
+  - dès le lendemain du dernier jour, `current_role_name()` rend « member » et `tool_allowed()` refuse tout ;
+  - la connexion est bloquée (`banned_until`) par `temp_accounts_expire()`, à l'ouverture de la page et chaque nuit en production (`supabase/temp_accounts_cron.sql`, production seulement).
+- **Administration** : la direction et l'admin peuvent limiter dans le temps n'importe quel compte non admin ou lever la limite (`admin_set_access_until`).
+- **Tests** : `tests/absences/temp-accounts.test.mjs` (PGlite). Parcours complet vérifié sur le projet de test le 16.11.2026. L'invitation par e-mail ne part pas depuis le projet de test, qui n'envoie pas d'e-mails.
