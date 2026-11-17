@@ -24,7 +24,7 @@
     box.append(el("p", null, `${s.pending} en attente · ${s.failed} en échec · ${s.sent} remises au serveur d’envoi.`));
     if (!health.data.scheduled || !health.data.configured) box.append(el("p", "form-msg error", "L’envoi automatique n’est pas configuré. Les notifications dépendent encore des actions dans l’application."));
     for (const row of failures.data || []) {
-      const line = el("p", null, `Notification ${row.id} · ${{ to_validate: "Demande à valider", to_validate_change: "Changement à valider", to_direction: "Visa de la direction", to_opinion: "Pré-avis", approved: "Acceptation", rejected: "Refus", change_approved: "Changement accepté", change_rejected: "Changement refusé", direction_change: "Saisie de la direction", form: "Formulaire PDF" }[row.kind] || "Absence"} · ${row.attempts} tentatives. `);
+      const line = el("p", null, `Notification ${row.id} · ${{ to_validate: "Demande à valider", to_validate_change: "Changement à valider", to_direction: "Visa de la direction", to_opinion: "Pré-avis ou avis", peer_rejected: "Refus signalé aux autres validateurs", approved: "Acceptation", rejected: "Refus", change_approved: "Changement accepté", change_rejected: "Changement refusé", direction_change: "Saisie de la direction", form: "Formulaire PDF" }[row.kind] || "Absence"} · ${row.attempts} tentatives. `);
       const retry = el("button", "btn btn-outline", "Réessayer"); retry.type = "button";
       retry.addEventListener("click", async () => {
         retry.disabled = true;

@@ -44,7 +44,7 @@ async function vapidKeys() {
   return row!;
 }
 
-type Row = { id: number; kind: Kind | "form"; recipient: string | null; absence_ids: number[]; payload: { owner?: string; by?: string; comment?: string; reminder?: boolean; action?: string; document_id?: number; absences?: (Abs & { user_id: string })[] } };
+type Row = { id: number; kind: Kind | "form"; recipient: string | null; absence_ids: number[]; payload: { owner?: string; by?: string; step_label?: string; comment?: string; reminder?: boolean; action?: string; document_id?: number; absences?: (Abs & { user_id: string })[] } };
 
 const ROLE_LABEL: Record<string, string> = { clinician: "médecin assistant", cdc: "chef de clinique", cadre: "médecin cadre" };
 const slug = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "membre";
@@ -59,6 +59,7 @@ async function renderForm(ids: number[], documentId?: number) {
   const now = d.generated_at ?? new Date().toISOString();
   const form: FormData = {
     role: d.role, owner: d.owner, clinics: d.clinics ?? [], requestedAt: d.requested_at ?? now, absences: d.absences.map((a: Abs) => externalAbsence(a)), signers: (d.signers ?? []).map((s: { name: string; at: string }) => ({ name: s.name, at: s.at })), direction: d.direction ?? null,
+    extra: (d.extra ?? []).map((x: { label: string; name: string; at: string; slot: string | null }) => ({ label: x.label, name: x.name, at: x.at, slot: x.slot ?? null })),
     generatedAt: now, ref: `OC-ABS-D${d.document_id}`, action: d.action,
   };
   const bytes = await buildAbsenceForm(form, logo);
@@ -90,7 +91,7 @@ function b64(bytes: Uint8Array): string {
 
 // Adresses de la boîte commune de la direction (secret ABSENCE_FORMS_TO, séparées par une virgule)
 const sharedBox = () => (Deno.env.get("ABSENCE_FORMS_TO") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-const DIRECTION_KINDS = ["to_direction", "to_opinion"];
+const DIRECTION_KINDS = ["to_direction", "to_opinion"]; // peer_rejected va à chaque personne concernée, pas à la boîte commune
 const VALIDATE_KINDS = ["to_validate", "to_validate_change"];
 
 async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createTransport> | null, sentShared: Set<string>): Promise<string | null> {
@@ -114,13 +115,15 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
   const lang: Lang = prof?.lang === "en" ? "en" : "fr";
   const first = absences[0];
   const { data: ownerName } = await admin.rpc("member_name", { p_user: first.user_id });
-  const { data: appr } = await admin.from("absence_approvals").select("validator_id, decision").eq("absence_id", first.id);
+  const { data: appr } = await admin.from("absence_approvals").select("validator_id, decision, step").eq("absence_id", first.id);
+  const { data: cur } = await admin.from("absences").select("stage").eq("id", first.id).maybeSingle();
   const names = async (ids: string[]) => (await Promise.all(ids.map(async (i) => (await admin.rpc("member_name", { p_user: i })).data as string))).filter(Boolean);
-  const validators = await names((appr ?? []).map((a) => a.validator_id));
+  // « à valider par » : les personnes de l'étape en cours seulement (circuit configurable, plusieurs étapes) ; « validée par » : toutes les étapes
+  const validators = await names((appr ?? []).filter((a) => cur?.stage == null || a.step === cur.stage).map((a) => a.validator_id));
   const approvers = await names((appr ?? []).filter((a) => a.decision === "approved").map((a) => a.validator_id));
 
   const msg = buildEmail({
-    lang, kind: row.kind, owner: row.payload.owner ?? (ownerName as string) ?? "Un membre", by: row.payload.by, comment: null, reminder: row.payload.reminder, action: row.payload.action,
+    lang, kind: row.kind, owner: row.payload.owner ?? (ownerName as string) ?? "Un membre", by: row.payload.by, comment: null, stepLabel: row.payload.step_label, reminder: row.payload.reminder, action: row.payload.action,
     absences: absences as unknown as Abs[], validators, approvers,
   });
 

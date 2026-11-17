@@ -16,11 +16,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
-  <link rel="stylesheet" href="/assets/css/circuit.css?v=20261117b">
+  <link rel="stylesheet" href="/assets/css/circuit.css?v=20261118a">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/admin-circuit.js?v=20261117b" defer></script>
+  <script src="/assets/js/admin-circuit.js?v=20261118a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -44,7 +44,7 @@
         <hr class="rule">
         <p class="form-msg" id="ug-status" role="status">Chargement…</p>
         <div id="cc-tool" hidden>
-          <p class="muted">Vue en lecture seule du circuit actuel. Les modifications se font dans <a href="/admin/absences.html">Absences : valideurs par clinique</a> et dans <a href="/admin/membres.html">Membres et accès</a>.</p>
+          <p class="muted">Ce schéma montre le circuit enregistré. Les validateurs restent désignés par clinique dans <a href="/admin/absences.html">Absences : valideurs par clinique</a> ; les rôles et accès se règlent dans <a href="/admin/membres.html">Membres et accès</a>.</p>
           <h2>Schéma du circuit</h2>
           <div id="cc-flow" class="cc-flow"></div>
           <p class="muted" id="cc-admin-note">Un administrateur peut valider à toute étape ; sa validation conclut la demande.</p>
@@ -52,15 +52,31 @@
           <div id="cc-warn" class="card cc-warn"></div>
           <h2>Cliniques</h2>
           <div class="cc-scroll"><table class="cc-table" id="cc-table"></table></div>
+          <h2>Modifier le circuit</h2>
+          <p class="muted">Les demandes déjà envoyées gardent leur circuit ; les nouvelles suivront celui enregistré ici. Le pré-avis reste en tête. Pour une étape de clinique, les validateurs sont désignés dans <a href="/admin/absences.html">Absences : valideurs par clinique</a>.</p>
+          <div id="cc-editor" class="cc-editor"></div>
+          <div class="btn-row cc-ed-actions">
+            <button class="btn btn-outline" id="cc-add" type="button">Ajouter une étape (personnes désignées)</button>
+          </div>
+          <p class="form-msg" id="cc-ed-msg" role="status" aria-live="polite"></p>
+          <div class="btn-row cc-ed-actions">
+            <button class="btn" id="cc-save" type="button" disabled>Enregistrer</button>
+            <button class="btn btn-outline" id="cc-sim-draft" type="button">Simuler ce circuit</button>
+            <button class="btn btn-outline" id="cc-cancel" type="button" disabled>Annuler les modifications</button>
+            <span class="cc-dirty" id="cc-dirty" hidden>modifications non enregistrées</span>
+          </div>
           <h2>Simulateur</h2>
           <form class="card cc-sim" id="cc-form" novalidate>
             <label>Membre <select id="cc-member"></select></label>
+            <label>Motif <select id="cc-kind"><option value="vacances">Vacances</option><option value="congres">Congrès</option><option value="autre">Autre</option></select></label>
             <label>Du <input id="cc-from" type="date" required></label>
             <label>Au (inclus) <input id="cc-to" type="date" required></label>
             <button class="btn" type="submit">Simuler</button>
           </form>
           <p class="form-msg" id="cc-msg" role="status" aria-live="polite"></p>
           <div id="cc-result"></div>
+          <h2>Journal des modifications</h2>
+          <div id="cc-log" class="card cc-log"></div>
         </div>
       </div>
     </section>

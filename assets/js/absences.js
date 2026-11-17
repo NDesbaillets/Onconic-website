@@ -858,19 +858,36 @@
     return f;
   }
 
-  // Avancement de la validation : qui a validé, qui attend, qui a refusé
+  // Étape en cours d'une demande (circuit configurable) : champs step_kind / step_label, sinon instantané `circuit` (étape « current »), sinon `stage` de compatibilité
+  function curStep(r) {
+    if (r.step_kind || r.step_label) return { kind: r.step_kind || "clinique", label: r.step_label || (r.step_kind === "visa" ? "Visa de la direction" : "Validateurs de clinique") };
+    const c = (r.circuit || []).find((x) => x.current);
+    if (c) return { kind: c.kind, label: c.label };
+    return r.stage === 2 ? { kind: "visa", label: "Visa de la direction" } : { kind: "clinique", label: "Validateurs de clinique" };
+  }
+  // Avancement de la validation : qui a validé, qui attend, qui a refusé (regroupé par étape quand le circuit en compte plusieurs)
   function approvalsBlock(rows) {
     const box = el("div", "ab-appr");
     if (!rows.length) { box.append(el("p", "muted", "Aucun validateur désigné : l'administration décide.")); return box; }
-    const ul = el("ul", "ab-appr-list");
     const LABEL = { approved: "a validé", pending: "en attente", rejected: "a refusé", skipped: "étape close sans décision individuelle" };
-    rows.forEach((r) => {
-      const li = el("li", "ab-appr-" + r.decision);
-      li.append(el("strong", null, r.validator_name || r.name),
-        document.createTextNode(` : ${LABEL[r.decision]}${r.decided_at && ["approved", "rejected"].includes(r.decision) ? " le " + fmtCH(r.decided_at) : ""}${r.comment ? " · « " + r.comment + " »" : ""}`));
-      ul.append(li);
+    const list = (items) => {
+      const ul = el("ul", "ab-appr-list");
+      items.forEach((r) => {
+        const li = el("li", "ab-appr-" + r.decision);
+        li.append(el("strong", null, r.validator_name || r.name),
+          document.createTextNode(` : ${LABEL[r.decision] || r.decision}${r.decided_at && ["approved", "rejected"].includes(r.decision) ? " le " + fmtCH(r.decided_at) : ""}${r.comment ? " · « " + r.comment + " »" : ""}`));
+        ul.append(li);
+      });
+      return ul;
+    };
+    const groups = new Map();
+    [...rows].sort((a, b) => (a.step ?? 0) - (b.step ?? 0)).forEach((r) => {
+      const k = r.step_label || "";
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(r);
     });
-    box.append(ul);
+    if (groups.size <= 1) { box.append(list(rows)); return box; }
+    for (const [label, items] of groups) box.append(el("p", "ab-appr-step", label), list(items));
     return box;
   }
   const approvalCount = (rows) => rows.filter((r) => r.decision === "approved").length;
@@ -969,8 +986,9 @@
       d.append(approvalsBlock(rows));
       card.append(d);
     }
-    if (a.stage === 2 && (a.status === "requested" || (a.status === "approved" && a.change_type))) {
-      card.append(el("p", "ab-pending-change", "Validée par les validateurs de la clinique : en attente du visa de la direction."));
+    const mySt = curStep(a);
+    if (mySt.kind !== "clinique" && (a.status === "requested" || (a.status === "approved" && a.change_type))) {
+      card.append(el("p", "ab-pending-change", mySt.kind === "visa" ? "Validée par les validateurs de la clinique : en attente du visa de la direction." : `En cours : ${mySt.label}.`));
     }
     if (a.status === "rejected" && a.decided_at) {
       const gone = new Date(new Date(a.decided_at).getTime() + 14 * 864e5);
@@ -1154,6 +1172,7 @@
       const isChange = !!a.change_type;
       head.append(el("strong", null, a.name), el("span", "ug-badge", (a.clinics || []).join(", ") || "Sans clinique"),
         el("span", "ug-badge ug-warn", isChange ? (a.change_type === "delete" ? "Suppression demandée" : "Modification demandée") : "Nouvelle demande"));
+      head.append(el("span", "ug-badge", a.step_label || "Pré-avis de la direction"));
       if (a.my_opinion) head.append(el("span", "ug-badge ab-op-ok", "Votre pré-avis : " + OPINION[a.my_opinion]));
       card.append(head);
       const cur = `${KINDS[a.kind][0]} · ${period(a.start_date, a.end_date)} · ${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}`;
@@ -1164,7 +1183,7 @@
       if (prog.length) { const d = el("details", "ab-progress"); d.append(el("summary", null, `Validation par la clinique : ${approvalCount(prog)} sur ${prog.length}`), approvalsBlock(prog)); card.append(d); }
       const w = warnBox(a.conflicts, "Attention : trop d'absences en même temps si la demande est validée");
       if (w) card.append(w);
-      const others = opinionsBlock(a.opinions, "Autres pré-avis de la direction");
+      const others = opinionsBlock(a.opinions, a.step_label ? `Autres avis : ${a.step_label}` : "Autres pré-avis de la direction");
       if (others) card.append(others);
       const fs = el("fieldset", "ab-op-choice");
       fs.append(el("legend", null, "Votre pré-avis"));
@@ -1218,6 +1237,12 @@
       card.append(head);
       const gone = new Date(new Date(a.decided_at).getTime() + 14 * 864e5);
       card.append(el("p", "ab-decision", `Refusée${a.decided_by_name ? " par " + a.decided_by_name : ""} le ${fmtCH(a.decided_at)}${a.decision_comment ? " : « " + a.decision_comment + " »" : ""}. Disparaît d'elle-même le ${fmtCH(iso(gone))}.`));
+      const hist = (a.approvals || []).map((x) => ({ validator_name: x.name, decision: x.decision, comment: x.comment, decided_at: x.at, step: x.step, step_label: x.step_label }));
+      if (hist.length) {
+        const d = el("details", "ab-progress");
+        d.append(el("summary", null, "Historique des décisions"), approvalsBlock(hist));
+        card.append(d);
+      }
       const act = el("div", "btn-row ab-actions");
       act.append(button("Supprimer", "btn btn-outline lt-danger", async () => {
         if (!confirm(`Supprimer la demande refusée de ${a.name} (${period(a.start_date, a.end_date)}) ?`)) return;
@@ -1240,7 +1265,8 @@
       const isChange = !!a.change_type;
       head.append(el("strong", null, a.name), el("span", "ug-badge", (a.clinics || []).join(", ") || "Sans clinique"),
         el("span", "ug-badge ug-warn", isChange ? (a.change_type === "delete" ? "Suppression demandée" : "Modification demandée") : "Nouvelle demande"));
-      if (a.stage === 2) head.append(el("span", "ug-badge", "Visa de la direction"));
+      const st = curStep(a);
+      if (st.kind !== "clinique") head.append(el("span", "ug-badge", st.label));
       card.append(head);
       const cur = `${KINDS[a.kind][0]} · ${period(a.start_date, a.end_date)} · ${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}`;
       card.append(el("p", null, isChange ? `Absence validée : ${cur}` : cur));
@@ -1254,10 +1280,12 @@
         d.open = true;
         d.append(el("summary", null, `Validation : ${approvalCount(prog)} sur ${prog.length}`), approvalsBlock(prog));
         card.append(d);
-        card.append(el("p", "muted ab-item-meta", a.stage === 2
+        card.append(el("p", "muted ab-item-meta", st.kind === "visa"
           ? "Les validateurs de la clinique ont validé : votre visa conclut la demande."
-          : "L'absence n'est validée que lorsque tous les validateurs concernés ont validé, puis visée par la direction ; un seul refus suffit à la refuser."));
-      } else if (a.stage === 2) {
+          : st.kind === "clinique"
+            ? "L'absence n'est validée que lorsque tous les validateurs concernés ont validé, puis visée par la direction ; un seul refus suffit à la refuser."
+            : `Étape en cours : ${st.label}. Les étapes précédentes sont validées ; un seul refus suffit à refuser la demande.`));
+      } else if (st.kind === "visa") {
         card.append(el("p", "muted ab-item-meta", "Aucun validateur de clinique : votre visa conclut la demande."));
       }
       const ops = opinionsBlock(a.opinions);
@@ -1280,7 +1308,7 @@
         await afterChange();
       };
       const actions = el("div", "btn-row");
-      const yes = button(isChange ? "Accepter le changement" : a.stage === 2 ? "Viser (valider)" : "Valider", "btn", () => decide(true, yes, no));
+      const yes = button(isChange ? "Accepter le changement" : st.kind === "visa" ? "Viser (valider)" : "Valider", "btn", () => decide(true, yes, no));
       const no = button(isChange ? "Refuser le changement" : "Refuser", "btn btn-outline", () => decide(false, yes, no));
       actions.append(yes, no);
       card.append(lab, out, actions);
@@ -1440,10 +1468,10 @@
   const FILL = { approved: "FFE3F1E4", requested: "FFFFF3D6", direction: "FFFCE4C8", rejected: "FFF9DADA", cancelled: "FFE6E8EC", change: "FFDDE8F7" };
   function statusLabel(r) {
     if (r.status === "approved") return r.change_type === "delete" ? "Validée, suppression demandée" : r.change_type === "modify" ? "Validée, modification demandée" : "Validée";
-    if (r.status === "requested") return r.stage === 2 ? "En cours : visa de la direction" : "En cours : chez les validateurs";
+    if (r.status === "requested") return r.state_label || `En cours : ${curStep(r).label}`;
     return r.status === "rejected" ? "Refusée" : r.status === "cancelled" ? "Annulée" : r.status;
   }
-  const statusFill = (r) => (r.status === "approved" ? (r.change_type ? FILL.change : FILL.approved) : r.status === "requested" ? (r.stage === 2 ? FILL.direction : FILL.requested) : FILL[r.status]);
+  const statusFill = (r) => (r.status === "approved" ? (r.change_type ? FILL.change : FILL.approved) : r.status === "requested" ? (curStep(r).kind === "clinique" ? FILL.requested : FILL.direction) : FILL[r.status]);
   const DECISION_LABEL = { approved: "Acceptée", rejected: "Refusée", change_approved: "Changement accepté", change_rejected: "Changement refusé" };
   function exportWindow() {
     const from = $("ab-exp-from").value, to = $("ab-exp-to").value;
@@ -1577,7 +1605,7 @@
     add(CAL.weekend, "Week-end ou jour férié vaudois (nom du férié en commentaire sur le numéro du jour)");
     lg.addRow([]);
     add(null, "Absences : une ligne par absence avec son état ; couleur de la ligne selon l'état");
-    [["Validée", FILL.approved], ["En cours : chez les validateurs", FILL.requested], ["En cours : visa de la direction", FILL.direction], ["Validée, modification ou suppression demandée", FILL.change], ["Refusée", FILL.rejected], ["Annulée", FILL.cancelled]].forEach(([t, c]) => add(c, t));
+    [["Validée", FILL.approved], ["En cours : chez les validateurs", FILL.requested], ["En cours : visa de la direction ou autre étape du circuit", FILL.direction], ["Validée, modification ou suppression demandée", FILL.change], ["Refusée", FILL.rejected], ["Annulée", FILL.cancelled]].forEach(([t, c]) => add(c, t));
     lg.addRow([]);
     add(null, scope);
     add(null, `Fenêtre : du ${fmtCH(w.from)} au ${fmtCH(w.to)}. Brouillons non exportés. Jours ouvrables : lundi à vendredi, fériés vaudois déduits.`);
