@@ -1,6 +1,6 @@
 // Formulaire de contact : enregistre la demande et prévient les admins par e-mail.
-// Pour une demande d'adhésion, l'e-mail contient des liens signés vers /admin/review.html
-// (inviter comme médecin, comme assistante, comme pharmacien·ne, ou refuser).
+// Pour une demande d'adhésion, l'e-mail contient deux liens signés vers /admin/review.html :
+// « Examiner et inviter » (rôle, cliniques, validation des absences et outils choisis sur la page, admin connecté) et « Refuser ».
 // Secrets requis : SMTP_PASSWORD (boîte noreply@onconic.ch), REVIEW_SECRET (signature des liens).
 import nodemailer from "npm:nodemailer@6.9.16";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
@@ -79,9 +79,7 @@ async function notify(r: Request_) {
   const exp = Math.floor(Date.now() / 1000) + LINK_DAYS * 86400;
   const buttons = r.kind === "join"
     ? [
-      ["Inviter comme médecin", await reviewLink(r.id, "invite_clinician", exp), "#F0B12B", "#001B4D"],
-      ["Inviter comme assistante", await reviewLink(r.id, "invite_assistant", exp), "#001B4D", "#FFFFFF"],
-      ["Inviter comme pharmacien·ne", await reviewLink(r.id, "invite_pharmacist", exp), "#001B4D", "#FFFFFF"],
+      ["Examiner et inviter", await reviewLink(r.id, "review", exp), "#F0B12B", "#001B4D"],
       ["Refuser", await reviewLink(r.id, "decline", exp), "#FFFFFF", "#001B4D"],
     ]
     : [];
@@ -100,7 +98,7 @@ async function notify(r: Request_) {
 ${buttons.map(([label, href, bg, fg]) =>
     `<a href="${href}" style="display:inline-block;margin:0 8px 8px 0;padding:12px 20px;background:${bg};color:${fg};border:1px solid #001B4D;text-decoration:none;font-weight:500">${label}</a>`
   ).join("")}
-${buttons.length ? `<p style="font-size:13px;color:#5A6478;margin-top:16px">Chaque lien ouvre une page de confirmation. Valable ${LINK_DAYS} jours, utilisable une fois.</p>` : ""}
+${buttons.length ? `<p style="font-size:13px;color:#5A6478;margin-top:16px">Chaque lien ouvre une page de confirmation (connexion administrateur requise pour inviter). Valable ${LINK_DAYS} jours, utilisable une fois.</p>` : ""}
 </div>`;
 
   const plain = [

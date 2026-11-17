@@ -83,7 +83,9 @@
   const login = document.getElementById("login-form");
   if (login) {
     const out = login.querySelector(".form-msg");
-    if (sb) sb.auth.getSession().then(({ data }) => { if (data.session) homeFor(data.session.user.id).then((u) => { location.href = u; }); });
+    // Retour après connexion : seulement vers la page d'examen d'une demande d'accès (jamais une adresse externe)
+    const next = (() => { const n = new URLSearchParams(location.search).get("next") || ""; return /^\/admin\/review\.html\?[A-Za-z0-9_=&%.-]*$/.test(n) ? n : null; })();
+    if (sb) sb.auth.getSession().then(({ data }) => { if (data.session) (next ? Promise.resolve(next) : homeFor(data.session.user.id)).then((u) => { location.href = u; }); });
 
     onSubmit(login, async (e) => {
       e.preventDefault();
@@ -93,7 +95,7 @@
         password: login.password.value
       });
       if (error) return msg(out, T.badLogin, "error");
-      location.href = await homeFor(signed.user.id);
+      location.href = next || await homeFor(signed.user.id);
     });
 
     const forgot = document.getElementById("forgot");
