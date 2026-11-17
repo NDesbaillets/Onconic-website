@@ -893,6 +893,7 @@ begin
     when p_kind = 'peer_rejected' then p_recipient = any (public.absence_peer_people(a))
     else false end)
   -- un seul message d'avis par personne et par tour, qu'il vienne du pré-avis ou d'une étape non bloquante
+  and not (p_kind = 'to_opinion' and p_recipient = any (public.absence_col_people(a)))
   and not (p_kind = 'to_opinion' and exists (select 1 from public.absence_outbox o where o.kind = 'to_opinion' and o.recipient = p_recipient
            and a.id = any (o.absence_ids) and o.created_at >= coalesce(a.change_requested_at, a.submitted_at, a.created_at)));
   if ids is null then return; end if;
@@ -973,26 +974,46 @@ begin
 end;
 $$;
 
-create or replace function public.absence_my_validators() returns jsonb
+create or replace function public.absence_my_validators_full() returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp as $$
-declare uid uuid := auth.uid(); v uuid[] := '{}'; fb boolean := false; a record; fs jsonb; first_step jsonb;
+declare uid uuid := auth.uid(); v uuid[] := '{}'; fb boolean := false; a record; fs jsonb; first_step jsonb; fsteps jsonb;
 begin
   perform public.absence_guard();
   if exists (select 1 from public.absences where user_id = uid and status = 'draft') then
     for a in select x.kind, x.start_date, x.end_date from public.absences x where x.user_id = uid and x.status = 'draft' order by x.start_date, x.id loop
       fs := public.absence_first_stop(uid, a.start_date, a.end_date, public.absence_circuit_build(a.kind, a.start_date, a.end_date, null, uid));
-      first_step := coalesce(first_step, fs -> 'step');
+      first_step := coalesce(first_step, fs -> 'step'); fsteps := coalesce(fsteps, fs -> 'steps');
       if fs -> 'step' ->> 'kind' = 'visa' then fb := true; end if;
       v := v || array(select p::uuid from jsonb_array_elements_text(fs -> 'people') p where not (p::uuid = any (v)));
     end loop;
   else
     fs := public.absence_first_stop(uid, public.ch_today(), public.ch_today(), public.absence_circuit_build('vacances', public.ch_today(), public.ch_today(), null, uid));
-    first_step := fs -> 'step';
+    first_step := fs -> 'step'; fsteps := fs -> 'steps';
     fb := fs -> 'step' ->> 'kind' = 'visa';
     v := array(select p::uuid from jsonb_array_elements_text(fs -> 'people') p);
   end if;
-  return jsonb_build_object('fallback', fb, 'step_kind', first_step ->> 'kind', 'step_label', first_step ->> 'label', 'step_rule', coalesce(first_step ->> 'rule', 'all'),
+  return jsonb_build_object('fallback', fb, 'steps', coalesce((select jsonb_agg(jsonb_build_object('label', x ->> 'label', 'rule', coalesce(x ->> 'rule', 'all'))) from jsonb_array_elements(coalesce(fsteps, '[]'::jsonb)) x), '[]'::jsonb), 'step_kind', first_step ->> 'kind', 'step_label', first_step ->> 'label', 'step_rule', coalesce(first_step ->> 'rule', 'all'),
     'validators', coalesce((select jsonb_agg(jsonb_build_object('id', x, 'name', public.member_name(x)) order by public.member_name(x)) from unnest(v) x), '[]'::jsonb));
+end;
+$$;
+
+-- Liste des validateurs pour l'interface : 12 noms au plus, le nombre restant (more) et un résumé (summary) au-delà
+create or replace function public.absence_validators_view(w jsonb) returns jsonb
+language plpgsql immutable set search_path = public, pg_temp as $$
+declare n int := jsonb_array_length(coalesce(w -> 'validators', '[]'::jsonb));
+begin
+  if n <= 12 then return w || jsonb_build_object('more', 0, 'summary', null); end if;
+  return w || jsonb_build_object(
+    'validators', (select jsonb_agg(x order by o) from (select x, o from jsonb_array_elements(w -> 'validators') with ordinality t(x, o) order by o limit 12) q),
+    'more', n - 12,
+    'summary', n || ' personnes : ' || coalesce(nullif(w ->> 'step_label', ''), 'validateurs'));
+end;
+$$;
+
+create or replace function public.absence_my_validators() returns jsonb
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+begin
+  return public.absence_validators_view(public.absence_my_validators_full());
 end;
 $$;
 
@@ -1002,7 +1023,7 @@ declare uid uuid := auth.uid(); ids bigint[]; rec uuid[]; who jsonb; fb boolean;
 begin
   perform public.absence_guard();
   perform public.absence_purge();
-  who := public.absence_my_validators();
+  who := public.absence_my_validators_full();
   fb := (who ->> 'fallback')::boolean;
   select array_agg(id order by start_date) into ids from public.absences where user_id = uid and status = 'draft';
   if ids is null then raise exception 'Aucune demande en brouillon à envoyer.'; end if;
@@ -1019,7 +1040,8 @@ begin
       perform public.absence_enqueue('to_opinion', rcp, oi, jsonb_build_object('owner', public.member_name(uid)));
     end if;
   end loop;
-  return jsonb_build_object('count', array_length(ids, 1), 'ids', to_jsonb(ids), 'fallback', fb, 'validators', who -> 'validators');
+  who := public.absence_validators_view(who);
+  return jsonb_build_object('count', array_length(ids, 1), 'ids', to_jsonb(ids), 'fallback', fb, 'validators', who -> 'validators', 'more', who -> 'more', 'summary', who -> 'summary');
 end;
 $$;
 
@@ -1963,7 +1985,7 @@ revoke execute on function
   public.absence_opinion_step(uuid, public.absences), public.absence_advance(bigint, uuid, text, boolean, boolean, int), public.absence_circuit_fallback(),
   public.absence_open_round_core(bigint, boolean), public.absence_circuit_steps_named(bigint), public.absence_peer_people(public.absences), public.absence_step_label(public.absences, int),
   public.absence_decision_rows(public.absences), public.absence_in_personnes_step(uuid, public.absences),
-  public.absence_enqueue_direction(bigint[], uuid, uuid[]), public.absence_circuit_default_id(), public.absence_circuit_resolve(uuid, date, date), public.absence_circuit_check_id(bigint),
+  public.absence_enqueue_direction(bigint[], uuid, uuid[]), public.absence_my_validators_full(), public.absence_validators_view(jsonb), public.absence_circuit_default_id(), public.absence_circuit_resolve(uuid, date, date), public.absence_circuit_check_id(bigint),
   public.absence_circuit_assignments_json(bigint), public.absence_circuit_who_core(),
   public.absence_circuit_assign_apply(bigint, text, text[]), public.absence_circuit_assign_guard(bigint)
   from public, anon, authenticated;
@@ -1982,6 +2004,7 @@ revoke execute on function
   public.absence_decide(bigint, boolean, text), public.absence_my_validators(), public.absence_submit(),
   public.absence_request_change(bigint, text, text, text, date, date), public.absence_opinion_set(bigint, text, text), public.absence_opinion_todo(),
   public.absence_to_validate(), public.absence_approvals_all(uuid), public.absence_rejected_to_manage(), public.absence_list(uuid), public.absence_export(date, date), public.absence_planning(date, date),
+  public.absence_delete_rejected(bigint), public.absence_history(bigint),
   public.absence_direction_add(uuid, text, text, date, date, boolean), public.absence_direction_cancel(bigint),
   public.absence_direction_update(bigint, text, text, date, date, boolean),
   public.absence_circuit_get(bigint), public.absence_circuit_save(jsonb, bigint), public.absence_circuit_simulate(uuid, date, date, text, jsonb, bigint), public.absence_circuit_overview(),
@@ -1992,6 +2015,7 @@ grant execute on function
   public.absence_decide(bigint, boolean, text), public.absence_my_validators(), public.absence_submit(),
   public.absence_request_change(bigint, text, text, text, date, date), public.absence_opinion_set(bigint, text, text), public.absence_opinion_todo(),
   public.absence_to_validate(), public.absence_approvals_all(uuid), public.absence_rejected_to_manage(), public.absence_list(uuid), public.absence_export(date, date), public.absence_planning(date, date),
+  public.absence_delete_rejected(bigint), public.absence_history(bigint),
   public.absence_direction_add(uuid, text, text, date, date, boolean), public.absence_direction_cancel(bigint),
   public.absence_direction_update(bigint, text, text, date, date, boolean),
   public.absence_circuit_get(bigint), public.absence_circuit_save(jsonb, bigint), public.absence_circuit_simulate(uuid, date, date, text, jsonb, bigint), public.absence_circuit_overview(),

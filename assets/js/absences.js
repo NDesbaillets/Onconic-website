@@ -727,18 +727,29 @@
     if (!$("sd").open) $("sd").showModal();
     $("ab-drafts").hidden = true;
   }
+  // 12 noms au plus venant du serveur ; au-delà, un résumé suivi des premiers noms
+  function listWho(info) {
+    const v = info.validators || [];
+    if (!v.length) return "";
+    return info.more > 0 ? `${info.summary || plur(v.length + info.more, "personne", "personnes")} (${names(v)} et ${plur(info.more, "autre", "autres")})` : names(v);
+  }
   function recipients() {
-    const v = sd.info.validators || [];
-    return v.length ? names(v) : "l'administration";
+    return (sd.info.validators || []).length ? listWho(sd.info) : "l'administration";
+  }
+  function ruleText(info) {
+    const st = info.steps || [];
+    const rules = new Set(st.map((x) => x.rule));
+    if (st.length > 1 && rules.size > 1) return `Règle selon l'étape : ${st.map((x) => `${x.label} (${x.rule === "any" ? "un seul suffit" : "tous"})`).join(" ; ")}.`;
+    return info.step_rule === "any" ? "Un seul de ces validateurs suffit à valider chaque absence." : "Chaque absence doit être validée par tous ces validateurs.";
   }
   function renderSend() {
     const v = sd.info.validators || [];
     $("sd-to").textContent = !v.length ? "Aucun validateur n'est disponible pour l'instant : la demande sera adressée à l'administration."
-      : sd.info.step_kind === "personnes" && sd.info.step_label ? `Validateurs : ${names(v)} (${sd.info.step_label})`
-      : sd.info.fallback ? `Aucun validateur n'est désigné pour vos cliniques : votre demande sera envoyée à l'administration (${names(v)}).`
-      : `Vous allez envoyer une demande de validation à : ${names(v)}.`;
-    $("sd-rule").textContent = v.length > 1 && !sd.info.fallback
-      ? (sd.info.step_rule === "any" ? "Un seul de ces validateurs suffit à valider chaque absence." : "Chaque absence doit être validée par tous ces validateurs.")
+      : sd.info.step_kind === "personnes" && sd.info.step_label ? `Validateurs : ${listWho(sd.info)} (${sd.info.step_label})`
+      : sd.info.fallback ? `Aucun validateur n'est désigné pour vos cliniques : votre demande sera envoyée à l'administration (${listWho(sd.info)}).`
+      : `Vous allez envoyer une demande de validation à : ${listWho(sd.info)}.`;
+    $("sd-rule").textContent = (v.length > 1 || sd.info.more > 0) && !sd.info.fallback
+      ? ruleText(sd.info)
       + " Ils reçoivent un seul e-mail pour l'ensemble de vos demandes ; vous êtes prévenu·e dès que tout est validé, ou dès qu'un validateur refuse."
       : "Le validateur reçoit un seul e-mail pour l'ensemble de vos demandes ; vous êtes prévenu·e de sa décision.";
     const list = $("sd-list");
@@ -776,8 +787,8 @@
       if (error) return say($("sd-confirm-msg"), error.message, "error");
       mailer();
       $("sd-confirm").hidden = true; $("sd-done").hidden = false;
-      const who = (data.validators || []).length ? names(data.validators) : "l'administration";
-      $("sd-done-text").textContent = `${plur(data.count, "demande envoyée", "demandes envoyées")}. ${who} ${(data.validators || []).length > 1 ? "seront prévenus" : "sera prévenu·e"} par e-mail. Vous serez prévenu·e par e-mail dès que tout est validé, ou dès qu'un validateur refuse.`;
+      const who = (data.validators || []).length ? listWho(data) : "l'administration";
+      $("sd-done-text").textContent = `${plur(data.count, "demande envoyée", "demandes envoyées")}. ${who} ${(data.validators || []).length > 1 || data.more > 0 ? "seront prévenus" : "sera prévenu·e"} par e-mail. Vous serez prévenu·e par e-mail dès que tout est validé, ou dès qu'un validateur refuse.`;
       say($("sd-confirm-msg"), "");
       await afterChange();
     } finally { btn.disabled = false; }
@@ -863,8 +874,9 @@
   // Étape en cours d'une demande (circuit configurable) : champs step_kind / step_label, sinon instantané `circuit` (étape « current »), sinon `stage` de compatibilité
   function curStep(r) {
     if (r.step_kind || r.step_label) return { kind: r.step_kind || "clinique", label: r.step_label || (r.step_kind === "visa" ? "Visa de la direction" : "Validateurs de clinique") };
-    const c = (r.circuit || []).find((x) => x.current);
-    if (c) return { kind: c.kind, label: c.label };
+    // étapes bloquantes de la colonne en cours, jointes par « + » (les étapes consultatives n'arrêtent pas la demande)
+    const cur = (r.circuit || []).filter((x) => x.current && x.blocking !== false);
+    if (cur.length) return { kind: cur.some((x) => x.kind === "visa") ? "visa" : cur[0].kind, label: cur.map((x) => x.label).join(" + ") };
     return r.stage === 2 ? { kind: "visa", label: "Visa de la direction" } : { kind: "clinique", label: "Validateurs de clinique" };
   }
   // Avancement de la validation : qui a validé, qui attend, qui a refusé (regroupé par étape quand le circuit en compte plusieurs)

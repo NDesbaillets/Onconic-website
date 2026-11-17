@@ -16,7 +16,7 @@ const PEOPLE = [[1, 'admin', []], [2, 'direction', []], [3, 'cadre', ['Thoraciqu
 const D1 = ['2027-03-01', '2027-03-03'];
 const D2 = ['2027-04-05', '2027-04-07'];
 
-async function mk({ old = false } = {}) {
+async function mk({ old = false, temp = false } = {}) {
   const db = new PGlite();
   const as = async (n) => { await db.exec('reset role'); await db.query("select set_config('test.uid',$1,false)", [n ? uid(n) : '']); await db.exec('set role authenticated'); };
   const sup = () => db.exec('reset role');
@@ -29,6 +29,7 @@ async function mk({ old = false } = {}) {
     await db.exec(await read('supabase/' + f));
   for (const f of ['202611110001_absence_hardening.sql', '202611120001_nurse_role.sql', '202611120002_assistant_default_tools.sql', '202611130001_securite_advisors.sql', '202611140001_absence_planning.sql'])
     await db.exec(await read('supabase/migrations/' + f));
+  if (temp) await db.exec(await read('supabase/migrations/202611160002_comptes_temporaires.sql'));
   await db.exec(await read('supabase/migrations/202611170001_circuit_absences.sql'));
   for (const [n, role, clinics] of PEOPLE) {
     await db.query('insert into auth.users(id,email) values($1,$2)', [uid(n), `cc${n}@example.com`]);
@@ -322,5 +323,126 @@ test('11. destinataire du visa aussi présent dans une autre étape de la colonn
     const id2 = await t.request(4, D2);
     await t.decide(3, id2); await t.decide(5, id2);
     assert.equal((await t.outbox('to_direction')).filter((x) => x.recipient === uid(2) && x.absence_ids.includes(Number(id2))).length, 1);
+  } finally { await t.db.close(); }
+});
+
+test('12. personne à la fois dans une étape consultative et dans une étape bloquante : un seul message, « à valider »', async () => {
+  const t = await mk();
+  try {
+    const PERS = (col, pos, label, persons, blocking) => ({ pos, col, kind: 'personnes', label, rule: 'any', blocking, active: true, persons });
+    // à l'envoi : le cadre 3 est validateur de clinique et consulté dans la même colonne
+    await t.save([PRE, CLIN(10, 10), PERS(10, 20, 'Avis du cadre', [uid(3)], false), VISA(20, 30)]);
+    const id = await t.request(4, D1);
+    const mine = async (k, who) => (await t.outbox(k)).filter((r) => r.recipient === uid(who) && r.absence_ids.includes(Number(id)));
+    assert.equal((await mine('to_validate', 3)).length, 1);
+    assert.equal((await mine('to_opinion', 3)).length, 0);
+    // à l'arrivée dans une colonne suivante : la direction est consultée et doit valider
+    await t.save([PRE, CLIN(10, 10), DIR(20, 20, 'Direction'), PERS(20, 30, 'Avis consultatif', [uid(2)], false), VISA(30, 40)]);
+    const id2 = await t.request(4, D2);
+    await t.decide(3, id2); await t.decide(5, id2);
+    assert.equal(await t.stage(id2), 20);
+    const m2 = async (k) => (await t.outbox(k)).filter((r) => r.recipient === uid(2) && r.absence_ids.includes(Number(id2)));
+    assert.equal((await m2('to_validate')).length, 1);
+    assert.equal((await m2('to_opinion')).filter((r) => r.payload.step_label === 'Avis consultatif').length, 0);
+    // demande de changement : même règle
+    await t.decide(2, id2); await t.decide(2, id2);
+    await t.sup(); await t.db.exec("update absences set status='approved' where id=" + Number(id2));
+    await t.save([PRE, CLIN(10, 10), PERS(10, 20, 'Avis du cadre', [uid(3)], false), VISA(20, 30)]);
+    await t.as(4); await t.rpc('absence_request_change', [Number(id2), 'delete', null, null, null, null]);
+    assert.equal((await t.outbox('to_opinion')).filter((r) => r.recipient === uid(3) && r.absence_ids.includes(Number(id2))).length, 0);
+    assert.equal((await t.outbox('to_validate_change')).filter((r) => r.recipient === uid(3) && r.absence_ids.includes(Number(id2))).length, 1);
+  } finally { await t.db.close(); }
+});
+
+test('13. groupe nombreux : 12 noms, nombre restant et résumé ; l\'envoi prévient tout le monde', async () => {
+  const t = await mk();
+  try {
+    await t.sup();
+    await t.db.exec(`insert into auth.users(id,email) select ('20000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, 'cdc' || g || '@example.com' from generate_series(1, 15) g;
+      insert into profiles(id,full_name,role,institution,clinics) select ('20000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, 'Chef ' || lpad(g::text, 2, '0'), 'cdc', 'CHUV', '{}' from generate_series(1, 15) g;`);
+    await t.save([PRE, GRP(10, 10, 'Chefs de clinique', ['cdc'], 'all'), VISA(20, 20)]);
+    await t.as(4);
+    await t.rpc('absence_request', ['vacances', null, D1[0], D1[1]]);
+    const w = await t.rpc('absence_my_validators');
+    assert.equal(w.validators.length, 12); assert.equal(w.more, 7); assert.equal(w.summary, '19 personnes : Chefs de clinique');
+    assert.deepEqual(w.steps, [{ label: 'Chefs de clinique', rule: 'any' }]);
+    const sub = await t.rpc('absence_submit');
+    assert.equal(sub.validators.length, 12); assert.equal(sub.more, 7);
+    assert.equal((await t.outbox('to_validate')).length, 19);
+    // peu de personnes : liste complète, sans résumé
+    await t.save([PRE, CLIN(10, 10), VISA(20, 20)]);
+    await t.as(4); await t.rpc('absence_request', ['vacances', null, D2[0], D2[1]]);
+    const w2 = await t.rpc('absence_my_validators');
+    assert.equal(w2.validators.length, 2); assert.equal(w2.more, 0); assert.equal(w2.summary, null);
+    assert.deepEqual(w2.steps, [{ label: 'Validateurs de clinique', rule: 'all' }]);
+  } finally { await t.db.close(); }
+});
+
+test('14. groupe : sans l\'outil Absences ou accès échu, on n\'est pas sollicité', async () => {
+  const t = await mk({ temp: true });
+  try {
+    await t.save([PRE, GRP(10, 10, 'Tous les CDC', ['cdc'], 'all'), VISA(20, 20)]);
+    await t.sup();
+    await t.db.exec(`insert into tool_access(user_id, tool, allowed) values ('${uid(11)}', 'absences', false); update profiles set access_until = current_date - 3 where id = '${uid(12)}'`);
+    const id = await t.request(4, D1);
+    assert.deepEqual((await t.pending(id)).map((r) => r[1]), [uid(10), uid(13)]);
+    assert.deepEqual(sorted((await t.outbox('to_validate')).map((r) => r.recipient)), sorted([uid(10), uid(13)]));
+  } finally { await t.db.close(); }
+});
+
+test('15. colonne avec le visa et une étape clinique : dans un sens comme dans l\'autre, la colonne se solde', async () => {
+  const t = await mk();
+  try {
+    await t.save([PRE, CLIN(10, 10), VISA(10, 20)]);
+    const a = await t.request(4, D1);
+    assert.equal(await t.decide(2, a), 'requested');
+    await t.decide(3, a); assert.equal(await t.status(a), 'requested');
+    assert.equal(await t.decide(5, a), 'approved');
+    const b = await t.request(4, D2);
+    await t.decide(3, b); await t.decide(5, b); assert.equal(await t.status(b), 'requested');
+    assert.equal(await t.decide(2, b), 'approved');
+  } finally { await t.db.close(); }
+});
+
+test('16. visa d\'un tour précédent : une demande de changement le rouvre, l\'ancien visa ne compte pas', async () => {
+  const t = await mk();
+  try {
+    await t.save([PRE, CLIN(10, 10), VISA(20, 20)]);
+    const id = await t.request(4, D1);
+    await t.decide(3, id); await t.decide(5, id);
+    assert.equal(await t.decide(2, id), 'approved');
+    await t.as(4);
+    await t.rpc('absence_request_change', [Number(id), 'modify', 'vacances', null, '2027-03-08', '2027-03-10']);
+    assert.equal(await t.stage(id), 10);
+    await t.decide(3, id); await t.decide(5, id);
+    assert.equal(await t.stage(id), 20);
+    await t.as(2);
+    const v = await t.rows('select steps from absence_to_validate()');
+    assert.equal(v.length, 1);
+    assert.deepEqual(v[0].steps.map((s) => [s.kind, s.mine]), [['visa', true]]);
+    assert.equal(await t.decide(2, id), 'approved');
+  } finally { await t.db.close(); }
+});
+
+test('17. fonctions internes : permission refusée aux membres connectés', async () => {
+  const t = await mk();
+  try {
+    const calls = [
+      "public.absence_step_member('" + uid(4) + "'::uuid, null::public.absences, '{}'::jsonb)", "public.absence_step_done('" + uid(4) + "'::uuid, null::public.absences, '{}'::jsonb)",
+      'public.absence_visa_done(null::public.absences)', 'public.absence_col_people(null::public.absences)', 'public.absence_steps_of(null::public.absences)',
+      'public.absence_active_steps(null::public.absences)', 'public.absence_col_kind(null::public.absences)', 'public.absence_col_label(null::public.absences)',
+      "public.absence_step_people_for('" + uid(4) + "'::uuid, '2027-03-01'::date, '2027-03-02'::date, '{}'::jsonb)", "public.absence_circuit_normalize('[]'::jsonb)",
+      "public.absence_enqueue_direction(array[1]::bigint[], '" + uid(4) + "'::uuid, array[]::uuid[])", 'public.absence_my_validators_full()', "public.absence_validators_view('{}'::jsonb)",
+    ];
+    for (const n of [4, 2]) {
+      await t.as(n);
+      for (const c of calls) await assert.rejects(t.db.query('select ' + c), /permission denied/, c);
+    }
+    // les deux fonctions publiques restent appelables par un membre connecté
+    await t.as(4);
+    assert.deepEqual(await t.rpc('absence_history', [1]), []);
+    await assert.rejects(t.rpc('absence_delete_rejected', [999999]), /introuvable/);
+    await t.db.exec('reset role'); await t.db.exec('set role anon');
+    await assert.rejects(t.db.query('select public.absence_history(1)'), /permission denied/);
   } finally { await t.db.close(); }
 });

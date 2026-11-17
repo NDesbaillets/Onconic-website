@@ -1,6 +1,6 @@
 /* Circuit de validation des absences (admin) : constructeur visuel, dense et sobre */
 .cc { font-size: .9rem; padding-block: var(--space-4) var(--space-5); }
-section.cc h1 { font-size: 1.5rem; line-height: 1.2; letter-spacing: 0; margin: 0 0 var(--space-2); }
+.section.ug.cc h1 { font-size: 1.4rem; line-height: 1.2; letter-spacing: 0; margin: 0 0 var(--space-2); }
 .cc .rule { display: none; }
 .cc .eyebrow { margin-bottom: var(--space-1); font-size: .75rem; }
 .cc .hive-back { min-height: 32px; padding: 0 12px; font-size: .85rem; margin-bottom: var(--space-2); }

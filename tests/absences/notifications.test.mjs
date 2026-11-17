@@ -56,3 +56,12 @@ test('to_opinion avec step_label : avis demandé au lieu du pré-avis de la dire
  const b=buildEmail({lang:'fr',kind:'to_opinion',owner:'Test',absences:[{...absence,change_type:null}],validators:[],approvers:[]});
  assert.match(b.subject,/pré-avis/);
 });
+test('à valider : au plus 10 noms, puis « et n autres »',()=>{
+ const noms=Array.from({length:37},(_,i)=>`Validateur ${i+1}`);
+ const fr=buildEmail({lang:'fr',kind:'to_validate',owner:'Test',absences:[{...absence,change_type:null}],validators:noms,approvers:[]});
+ assert.match(fr.text,/Validateur 10 et 27 autres\./); assert.doesNotMatch(fr.text,/Validateur 11\b/);
+ const en=buildEmail({lang:'en',kind:'to_validate_change',owner:'Test',absences:[absence],validators:noms,approvers:[]});
+ assert.match(en.text,/Validateur 10 and 27 more\./);
+ const few=buildEmail({lang:'fr',kind:'to_validate',owner:'Test',absences:[{...absence,change_type:null}],validators:noms.slice(0,2),approvers:[]});
+ assert.match(few.text,/Validateur 1, Validateur 2\./);
+});
