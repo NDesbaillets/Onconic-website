@@ -734,6 +734,7 @@
   function renderSend() {
     const v = sd.info.validators || [];
     $("sd-to").textContent = !v.length ? "Aucun validateur n'est disponible pour l'instant : la demande sera adressée à l'administration."
+      : sd.info.step_kind === "personnes" && sd.info.step_label ? `Validateurs : ${names(v)} (${sd.info.step_label})`
       : sd.info.fallback ? `Aucun validateur n'est désigné pour vos cliniques : votre demande sera envoyée à l'administration (${names(v)}).`
       : `Vous allez envoyer une demande de validation à : ${names(v)}.`;
     $("sd-rule").textContent = v.length > 1 && !sd.info.fallback

@@ -318,3 +318,101 @@ test('refus d\'une clinique : décisions de toutes les étapes visibles et messa
     assert.ok(all.some((r) => r.validator_name === 'Circuit 9' && r.decision === 'rejected'));
   } finally { await t.db.close(); }
 });
+
+test('circuit sans visa : sans validateur, la demande va à la direction (repli) et peut être conclue', async () => {
+  const t = await mk();
+  try {
+    await t.as(2);
+    const res = await t.rpc('absence_circuit_save', [JSON.stringify(steps({ 20: { active: false } }))]);
+    assert.equal(res.warning, 'Aucun visa de la direction actif : les demandes sans validateur iront aux administrateurs.');
+    await t.as(6); await t.rpc('absence_request', ['vacances', null, ...D1]);
+    const who = await t.rpc('absence_my_validators');
+    assert.equal(who.step_kind, 'visa'); assert.equal(who.fallback, true); assert.deepEqual(who.validators.map((v) => v.name), ['Circuit 2']);
+    const id = (await t.rpc('absence_submit')).ids[0];
+    assert.equal(await t.stage(id), 1000);
+    assert.deepEqual((await t.outbox('to_validate')).map((r) => r.recipient), [uid(2)]);
+    await t.as(2); assert.deepEqual((await t.rows('select id from absence_to_validate()')).map((r) => r.id), [id]);
+    assert.equal(await t.rpc('absence_decide', [id, true, null]), 'approved');
+    // un circuit avec visa ne renvoie pas d'avertissement
+    assert.equal((await t.rpc('absence_circuit_save', [JSON.stringify(steps())])).warning, undefined);
+  } finally { await t.db.close(); }
+});
+
+test('même personne à une étape « personnes » puis validatrice de clinique : voit encore la demande', async () => {
+  const t = await mk();
+  try {
+    await t.as(2); await t.rpc('absence_circuit_save', [JSON.stringify(steps({}, [{ pos: 5, kind: 'personnes', label: 'Avant la clinique', rule: 'any', blocking: true, active: true, persons: [uid(3)] }]))]);
+    const id = await t.request(4, D1);
+    assert.equal(await t.stage(id), 5);
+    await t.as(3); await t.rpc('absence_decide', [id, true, null]);
+    assert.equal(await t.stage(id), 10);
+    assert.deepEqual((await t.rows('select id, step_kind from absence_to_validate()')).map((r) => [r.id, r.step_kind]), [[id, 'clinique']]);
+    await t.rpc('absence_decide', [id, true, null]);
+    assert.equal(await t.stage(id), 10);
+    await t.as(5); await t.rpc('absence_decide', [id, true, null]);
+    assert.equal(await t.stage(id), 20);
+  } finally { await t.db.close(); }
+});
+
+test('confidentialité : commentaires masqués pour les validateurs, visibles pour l\'administration', async () => {
+  const t = await mk();
+  try {
+    const id = await t.request(8, D1);
+    await t.as(9); await t.rpc('absence_decide', [id, false, 'Motif confidentiel']);
+    await t.sup(); await t.db.exec('update absences set confidential = true');
+    await t.as(3);
+    const r3 = (await t.rows('select decision_comment, approvals from absence_rejected_to_manage()')).find((r) => r.approvals.length);
+    assert.equal(r3.decision_comment, null); assert.ok(r3.approvals.every((x) => x.comment === null));
+    await t.as(1);
+    const r1 = (await t.rows('select decision_comment, approvals from absence_rejected_to_manage()'))[0];
+    assert.equal(r1.decision_comment, 'Motif confidentiel'); assert.ok(r1.approvals.some((x) => x.comment === 'Motif confidentiel'));
+    await t.as(3); await t.rpc('absence_approvals_all', [uid(8)]).catch(() => {});
+    const ap3 = await t.rows('select comment from absence_approvals_all($1)', [uid(8)]);
+    assert.ok(ap3.length && ap3.every((x) => x.comment === null));
+    await t.as(1); assert.ok((await t.rows('select comment from absence_approvals_all($1)', [uid(8)])).some((x) => x.comment === 'Motif confidentiel'));
+    await t.as(8); assert.ok((await t.rows('select comment from absence_approvals_all()')).some((x) => x.comment === 'Motif confidentiel'));
+  } finally { await t.db.close(); }
+});
+
+test('personnes d\'une étape « personnes » : accès limité aux demandes où elles figurent dans l\'instantané', async () => {
+  const t = await mk();
+  try {
+    await t.as(2); await t.rpc('absence_circuit_save', [JSON.stringify(steps({ 30: { active: true, persons: [uid(7)], min_days: 10 } }))]);
+    const short = await t.request(4, D1), long = await t.request(4, D2);
+    await t.as(7);
+    assert.deepEqual((await t.rows('select to_jsonb(r) j from public.absence_list($1) r', [uid(4)])).map((x) => x.j.id), [long]);
+    assert.deepEqual([...new Set((await t.rows('select absence_id from absence_approvals_all($1)', [uid(4)])).map((x) => x.absence_id))], [long]);
+    await t.as(6); await assert.rejects(t.rows('select * from public.absence_list($1)', [uid(4)]), /Accès refusé/);
+    await t.as(3); await t.rpc('absence_decide', [long, false, 'Refus de test']);
+    await t.as(7);
+    assert.deepEqual((await t.rows('select id from absence_rejected_to_manage()')).map((x) => x.id), [long]);
+    await assert.rejects(t.rpc('absence_delete_rejected', [short]), /introuvable|refusé/);
+    await t.rpc('absence_delete_rejected', [long]);
+    await t.sup(); assert.equal((await t.rows('select 1 from absences where id=$1', [long])).length, 0);
+    assert.equal((await t.rows('select 1 from absences where id=$1', [short])).length, 1);
+  } finally { await t.db.close(); }
+});
+
+test('droits refusés, renvoi aux bonnes personnes, un seul avis par personne, historique sans circuit', async () => {
+  const t = await mk();
+  try {
+    await t.as(4);
+    await assert.rejects(t.rpc('absence_circuit_overview'), /Réservé/);
+    await assert.rejects(t.rpc('absence_circuit_simulate', [uid(4), ...D1]), /Réservé/);
+    await t.as(2); await t.rpc('absence_circuit_save', [JSON.stringify(steps(CHEFFE, [{ pos: 5, kind: 'personnes', label: 'Avis', rule: 'any', blocking: false, active: true, persons: [uid(2)] }]))]);
+    const id = await t.request(4, D1);
+    // la direction reçoit le pré-avis et figure dans une étape non bloquante : un seul message
+    assert.equal((await t.outbox('to_opinion')).filter((r) => r.recipient === uid(2)).length, 1);
+    await t.sup();
+    assert.deepEqual((await t.rows('select recipient from absence_resend_pairs($1,$2) order by 1', [uid(4), [id]])).map((r) => r.recipient).sort(), [uid(3), uid(5)].sort());
+    await t.as(3); await t.rpc('absence_decide', [id, true, null]);
+    await t.as(5); await t.rpc('absence_decide', [id, true, null]);
+    await t.as(2); await t.rpc('absence_decide', [id, true, null]);
+    assert.equal(await t.stage(id), 30);
+    await t.sup();
+    assert.deepEqual((await t.rows('select absence_id, recipient from absence_resend_pairs($1,$2)', [uid(4), [id]])).map((r) => [r.absence_id, r.recipient]), [[id, uid(7)]]);
+    await t.as(4);
+    const h = await t.rpc('absence_history', [id]);
+    assert.ok(h.length > 0 && h.every((e) => !('circuit' in (e.before_data || {})) && !('circuit' in (e.after_data || {}))));
+  } finally { await t.db.close(); }
+});

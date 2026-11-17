@@ -59,17 +59,17 @@ alter table public.absences add column if not exists circuit jsonb;
 
 do $$
 begin
-  -- une seule fois : l'ancienne contrainte (stage 1 ou 2) n'existe plus après la première exécution
+  -- l'ancienne contrainte (stage 1 ou 2) n'existe plus après la première exécution
   if exists (select 1 from pg_constraint where conrelid = 'public.absences'::regclass and conname = 'absences_stage_check') then
     alter table public.absences drop constraint absences_stage_check;
-    alter table public.absences alter column stage type int;
-    update public.absences set circuit = '[{"pos":10,"kind":"clinique","label":"Validateurs de clinique","rule":"all","blocking":true,"persons":[],"pdf_slot":null},{"pos":20,"kind":"visa","label":"Visa de la direction","rule":"any","blocking":true,"persons":[],"pdf_slot":null}]'::jsonb
-      where circuit is null and (status = 'requested' or (status = 'approved' and change_type is not null));
-    update public.absences set stage = stage * 10 where stage in (1, 2);
   end if;
 end $$;
 alter table public.absences alter column stage type int;
 alter table public.absences alter column stage set default 10;
+-- reprise des demandes en cours (réexécutable : l'instantané n'est posé que s'il manque, le remappage ne touche que les anciennes valeurs 1 et 2)
+update public.absences set circuit = '[{"pos":10,"kind":"clinique","label":"Validateurs de clinique","rule":"all","blocking":true,"persons":[],"pdf_slot":null},{"pos":20,"kind":"visa","label":"Visa de la direction","rule":"any","blocking":true,"persons":[],"pdf_slot":null}]'::jsonb
+  where circuit is null and (status = 'requested' or (status = 'approved' and change_type is not null));
+update public.absences set stage = stage * 10 where stage in (1, 2);
 
 alter table public.absence_approvals add column if not exists step int not null default 10;
 do $$
@@ -262,6 +262,12 @@ language sql stable security definer set search_path = public, pg_temp as $$
     ) q where q.x <> a.user_id and public.tool_allowed(q.x, 'absences') order by q.x), '{}'::uuid[]);
 $$;
 
+-- Étape de repli : aucune étape bloquante n'a de personne, la demande va aux destinataires du visa (direction, sinon administrateurs)
+create or replace function public.absence_circuit_fallback() returns jsonb
+language sql immutable set search_path = public, pg_temp as $$
+  select '{"pos":1000,"kind":"visa","label":"Visa de la direction (repli)","rule":"any","blocking":true,"persons":[],"pdf_slot":null}'::jsonb;
+$$;
+
 -- Première étape bloquante qui retient la demande : étape avec personnes (le visa n'est jamais sauté)
 create or replace function public.absence_first_stop(p_user uuid, p_from date, p_to date, p_circuit jsonb) returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp as $$
@@ -275,7 +281,7 @@ begin
       end if;
     end if;
   end loop;
-  return null;
+  return jsonb_build_object('step', public.absence_circuit_fallback(), 'people', to_jsonb(public.absence_direction_recipients(p_user)));
 end;
 $$;
 
@@ -326,15 +332,23 @@ $$;
 -- 4. Moteur ------------------------------------------------------------------------------------------------------------------
 
 -- Passe à l'étape bloquante suivante, ou conclut la demande. Notifications d'avis des étapes non bloquantes rencontrées avant l'arrêt.
+-- p_after : position de départ (par défaut l'étape en cours) ; -1 pour partir du début d'un nouveau tour.
+do $$
+begin
+  if to_regprocedure('public.absence_advance(bigint,uuid,text,boolean,boolean)') is not null then
+    drop function public.absence_advance(bigint, uuid, text, boolean, boolean);
+  end if;
+end $$;
 create or replace function public.absence_advance(p_id bigint, p_by uuid default null, p_comment text default null,
-                                                  p_mail_stop boolean default true, p_mail_opinion boolean default true) returns void
+                                                  p_mail_stop boolean default true, p_mail_opinion boolean default true, p_after int default null) returns void
 language plpgsql security definer set search_path = public, pg_temp as $$
-declare a public.absences; s jsonb; ppl uuid[]; r uuid; k text; last_pos int; ops jsonb[] := '{}'; o jsonb;
+declare a public.absences; s jsonb; ppl uuid[]; r uuid; k text; v_from int; circ jsonb; ops jsonb[] := '{}'; o jsonb;
 begin
   select * into a from public.absences where id = p_id for update;
   if not found then return; end if;
+  v_from := coalesce(p_after, a.stage);
   for s in select value from jsonb_array_elements(coalesce(a.circuit, '[]'::jsonb)) order by (value ->> 'pos')::int loop
-    continue when (s ->> 'pos')::int <= a.stage;
+    continue when (s ->> 'pos')::int <= v_from;
     ppl := public.absence_step_people(a, s);
     k := s ->> 'kind';
     if not (s ->> 'blocking')::boolean then
@@ -364,13 +378,13 @@ begin
     end if;
     return;
   end loop;
-  -- Fin de chaîne. Jamais d'approbation automatique sans aucune décision humaine : la demande reste à sa dernière étape bloquante.
+  -- Fin de chaîne. Jamais d'approbation automatique sans aucune décision humaine : la demande passe à l'étape de repli (visa de la direction, sinon administrateurs).
   if p_by is null and not exists (select 1 from public.absence_approvals where absence_id = p_id and decision = 'approved') then
-    select max((e ->> 'pos')::int) into last_pos from jsonb_array_elements(coalesce(a.circuit, '[]'::jsonb)) e where (e ->> 'blocking')::boolean;
-    if last_pos is not null then
-      update public.absences set stage = last_pos where id = p_id;
-      return;
-    end if;
+    circ := coalesce(a.circuit, '[]'::jsonb);
+    if not exists (select 1 from jsonb_array_elements(circ) e where (e ->> 'pos')::int = 1000) then circ := circ || jsonb_build_array(public.absence_circuit_fallback()); end if;
+    update public.absences set circuit = circ, stage = 1000 where id = p_id;
+    if p_mail_stop then perform public.absence_enqueue_direction(array[p_id], a.user_id); end if;
+    return;
   end if;
   perform public.absence_finalize_approve(p_id, p_by, p_comment);
 end;
@@ -411,9 +425,9 @@ begin
   if not found then return; end if;
   delete from public.absence_approvals where absence_id = p_id;
   delete from public.absence_opinions where absence_id = p_id;
-  update public.absences set circuit = public.absence_circuit_for(a), stage = -1 where id = p_id;
+  update public.absences set circuit = public.absence_circuit_for(a) where id = p_id;
   -- les e-mails de la première étape bloquante sont envoyés par l'appelant (envoi, demande de changement)
-  perform public.absence_advance(p_id, null, null, false, p_notify);
+  perform public.absence_advance(p_id, null, null, false, p_notify, -1);
 end;
 $$;
 
@@ -514,7 +528,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
     when public.absence_step_of(a) ->> 'kind' = 'personnes' then p_uid = any (public.absence_step_people(a, public.absence_step_of(a)))
          and not exists (select 1 from public.absence_approvals p where p.absence_id = a.id and p.step = a.stage and p.validator_id = p_uid and p.decision = 'approved')
     else public.can_validate_absence(p_uid, a.user_id, public.absence_lo(a), public.absence_hi(a))
-         and not exists (select 1 from public.absence_approvals p where p.absence_id = a.id and p.validator_id = p_uid and p.decision = 'approved')
+         and not exists (select 1 from public.absence_approvals p where p.absence_id = a.id and p.step = a.stage and p.validator_id = p_uid and p.decision = 'approved')
   end;
 $$;
 
@@ -532,7 +546,10 @@ begin
       (public.absence_preavis_active() and p_recipient = any (public.absence_opinion_recipients(a.user_id)))
       or p_recipient = any (public.absence_nonblocking_people(a))
     when p_kind = 'peer_rejected' then p_recipient = any (public.absence_peer_people(a))
-    else false end);
+    else false end)
+  -- un seul message d'avis par personne et par tour, qu'il vienne du pré-avis ou d'une étape non bloquante
+  and not (p_kind = 'to_opinion' and exists (select 1 from public.absence_outbox o where o.kind = 'to_opinion' and o.recipient = p_recipient
+           and a.id = any (o.absence_ids) and o.created_at >= coalesce(a.change_requested_at, a.submitted_at, a.created_at)));
   if ids is null then return; end if;
   if p_kind = 'to_opinion' and p_payload ->> 'step_label' is not null then
     -- un seul message par personne et par étape pour un même envoi
@@ -594,23 +611,23 @@ $$;
 
 create or replace function public.absence_my_validators() returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp as $$
-declare uid uuid := auth.uid(); v uuid[] := '{}'; fb boolean := false; a record; fs jsonb;
+declare uid uuid := auth.uid(); v uuid[] := '{}'; fb boolean := false; a record; fs jsonb; first_step jsonb;
 begin
   perform public.absence_guard();
   if exists (select 1 from public.absences where user_id = uid and status = 'draft') then
-    for a in select x.kind, x.start_date, x.end_date from public.absences x where x.user_id = uid and x.status = 'draft' loop
+    for a in select x.kind, x.start_date, x.end_date from public.absences x where x.user_id = uid and x.status = 'draft' order by x.start_date, x.id loop
       fs := public.absence_first_stop(uid, a.start_date, a.end_date, public.absence_circuit_build(a.kind, a.start_date, a.end_date, null));
-      if fs is null or fs -> 'step' ->> 'kind' <> 'clinique' then fb := true; end if;
-      if fs is not null then
-        v := v || array(select p::uuid from jsonb_array_elements_text(fs -> 'people') p where not (p::uuid = any (v)));
-      end if;
+      first_step := coalesce(first_step, fs -> 'step');
+      if fs -> 'step' ->> 'kind' = 'visa' then fb := true; end if;
+      v := v || array(select p::uuid from jsonb_array_elements_text(fs -> 'people') p where not (p::uuid = any (v)));
     end loop;
   else
     fs := public.absence_first_stop(uid, public.ch_today(), public.ch_today(), public.absence_circuit_build('vacances', public.ch_today(), public.ch_today(), null));
-    if fs is null or fs -> 'step' ->> 'kind' <> 'clinique' then fb := true; end if;
-    if fs is not null then v := array(select p::uuid from jsonb_array_elements_text(fs -> 'people') p); end if;
+    first_step := fs -> 'step';
+    fb := fs -> 'step' ->> 'kind' = 'visa';
+    v := array(select p::uuid from jsonb_array_elements_text(fs -> 'people') p);
   end if;
-  return jsonb_build_object('fallback', fb,
+  return jsonb_build_object('fallback', fb, 'step_kind', first_step ->> 'kind', 'step_label', first_step ->> 'label',
     'validators', coalesce((select jsonb_agg(jsonb_build_object('id', x, 'name', public.member_name(x)) order by public.member_name(x)) from unnest(v) x), '[]'::jsonb));
 end;
 $$;
@@ -799,17 +816,21 @@ $$;
 
 create or replace function public.absence_list(p_user uuid default null) returns setof public.absences
 language plpgsql stable security definer set search_path = public, pg_temp as $$
-declare uid uuid := auth.uid();
+declare uid uuid := auth.uid(); perm boolean := true;
 begin
   perform public.absence_guard();
-  if p_user is not null and p_user <> uid and not (public.can_validate_absence(uid, p_user) or public.is_direction_admin()) then
-    raise exception 'Accès refusé.' using errcode = '42501';
+  if p_user is not null and p_user <> uid then
+    perm := public.can_validate_absence(uid, p_user) or public.is_direction_admin();
+    -- une personne d'une étape « personnes » ne voit que les demandes où elle figure dans l'instantané
+    if not perm and not exists (select 1 from public.absences x where x.user_id = p_user and public.absence_in_personnes_step(uid, x)) then
+      raise exception 'Accès refusé.' using errcode = '42501';
+    end if;
   end if;
   -- `stage` de compatibilité (1 ou 2) ; l'instantané `circuit` marque l'étape en cours (current) et ne contient pas les personnes
   return query select (jsonb_populate_record(null::public.absences, to_jsonb(a)
       || case when a.confidential and a.user_id <> uid and not public.is_direction_admin() then jsonb_build_object('note', null,'change_note',null,'decision_comment',null) else '{}'::jsonb end
       || jsonb_build_object('stage', public.absence_stage_compat(a), 'circuit', public.absence_circuit_public(a)))).*
-    from public.absences a where a.user_id = coalesce(p_user, uid)
+    from public.absences a where a.user_id = coalesce(p_user, uid) and (perm or public.absence_in_personnes_step(uid, a))
     and not (a.status = 'rejected' and a.decided_at < now() - interval '14 days')
     and (a.status <> 'draft' or a.user_id = uid)
     order by a.start_date desc;
@@ -935,7 +956,8 @@ $$;
 
 create or replace function public.absence_in_personnes_step(p_uid uuid, a public.absences) returns boolean
 language sql stable security definer set search_path = public, pg_temp as $$
-  select exists (select 1 from jsonb_array_elements(coalesce(a.circuit, '[]'::jsonb)) e
+  select (a.status in ('requested', 'rejected') or public.absence_is_open(a))
+     and exists (select 1 from jsonb_array_elements(coalesce(a.circuit, '[]'::jsonb)) e
                   where e ->> 'kind' = 'personnes' and p_uid = any (public.absence_step_people(a, e)));
 $$;
 
@@ -943,16 +965,21 @@ drop function if exists public.absence_approvals_all(uuid);
 create function public.absence_approvals_all(p_user uuid default null)
 returns table(absence_id bigint, validator_name text, decision text, comment text, decided_at timestamptz, step int, step_label text)
 language plpgsql stable security definer set search_path = public, pg_temp as $$
-declare uid uuid := auth.uid();
+declare uid uuid := auth.uid(); perm boolean := true;
 begin
   perform public.absence_guard();
-  if p_user is not null and p_user <> uid and not (public.can_validate_absence(uid, p_user) or public.is_direction_admin()) then
-    raise exception 'Accès refusé.' using errcode = '42501';
+  if p_user is not null and p_user <> uid then
+    perm := public.can_validate_absence(uid, p_user) or public.is_direction_admin();
+    -- une personne d'une étape « personnes » ne voit que les demandes où elle figure dans l'instantané
+    if not perm and not exists (select 1 from public.absences x where x.user_id = p_user and public.absence_in_personnes_step(uid, x)) then
+      raise exception 'Accès refusé.' using errcode = '42501';
+    end if;
   end if;
   return query
-    select a.id, r.name, r.decision, r.comment, r.at, r.step, r.step_label
+    select a.id, r.name, r.decision, case when not a.confidential or a.user_id = uid or public.is_direction_admin() then r.comment end, r.at, r.step, r.step_label
     from public.absences a cross join lateral public.absence_decision_rows(a) r
-    where a.user_id = coalesce(p_user, uid) and (a.status in ('requested', 'rejected') or (a.status = 'approved' and a.change_type is not null))
+    where a.user_id = coalesce(p_user, uid) and (perm or public.absence_in_personnes_step(uid, a))
+      and (a.status in ('requested', 'rejected') or (a.status = 'approved' and a.change_type is not null))
     order by a.id, r.step, r.name;
 end;
 $$;
@@ -964,9 +991,9 @@ language plpgsql stable security definer set search_path = public, pg_temp as $$
 begin
   perform public.absence_guard();
   return query
-    select a.id, a.user_id, public.member_name(a.user_id), a.kind, a.start_date, a.end_date, a.decision_comment, a.decided_at,
+    select a.id, a.user_id, public.member_name(a.user_id), a.kind, a.start_date, a.end_date, case when not a.confidential or a.user_id = auth.uid() or public.is_direction_admin() then a.decision_comment end, a.decided_at,
            case when a.decided_by is null then null else public.member_name(a.decided_by) end,
-           coalesce((select jsonb_agg(jsonb_build_object('name', r.name, 'decision', r.decision, 'comment', r.comment, 'at', r.at, 'step', r.step, 'step_label', r.step_label)
+           coalesce((select jsonb_agg(jsonb_build_object('name', r.name, 'decision', r.decision, 'comment', case when not a.confidential or a.user_id = auth.uid() or public.is_direction_admin() then r.comment end, 'at', r.at, 'step', r.step, 'step_label', r.step_label)
                      order by r.step, r.name) from public.absence_decision_rows(a) r where r.decision in ('approved', 'rejected')), '[]'::jsonb)
     from public.absences a
     where a.status = 'rejected' and a.decided_at >= now() - interval '14 days'
@@ -974,6 +1001,33 @@ begin
     order by a.decided_at desc;
 end;
 $$;
+
+create or replace function public.absence_delete_rejected(p_id bigint) returns void
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare uid uuid := auth.uid(); a public.absences;
+begin
+  perform public.absence_guard();
+  select * into a from public.absences where id = p_id for update;
+  if not found or a.status <> 'rejected' then raise exception 'Demande refusée introuvable.'; end if;
+  if a.user_id <> uid and not public.can_validate_absence(uid, a.user_id, public.absence_lo(a), public.absence_hi(a)) and not public.absence_in_personnes_step(uid, a) then
+    raise exception 'Accès refusé.' using errcode = '42501';
+  end if;
+  delete from public.absences where id = p_id;
+end;
+$$;
+
+-- Historique : l'instantané du circuit (identifiants de personnes) n'est pas montré
+create or replace function public.absence_history(p_id bigint) returns jsonb
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare owner uuid;
+begin
+ perform public.absence_guard();
+ select user_id into owner from public.absence_audit where absence_id=p_id order by id limit 1;
+ if owner is null then return '[]'; end if;
+ -- L'historique détaillé reste réservé à la personne et à l'administration ; aucun contournement de confidentialité.
+ if owner<>auth.uid() and not public.is_direction_admin() then raise exception 'Accès refusé.' using errcode='42501'; end if;
+ return coalesce((select jsonb_agg(to_jsonb(a)||jsonb_build_object('actor_name',public.member_name(actor),'before_data',a.before_data - 'circuit','after_data',a.after_data - 'circuit') order by id) from public.absence_audit a where absence_id=p_id),'[]');
+end $$;
 
 -- 8. Saisies directes de la direction ---------------------------------------------------------------------------------------
 
@@ -1083,7 +1137,8 @@ begin
            s.min_days, s.pdf_slot
       from jsonb_to_recordset(norm) as s(pos int, kind text, label text, rule text, blocking boolean, active boolean, persons jsonb, kinds jsonb, min_days int, pdf_slot text);
   insert into public.absence_circuit_log (changed_by, before, after) values (auth.uid(), before, public.absence_circuit_steps_json());
-  return public.absence_circuit_get();
+  return public.absence_circuit_get() || case when exists (select 1 from public.absence_circuit_steps where kind = 'visa' and active) then '{}'::jsonb
+    else jsonb_build_object('warning', 'Aucun visa de la direction actif : les demandes sans validateur iront aux administrateurs.') end;
 end;
 $$;
 
@@ -1111,6 +1166,7 @@ begin
   pre := (select v from jsonb_array_elements(norm) v where v ->> 'kind' = 'preavis' limit 1);
   pre_active := coalesce((pre ->> 'active')::boolean, false);
   fs := public.absence_first_stop(p_user, p_from, p_to, circ);
+  if (fs -> 'step' ->> 'pos')::int = 1000 then circ := circ || jsonb_build_array(fs -> 'step'); end if;
   stop_people := coalesce(array(select x::uuid from jsonb_array_elements_text(coalesce(fs -> 'people', '[]'::jsonb)) x), '{}');
   op := case when pre_active then array(select x from unnest(public.absence_opinion_recipients(p_user)) x where not (x = any (stop_people))) else '{}'::uuid[] end;
   selfx := exists (select 1 from public.absence_validators av join public.profiles p on p.id = av.user_id
@@ -1239,7 +1295,7 @@ revoke execute on function
   public.absence_step_people_for(uuid, date, date, jsonb), public.absence_step_people(public.absences, jsonb), public.absence_step_kind(public.absences, int),
   public.absence_nonblocking_people(public.absences), public.absence_first_stop(uuid, date, date, jsonb), public.absence_preavis_active(),
   public.absence_preavis_open(public.absences), public.absence_stage_compat(public.absences), public.absence_circuit_public(public.absences),
-  public.absence_opinion_step(uuid, public.absences), public.absence_advance(bigint, uuid, text, boolean, boolean),
+  public.absence_opinion_step(uuid, public.absences), public.absence_advance(bigint, uuid, text, boolean, boolean, int), public.absence_circuit_fallback(),
   public.absence_open_round_core(bigint, boolean), public.absence_circuit_steps_named(), public.absence_peer_people(public.absences), public.absence_step_label(public.absences, int),
   public.absence_decision_rows(public.absences), public.absence_in_personnes_step(uuid, public.absences)
   from public, anon, authenticated;
@@ -1270,5 +1326,12 @@ grant execute on function
   public.absence_direction_update(bigint, text, text, date, date, boolean),
   public.absence_circuit_get(), public.absence_circuit_save(jsonb), public.absence_circuit_simulate(uuid, date, date, text, jsonb), public.absence_circuit_overview()
   to authenticated;
+
+do $$
+begin
+  if to_regclass('public.onconic_migrations') is not null then
+    insert into public.onconic_migrations(version) values ('202611170001'), ('202611180001') on conflict do nothing;
+  end if;
+end $$;
 
 commit;
