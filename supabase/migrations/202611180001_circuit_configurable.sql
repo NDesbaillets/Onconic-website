@@ -29,6 +29,13 @@ create table if not exists public.absence_circuit_steps (
   check (kind <> 'preavis' or blocking = false),
   check (kind <> 'visa' or rule = 'any')
 );
+-- Positions des étapes : 0 (pré-avis) ou au moins 10, pour que le remappage des anciennes valeurs 1 et 2 ne touche jamais une étape configurée
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'public.absence_circuit_steps'::regclass and conname = 'absence_circuit_steps_pos_min') then
+    alter table public.absence_circuit_steps add constraint absence_circuit_steps_pos_min check (pos = 0 or pos >= 10);
+  end if;
+end $$;
 create unique index if not exists absence_circuit_steps_kind_once on public.absence_circuit_steps (kind) where kind in ('preavis', 'clinique', 'visa');
 alter table public.absence_circuit_steps enable row level security;
 revoke all on public.absence_circuit_steps from public, anon, authenticated;
@@ -176,7 +183,10 @@ begin
   if not uncond then
     raise exception 'Le circuit doit comporter au moins une étape active, bloquante et sans condition de motif ni de durée.';
   end if;
-  return (select jsonb_agg(v order by (v ->> 'pos')::int) from jsonb_array_elements(res) v);
+  -- Positions renumérotées dans l'ordre demandé : pré-avis 0, puis 10, 20, 30… (jamais 1 à 9, réservés à l'ancien stage ; toujours sous le repli 1000)
+  return (select jsonb_agg(v || jsonb_build_object('pos', case when v ->> 'kind' = 'preavis' then 0 else 10 * rn end) order by (v ->> 'pos')::int)
+          from (select v, (row_number() over (order by (v ->> 'pos')::int) - case when exists (select 1 from jsonb_array_elements(res) w where w ->> 'kind' = 'preavis') then 1 else 0 end) as rn
+                from jsonb_array_elements(res) v) q);
 end;
 $$;
 

@@ -147,13 +147,13 @@ test('étape « personnes » non bloquante : avis demandé, la chaîne ne l\'att
     const id = await t.request(4, D1);
     const op = (await t.outbox('to_opinion')).filter((r) => r.recipient === uid(7));
     assert.equal(op.length, 1); assert.equal(op[0].payload.step_label, 'Avis de la cheffe');
-    assert.equal(await t.stage(id), 10);
+    assert.equal(await t.stage(id), 20);
     await t.as(7);
     const todo = await t.rows('select id, step_label from absence_opinion_todo()');
     assert.deepEqual(todo.map((r) => [r.id, r.step_label]), [[id, 'Avis de la cheffe']]);
     assert.equal((await t.rows('select * from absence_to_validate()')).length, 0);
     await t.rpc('absence_opinion_set', [id, 'favorable', null]);
-    await t.sup(); assert.equal((await t.rows('select step from absence_opinions where user_id=$1', [uid(7)]))[0].step, 5);
+    await t.sup(); assert.equal((await t.rows('select step from absence_opinions where user_id=$1', [uid(7)]))[0].step, 10);
     await t.as(6); await assert.rejects(t.rpc('absence_opinion_set', [id, 'favorable', null]), /Réservé/);
     await t.as(3); await t.rpc('absence_decide', [id, true, null]);
     await t.as(5); await t.rpc('absence_decide', [id, true, null]);
@@ -343,14 +343,14 @@ test('même personne à une étape « personnes » puis validatrice de clinique 
   try {
     await t.as(2); await t.rpc('absence_circuit_save', [JSON.stringify(steps({}, [{ pos: 5, kind: 'personnes', label: 'Avant la clinique', rule: 'any', blocking: true, active: true, persons: [uid(3)] }]))]);
     const id = await t.request(4, D1);
-    assert.equal(await t.stage(id), 5);
-    await t.as(3); await t.rpc('absence_decide', [id, true, null]);
     assert.equal(await t.stage(id), 10);
+    await t.as(3); await t.rpc('absence_decide', [id, true, null]);
+    assert.equal(await t.stage(id), 20);
     assert.deepEqual((await t.rows('select id, step_kind from absence_to_validate()')).map((r) => [r.id, r.step_kind]), [[id, 'clinique']]);
     await t.rpc('absence_decide', [id, true, null]);
-    assert.equal(await t.stage(id), 10);
-    await t.as(5); await t.rpc('absence_decide', [id, true, null]);
     assert.equal(await t.stage(id), 20);
+    await t.as(5); await t.rpc('absence_decide', [id, true, null]);
+    assert.equal(await t.stage(id), 30);
   } finally { await t.db.close(); }
 });
 
@@ -408,7 +408,7 @@ test('droits refusés, renvoi aux bonnes personnes, un seul avis par personne, h
     await t.as(3); await t.rpc('absence_decide', [id, true, null]);
     await t.as(5); await t.rpc('absence_decide', [id, true, null]);
     await t.as(2); await t.rpc('absence_decide', [id, true, null]);
-    assert.equal(await t.stage(id), 30);
+    assert.equal(await t.stage(id), 40);
     await t.sup();
     assert.deepEqual((await t.rows('select absence_id, recipient from absence_resend_pairs($1,$2)', [uid(4), [id]])).map((r) => [r.absence_id, r.recipient]), [[id, uid(7)]]);
     await t.as(4);
