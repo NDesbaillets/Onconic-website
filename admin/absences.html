@@ -41,10 +41,11 @@
         <span class="eyebrow">Administration</span>
         <h1>Absences : valideurs par clinique</h1>
         <hr class="rule">
+        <p><a class="btn btn-outline" href="/admin/circuit-absences.html">Voir le circuit de validation</a></p>
         <p class="form-msg" id="ug-status" role="status">Chargement…</p>
 
         <div id="aa-tool" hidden>
-          <p class="muted">Pour chaque clinique, choisissez les médecins cadres qui valident les absences de ses membres. Seuls les médecins cadres cochés « Validateur des absences » dans <a href="/admin/membres.html">Membres et accès</a> apparaissent ici (tous les cadres ne valident pas). Un seul valideur suffit à décider. Sans valideur désigné, les demandes vont aux administrateurs, qui peuvent de toute façon tout valider. Seuls les médecins, CDC et cadres sont rattachés à une clinique (page <a href="/admin/membres.html">Membres et accès</a>) ; les autres rôles relèvent de la clinique « Administration ».</p>
+          <p class="muted">Le <a href="/admin/circuit-absences.html">circuit de validation</a> montre qui valide quoi, dans quel ordre, et permet de le simuler. Pour chaque clinique, choisissez les médecins cadres qui valident les absences de ses membres. Seuls les médecins cadres cochés « Validateur des absences » dans <a href="/admin/membres.html">Membres et accès</a> apparaissent ici (tous les cadres ne valident pas). Un seul valideur suffit à décider. Sans valideur désigné, les demandes vont aux administrateurs, qui peuvent de toute façon tout valider. Seuls les médecins, CDC et cadres sont rattachés à une clinique (page <a href="/admin/membres.html">Membres et accès</a>) ; les autres rôles relèvent de la clinique « Administration ».</p>
           <p class="muted">Le seuil d'absents simultanés déclenche un avertissement, non bloquant, pour le demandeur et pour le valideur : il est atteint quand le nombre de membres de la clinique absents le même jour (demandes en attente comprises) dépasse le maximum indiqué.</p>
           <p class="form-msg" id="aa-msg" role="status" aria-live="polite"></p>
           <div id="aa-list" class="aa-grid"></div>
