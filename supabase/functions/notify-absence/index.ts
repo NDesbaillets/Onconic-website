@@ -116,10 +116,14 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
   const first = absences[0];
   const { data: ownerName } = await admin.rpc("member_name", { p_user: first.user_id });
   const { data: appr } = await admin.from("absence_approvals").select("validator_id, decision, step").eq("absence_id", first.id);
-  const { data: cur } = await admin.from("absences").select("stage").eq("id", first.id).maybeSingle();
+  const { data: cur } = await admin.from("absences").select("stage, circuit").eq("id", first.id).maybeSingle();
   const names = async (ids: string[]) => (await Promise.all(ids.map(async (i) => (await admin.rpc("member_name", { p_user: i })).data as string))).filter(Boolean);
   // « à valider par » : les personnes de l'étape en cours seulement (circuit configurable, plusieurs étapes) ; « validée par » : toutes les étapes
-  const validators = await names((appr ?? []).filter((a) => cur?.stage == null || a.step === cur.stage).map((a) => a.validator_id));
+  // stage = colonne en cours, step = position de l'étape : on retient les positions des étapes de la colonne (col, à défaut la position)
+  const curSteps = Array.isArray(cur?.circuit) ? (cur!.circuit as { pos?: number; col?: number | null }[]) : null;
+  const colPos = new Set((curSteps ?? []).filter((e) => (e.col ?? e.pos) === cur?.stage).map((e) => e.pos));
+  const inCol = (step: number) => cur?.stage == null || (curSteps ? colPos.has(step) : step === cur.stage);
+  const validators = [...new Set(await names([...new Set((appr ?? []).filter((a) => inCol(a.step)).map((a) => a.validator_id))]))];
   const approvers = await names((appr ?? []).filter((a) => a.decision === "approved").map((a) => a.validator_id));
 
   const msg = buildEmail({

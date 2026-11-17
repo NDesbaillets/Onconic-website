@@ -1,4 +1,4 @@
-// Circuits de validation des absences : circuit général et circuits alternatifs (membres, rôles, cliniques), schéma, édition des étapes, simulateur et journal.
+// Circuits de validation des absences : constructeur visuel (colonnes d'étapes simultanées), circuits alternatifs, simulateur et journal.
 // Réservé à l'administration (contrôlé aussi en base). Les validateurs restent désignés par clinique dans /admin/absences.html ; cette page règle les étapes, leur ordre et leurs conditions.
 (function () {
   const cfg = window.ONCONIC_CONFIG || {};
@@ -7,7 +7,16 @@
   const ROLES = { clinician: "médecin assistant", cdc: "CDC", cadre: "médecin cadre", direction: "direction", admin: "admin", assistant: "assistante", nurse: "infirmier·ère", pharmacist: "pharmacien·ne" };
   const KINDS = [["vacances", "vacances"], ["congres", "congrès"], ["autre", "autre"]];
   const KIND_NAME = { vacances: "vacances", congres: "congrès", autre: "autre" };
-  const TYPE_NAME = { preavis: "Pré-avis", clinique: "Validateurs de clinique", visa: "Visa de la direction", personnes: "Personnes désignées" };
+  const TYPE_NAME = { preavis: "Pré-avis", clinique: "Validateurs de clinique", visa: "Visa de la direction", personnes: "Personnes désignées", direction: "Direction", groupe: "Groupe par rôle" };
+  const TYPE_TAG = { preavis: "pré-avis", clinique: "clinique", visa: "visa", personnes: "personnes", direction: "direction", groupe: "groupe" };
+  // Types proposés dans la palette ; les types uniques sont grisés quand ils figurent déjà dans le circuit
+  const PALETTE = [
+    { kind: "clinique", title: "Validateurs de clinique", sub: "désignés par clinique ; une seule par circuit", unique: true },
+    { kind: "direction", title: "Direction", sub: "membres de la direction ; plusieurs possibles", unique: false },
+    { kind: "visa", title: "Visa de la direction", sub: "signe le PDF ; un seul par circuit", unique: true },
+    { kind: "personnes", title: "Personnes désignées", sub: "choisies une à une", unique: false },
+    { kind: "groupe", title: "Groupe par rôle", sub: "tous les membres d'un ou plusieurs rôles", unique: false },
+  ];
 
   function el(tag, cls, txt) {
     const e = document.createElement(tag);
@@ -19,77 +28,25 @@
   const names = (list) => (list || []).map((x) => x.name).join(", ");
   const REASONS = { member: "nommé", role: "rôle", clinic: "clinique", default: "défaut", draft: "brouillon du circuit sélectionné" };
   const ROLE_CODES = ["clinician", "cdc", "cadre", "assistant", "pharmacist", "admin", "direction", "nurse"];
-  const state = { overview: null, steps: [], orig: "", circuits: [], sel: null, detail: null, assign: { member: new Set(), role: new Set(), clinic: new Set() }, assignOrig: "", who: [], req: 0 };
+  const state = { overview: null, pre: null, cols: [], orig: "", circuits: [], sel: null, detail: null, assign: { member: new Set(), role: new Set(), clinic: new Set() }, assignOrig: "", who: [], req: 0, selected: null, drag: null };
   const current = () => state.circuits.find((c) => c.id === state.sel) || state.circuits[0] || { id: null, name: "", is_default: true };
+  const plural = (n, one, many) => n + " " + (n > 1 ? many : one);
 
-  // ----- Schéma (étapes enregistrées) -----
-  function conditions(s) {
-    const out = [];
-    if (Array.isArray(s.kinds) && s.kinds.length && s.kinds.length < 3) out.push("seulement : " + s.kinds.map((k) => KIND_NAME[k] || k).join(", "));
-    if (s.min_days) out.push("dès " + s.min_days + " jours ouvrables");
-    return out;
-  }
-  function node(s, o) {
-    const n = el("div", "cc-node" + (s.kind === "preavis" || !s.blocking ? " optional" : "") + (s.active ? "" : " inactive"));
-    n.append(el("h3", null, s.label));
-    const pills = el("div", "cc-pills");
-    pills.append(pill(s.blocking ? "bloquant" : "consultatif", s.blocking ? "block" : ""));
-    if (!s.active) pills.append(pill("désactivée", "off"));
-    n.append(pills);
-    let rule, who;
-    if (s.kind === "preavis") {
-      rule = "Facultatif, non bloquant, en parallèle de la première étape bloquante.";
-      who = "Direction : " + (names((o.direction || []).filter((d) => d.has_tool)) || "aucun membre");
-    } else if (s.kind === "clinique") {
-      rule = s.rule === "any" ? "Un seul validateur suffit ; un refus suffit." : "Tous doivent valider ; un refus suffit.";
-      who = "Désignés par clinique (voir le tableau)";
-    } else if (s.kind === "visa") {
-      rule = "Un seul visa suffit ; signe le formulaire PDF.";
-      who = o.visa_fallback_admins ? "Repli : administrateurs (" + names(o.admins) + ")" : "Direction : " + (names((o.direction || []).filter((d) => d.has_tool)) || "aucun membre");
-    } else {
-      rule = s.blocking ? (s.rule === "any" ? "Une seule validation suffit ; un refus suffit." : "Tous doivent valider ; un refus suffit.") : "Avis demandé ; la demande n'attend pas cette étape.";
-      who = (s.persons || []).length ? names(s.persons) : "Aucune personne désignée";
-      if (s.pdf_slot === "chef_service") rule += " Remplit la case « avis du chef de service » du formulaire.";
-    }
-    n.append(el("p", null, rule), el("p", null, who));
-    const c = conditions(s);
-    if (c.length) n.append(el("p", "cc-cond", c.join(" · ")));
-    return n;
-  }
-  function flow(o, stepList) {
-    const steps = [...(stepList || [])].sort((a, b) => a.pos - b.pos);
-    const pre = steps.find((s) => s.kind === "preavis");
-    const rest = steps.filter((s) => s.kind !== "preavis");
-    const arrow = () => el("span", "cc-arrow", "→");
-    const cols = [];
-    const c1 = el("div", "cc-col"), start = el("div", "cc-node");
-    start.append(el("h3", null, "Envoi de la demande"));
-    c1.append(start);
-    cols.push(c1);
-    rest.forEach((s, i) => {
-      const col = el("div", "cc-col");
-      if (i === 0 && pre) col.append(node(pre, o));
-      col.append(node(s, o));
-      cols.push(col);
-    });
-    const end = el("div", "cc-node"); end.append(el("h3", null, "Validée : formulaire PDF"), el("p", null, "Signé par le visa"));
-    const last = el("div", "cc-col"); last.append(end);
-    cols.push(last);
-    const out = [];
-    cols.forEach((c, i) => { if (i) out.push(arrow()); out.push(c); });
-    $("cc-flow").replaceChildren(...out);
-  }
-
+  // ----- Avertissements et cliniques -----
   function warnings(o) {
     const box = $("cc-warn");
-    if (!(o.warnings || []).length) return box.replaceChildren(el("p", null, "Aucun problème de configuration"));
+    const list = o.warnings || [];
+    $("cc-warn-count").textContent = "(" + list.length + ")";
+    $("cc-warn-box").classList.toggle("has", list.length > 0);
+    if (!list.length) return box.replaceChildren(el("p", "cc-hint", "Aucun problème de configuration"));
     const ul = el("ul");
-    for (const w of o.warnings) ul.append(el("li", null, w));
+    for (const w of list) ul.append(el("li", null, w));
     box.replaceChildren(ul);
   }
 
   function table(o) {
     const t = $("cc-table");
+    $("cc-clinics-count").textContent = "(" + (o.clinics || []).length + ")";
     const head = el("tr");
     for (const h of ["Clinique", "Membres", "Validateurs", "Les demandes vont à"]) head.append(el("th", null, h));
     const thead = el("thead"); thead.append(head);
@@ -112,36 +69,253 @@
     t.replaceChildren(thead, body);
   }
 
-  // ----- Édition -----
-  const clone = (x) => JSON.parse(JSON.stringify(x));
-  function fromServer(steps) {
-    return [...(steps || [])].sort((a, b) => a.pos - b.pos).map((s) => ({
-      kind: s.kind, label: s.label, rule: s.kind === "visa" ? "any" : s.rule || "all", blocking: s.kind === "preavis" ? false : !!s.blocking, active: !!s.active,
+  // ----- Modèle d'édition : pré-avis à part, puis colonnes d'étapes simultanées -----
+  function mk(s) {
+    const kind = s.kind;
+    return {
+      kind, label: s.label || TYPE_NAME[kind] || "", rule: kind === "visa" ? "any" : s.rule === "any" ? "any" : "all",
+      blocking: kind === "preavis" ? false : kind === "visa" ? true : !!s.blocking, active: !!s.active,
       persons: (s.persons || []).map((p) => (typeof p === "string" ? p : p.id)),
-      kinds: Array.isArray(s.kinds) && s.kinds.length ? [...s.kinds] : null,
-      min_days: s.min_days || null, pdf_slot: s.pdf_slot || null,
-    }));
+      roles: Array.isArray(s.roles) ? [...s.roles] : [], scope: s.scope === "all" ? "all" : "clinic",
+      kinds: Array.isArray(s.kinds) && s.kinds.length ? [...s.kinds] : null, min_days: s.min_days || null, pdf_slot: s.pdf_slot || null,
+    };
   }
-  // Positions recalculées : pré-avis à 0, les autres 10, 20, 30… dans l'ordre affiché. Lève une erreur lisible si une étape est incomplète.
+  function newStep(kind) {
+    const base = { kind, label: TYPE_NAME[kind], rule: kind === "visa" || kind === "direction" ? "any" : "all", blocking: true, active: kind === "clinique" || kind === "direction" || kind === "visa" };
+    if (kind === "preavis") { base.label = "Pré-avis de la direction"; base.blocking = false; base.active = true; base.rule = "all"; }
+    return mk(base);
+  }
+  const colOf = (s) => (s.col != null && s.col !== "" ? Number(s.col) : s.pos);
+  function load(steps) {
+    const list = [...(steps || [])].sort((a, b) => a.pos - b.pos);
+    const pre = list.find((s) => s.kind === "preavis");
+    state.pre = pre ? mk(pre) : null;
+    const groups = new Map();
+    for (const s of list) {
+      if (s.kind === "preavis") continue;
+      const c = colOf(s);
+      if (!groups.has(c)) groups.set(c, []);
+      groups.get(c).push(mk(s));
+    }
+    state.cols = [...groups.entries()].sort((a, b) => a[0] - b[0]).map((g) => g[1]);
+    state.selected = null;
+  }
+  const snapshot = () => JSON.stringify({ pre: state.pre, cols: state.cols });
+  function cleanCols() { state.cols = state.cols.filter((c) => c.length); }
+  const allSteps = () => state.cols.flat();
+  function locate(s) {
+    for (let i = 0; i < state.cols.length; i++) { const j = state.cols[i].indexOf(s); if (j >= 0) return [i, j]; }
+    return [-1, -1];
+  }
+  // Colonnes numérotées 10, 20… dans l'ordre affiché, positions qui suivent. Lève une erreur lisible si une étape est incomplète.
   function serialize() {
-    let pos = 0;
-    return state.steps.map((s) => {
-      if (!String(s.label || "").trim()) throw new Error("Chaque étape doit avoir un libellé.");
-      if (s.kinds && !s.kinds.length) throw new Error("Étape « " + s.label.trim() + " » : cochez au moins un motif.");
-      if (s.min_days != null && !(Number.isInteger(s.min_days) && s.min_days >= 1 && s.min_days <= 365)) throw new Error("Étape « " + s.label.trim() + " » : la durée minimale va de 1 à 365 jours ouvrables.");
-      const p = s.kind === "preavis" ? 0 : (pos += 10);
-      return {
-        pos: p, kind: s.kind, label: s.label.trim(), rule: s.kind === "visa" ? "any" : s.rule, blocking: s.kind === "preavis" ? false : s.kind === "visa" ? true : s.blocking, active: s.active,
-        persons: s.kind === "personnes" ? s.persons : [], kinds: s.kinds && s.kinds.length < 3 ? s.kinds : null, min_days: s.min_days, pdf_slot: s.kind === "personnes" ? s.pdf_slot : null,
+    const out = [];
+    const wire = (s, col, pos) => {
+      const label = String(s.label || "").trim();
+      if (!label) throw new Error("Chaque étape doit avoir un libellé.");
+      if (s.kinds && !s.kinds.length) throw new Error("Étape « " + label + " » : cochez au moins un motif.");
+      if (s.min_days != null && !(Number.isInteger(s.min_days) && s.min_days >= 1 && s.min_days <= 365)) throw new Error("Étape « " + label + " » : la durée minimale va de 1 à 365 jours ouvrables.");
+      if (s.kind === "groupe" && s.active && !s.roles.length) throw new Error("Étape « " + label + " » : cochez au moins un rôle.");
+      const o = {
+        pos, col, kind: s.kind, label, rule: s.kind === "visa" ? "any" : s.rule, blocking: s.kind === "preavis" ? false : s.kind === "visa" ? true : s.blocking, active: s.active,
+        persons: s.kind === "personnes" ? s.persons : [], kinds: s.kinds && s.kinds.length < 3 ? s.kinds : null, min_days: s.min_days,
+        pdf_slot: s.kind === "personnes" || s.kind === "direction" ? s.pdf_slot : null,
       };
-    });
+      if (s.kind === "groupe") { o.roles = s.roles; o.scope = s.scope; }
+      return o;
+    };
+    if (state.pre) out.push(wire(state.pre, 0, 0));
+    let pos = 0;
+    state.cols.filter((c) => c.length).forEach((c, i) => c.forEach((s) => out.push(wire(s, 10 * (i + 1), (pos += 10)))));
+    return out;
   }
-  const snapshot = () => JSON.stringify(state.steps);
   function dirty() {
     const d = snapshot() !== state.orig;
     $("cc-dirty").hidden = !d;
     $("cc-save").disabled = !d; $("cc-cancel").disabled = !d;
   }
+  function say(id, txt, kind) { const m = $(id); m.className = "form-msg" + (kind ? " " + kind : ""); m.textContent = txt || ""; }
+  function changed() { renderBuilder(); dirty(); }
+
+  // ----- Constructeur : rendu -----
+  function memberName(id) {
+    const m = ((state.overview && state.overview.members) || []).find((x) => x.id === id);
+    if (m) return m.name;
+    for (const st of (state.detail && state.detail.steps) || []) for (const p of st.persons || []) if (p.id === id) return p.name || id;
+    return id;
+  }
+  function memberLabel(m) { return m.name + " · " + (ROLES[m.role] || m.role) + (m.clinics && m.clinics.length ? " · " + m.clinics.join(", ") : ""); }
+  function shortList(list) {
+    if (!list.length) return "";
+    return list.slice(0, 3).join(", ") + (list.length > 3 ? " +" + (list.length - 3) : "");
+  }
+  function directionNames() { return ((state.overview && state.overview.direction) || []).filter((d) => d.has_tool).map((d) => d.name); }
+  function whoLine(s) {
+    if (s.kind === "clinique") return "Validateurs désignés par clinique";
+    if (s.kind === "direction" || s.kind === "visa") return directionNames().length ? "Direction : " + shortList(directionNames()) : "Aucun membre de la direction";
+    if (s.kind === "personnes") return s.persons.length ? shortList(s.persons.map(memberName)) : "Aucune personne désignée";
+    if (s.kind === "groupe") return (s.roles.length ? shortList(s.roles.map((r) => ROLES[r] || r)) : "Aucun rôle") + " · " + (s.scope === "all" ? "tout le service" : "même clinique");
+    return "";
+  }
+  function condPills(s) {
+    const out = [];
+    if (Array.isArray(s.kinds) && s.kinds.length && s.kinds.length < 3) out.push(s.kinds.map((k) => KIND_NAME[k] || k).join(", "));
+    if (s.min_days) out.push("≥" + s.min_days + " j");
+    return out;
+  }
+  function card(s) {
+    const c = el("div", "cc-card k-" + s.kind + (s.active ? "" : " inactive") + (s.blocking ? "" : " soft") + (state.selected === s ? " selected" : ""));
+    c.tabIndex = 0; c.draggable = true; c.setAttribute("role", "button");
+    c.setAttribute("aria-label", "Étape « " + s.label + " » (" + TYPE_TAG[s.kind] + (s.active ? "" : ", désactivée") + ") : ouvrir les réglages");
+    const top = el("div", "cc-card-top");
+    top.append(el("span", "cc-tag", TYPE_TAG[s.kind]), el("span", "cc-card-label", s.label));
+    c.append(top);
+    const pills = el("div", "cc-pills");
+    if (s.kind !== "visa") pills.append(pill(s.rule === "any" ? "un seul" : "tous"));
+    if (!s.blocking) pills.append(pill("consultatif", "dash"));
+    for (const t of condPills(s)) pills.append(pill(t, "cond"));
+    if (s.pdf_slot === "chef_service") pills.append(pill("PDF", "cond"));
+    if (!s.active) pills.append(pill("désactivée", "off"));
+    c.append(pills);
+    const who = whoLine(s);
+    if (who) c.append(el("div", "cc-card-who", who));
+    c.addEventListener("click", () => openPanel(s));
+    c.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openPanel(s); } });
+    c.addEventListener("dragstart", (ev) => {
+      state.drag = s;
+      try { ev.dataTransfer.setData("text/plain", "etape"); ev.dataTransfer.effectAllowed = "move"; } catch (e) { /* navigateurs restrictifs */ }
+      c.classList.add("dragging");
+      $("cc-builder").classList.add("dragging");
+    });
+    c.addEventListener("dragend", () => { state.drag = null; c.classList.remove("dragging"); $("cc-builder").classList.remove("dragging"); clearOver(); });
+    c.addEventListener("dragover", (ev) => { if (!state.drag || state.drag === s) return; ev.preventDefault(); ev.stopPropagation(); clearOver(); c.classList.add("over-before"); });
+    c.addEventListener("drop", (ev) => { ev.preventDefault(); ev.stopPropagation(); const d = state.drag; clearOver(); if (d && d !== s) moveTo(d, { before: s }); });
+    return c;
+  }
+  function clearOver() { for (const e of document.querySelectorAll(".over, .over-before")) e.classList.remove("over", "over-before"); }
+  function dropTarget(node, target) {
+    node.addEventListener("dragover", (ev) => { if (!state.drag) return; ev.preventDefault(); clearOver(); node.classList.add("over"); });
+    node.addEventListener("dragleave", (ev) => { if (!node.contains(ev.relatedTarget)) node.classList.remove("over"); });
+    node.addEventListener("drop", (ev) => { ev.preventDefault(); const d = state.drag; clearOver(); if (d) moveTo(d, target()); });
+  }
+  function gap(i) {
+    const g = el("div", "cc-gap" + (i === 0 || i === state.cols.length ? " edge" : ""));
+    const b = el("button", "cc-plus", "+"); b.type = "button";
+    b.setAttribute("aria-label", i === 0 ? "Ajouter une colonne au début" : i === state.cols.length ? "Ajouter une colonne à la fin" : "Insérer une colonne entre les colonnes " + i + " et " + (i + 1));
+    b.addEventListener("click", (ev) => { ev.stopPropagation(); openPalette(b, { gap: i }); });
+    g.append(b);
+    dropTarget(g, () => ({ gap: i }));
+    return g;
+  }
+  function colEl(col, i) {
+    const c = el("div", "cc-col");
+    c.setAttribute("role", "group"); c.setAttribute("aria-label", "Colonne " + (i + 1));
+    c.append(el("div", "cc-col-head", "Colonne " + (i + 1) + (col.length > 1 ? " · simultanées" : "")));
+    const stack = el("div", "cc-stack");
+    for (const s of col) stack.append(card(s));
+    c.append(stack);
+    const add = el("button", "cc-add", "+"); add.type = "button";
+    add.setAttribute("aria-label", "Ajouter une étape simultanée dans la colonne " + (i + 1)); add.title = "Ajouter une étape simultanée";
+    add.addEventListener("click", (ev) => { ev.stopPropagation(); openPalette(add, { col }); });
+    c.append(add);
+    dropTarget(c, () => ({ col }));
+    return c;
+  }
+  function renderPre() {
+    const box = $("cc-pre");
+    const lab = el("label", "cc-switch");
+    const cb = el("input"); cb.type = "checkbox"; cb.setAttribute("role", "switch"); cb.checked = !!(state.pre && state.pre.active);
+    cb.addEventListener("change", () => {
+      if (!state.pre) state.pre = newStep("preavis");
+      state.pre.active = cb.checked;
+      renderPre(); dirty();
+    });
+    lab.append(cb, el("span", "cc-track"), el("span", "cc-switch-text", "Pré-avis de la direction (en parallèle, consultatif)"));
+    box.replaceChildren(lab);
+    box.classList.toggle("off", !(state.pre && state.pre.active));
+    const dn = directionNames();
+    box.append(el("span", "cc-pre-who", dn.length ? "Direction : " + shortList(dn) : "Aucun membre de la direction"));
+  }
+  function renderBuilder() {
+    cleanCols();
+    const box = $("cc-builder");
+    if (!state.cols.length) {
+      const g = gap(0);
+      box.replaceChildren(el("p", "cc-hint", "Aucune étape : ajoutez une première colonne."), g);
+    } else {
+      const kids = [];
+      state.cols.forEach((col, i) => { kids.push(gap(i), colEl(col, i)); });
+      kids.push(gap(state.cols.length));
+      box.replaceChildren(...kids);
+    }
+    renderPre();
+  }
+
+  // ----- Constructeur : déplacements -----
+  // cible : { col: tableau } (à la fin), { before: étape } ou { gap: index } (nouvelle colonne)
+  function moveTo(s, target) {
+    const [ci, si] = locate(s);
+    if (ci < 0) return;
+    state.cols[ci].splice(si, 1);
+    if (target.gap != null) state.cols.splice(target.gap, 0, [s]);
+    else if (target.before) { const [bi, bj] = locate(target.before); state.cols[bi].splice(bj, 0, s); }
+    else target.col.push(s);
+    state.selected = s;
+    changed(); if (state.selected === s && !$("cc-panel").hidden) buildPanel(s);
+  }
+  function canShift(s, d) {
+    const [ci] = locate(s);
+    if (ci < 0) return false;
+    if (state.cols[ci].length > 1) return true;
+    return ci + d >= 0 && ci + d < state.cols.length;
+  }
+  function shift(s, d) {
+    const [ci, si] = locate(s);
+    if (!canShift(s, d)) return;
+    if (state.cols[ci].length === 1) { const t = state.cols[ci]; state.cols[ci] = state.cols[ci + d]; state.cols[ci + d] = t; }
+    else { state.cols[ci].splice(si, 1); state.cols.splice(d < 0 ? ci : ci + 1, 0, [s]); }
+    changed(); buildPanel(s);
+  }
+  function canJoin(s, d) { const [ci] = locate(s); return ci >= 0 && ci + d >= 0 && ci + d < state.cols.length; }
+  function join(s, d) {
+    const [ci, si] = locate(s);
+    if (!canJoin(s, d)) return;
+    state.cols[ci].splice(si, 1);
+    state.cols[ci + d].push(s);
+    changed(); buildPanel(s);
+  }
+
+  // ----- Palette -----
+  function openPalette(anchor, target) {
+    const pal = $("cc-palette");
+    const used = new Set(allSteps().map((s) => s.kind));
+    pal.replaceChildren(el("div", "cc-pal-title", target.gap != null ? "Nouvelle colonne" : "Étape simultanée"));
+    for (const it of PALETTE) {
+      const b = el("button", "cc-pal-item"); b.type = "button"; b.setAttribute("role", "menuitem");
+      const off = it.unique && used.has(it.kind);
+      b.append(el("strong", null, it.title), el("span", null, off ? "déjà présente dans ce circuit" : it.sub));
+      if (off) { b.disabled = true; }
+      b.addEventListener("click", () => {
+        closePalette();
+        const s = newStep(it.kind);
+        if (target.gap != null) state.cols.splice(target.gap, 0, [s]); else target.col.push(s);
+        state.selected = s;
+        changed(); openPanel(s);
+      });
+      pal.append(b);
+    }
+    pal.hidden = false;
+    pal.dataset.anchor = anchor.getAttribute("aria-label");
+    const r = anchor.getBoundingClientRect(), w = pal.offsetWidth, h = pal.offsetHeight;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+    const top = r.bottom + 4 + h > window.innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4;
+    pal.style.left = left + "px"; pal.style.top = top + "px";
+    const first = pal.querySelector("button:not(:disabled)");
+    if (first) first.focus();
+  }
+  function closePalette() { $("cc-palette").hidden = true; }
+
+  // ----- Panneau de réglages -----
   function field(label, control, cls) {
     const l = el("label", "cc-field" + (cls ? " " + cls : ""));
     l.append(el("span", null, label), control);
@@ -154,8 +328,6 @@
     l.append(c, el("span", null, label));
     return l;
   }
-  function memberLabel(m) { return m.name + " · " + (ROLES[m.role] || m.role) + (m.clinics && m.clinics.length ? " · " + m.clinics.join(", ") : ""); }
-
   function personsPicker(s) {
     const box = el("div", "cc-persons");
     const known = new Map();
@@ -164,104 +336,125 @@
     const filter = el("input"); filter.type = "search"; filter.placeholder = "Filtrer par nom"; filter.setAttribute("aria-label", "Filtrer les personnes");
     const list = el("div", "cc-person-list");
     const rows = [];
+    const count = el("span", "cc-hint", plural(s.persons.length, "désignée", "désignées"));
     for (const [id, label] of [...known].sort((a, b) => a[1].localeCompare(b[1], "fr"))) {
       const row = check(label, s.persons.includes(id), (on) => {
         s.persons = on ? [...new Set([...s.persons, id])] : s.persons.filter((x) => x !== id);
-        count.textContent = s.persons.length + " désignée" + (s.persons.length > 1 ? "s" : "");
-        dirty();
+        count.textContent = plural(s.persons.length, "désignée", "désignées");
+        changed();
       });
       row.dataset.name = label.toLowerCase();
       rows.push(row); list.append(row);
     }
     filter.addEventListener("input", () => { const q = filter.value.trim().toLowerCase(); for (const r of rows) r.hidden = !!q && !r.dataset.name.includes(q); });
-    const count = el("span", "muted", s.persons.length + " désignée" + (s.persons.length > 1 ? "s" : ""));
     box.append(field("Personnes désignées", filter), count, list);
     return box;
   }
-
-  function editorCard(s, i) {
-    const card = el("article", "card cc-ed" + (s.active ? "" : " inactive") + (s.kind === "preavis" ? " optional" : ""));
-    const head = el("div", "cc-ed-head");
-    head.append(pill(TYPE_NAME[s.kind] || s.kind));
-    if (!s.active) head.append(pill("désactivée", "off"));
+  function openPanel(s) {
+    closePalette();
+    state.selected = s;
+    renderBuilder();
+    buildPanel(s);
+    $("cc-panel").hidden = false;
+    $("cc-tool").classList.add("has-panel");
+    $("cc-scrim").hidden = false;
+    const cardEl = document.querySelector(".cc-card.selected");
+    if (cardEl && cardEl.scrollIntoView) cardEl.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  function closePanel() {
+    state.selected = null;
+    $("cc-panel").hidden = true; $("cc-scrim").hidden = true;
+    $("cc-tool").classList.remove("has-panel");
+    renderBuilder();
+  }
+  function buildPanel(s) {
+    const body = $("cc-panel-body");
+    $("cc-panel-title").textContent = "Étape : " + TYPE_NAME[s.kind];
+    const kids = [];
     const label = el("input"); label.type = "text"; label.maxLength = 80; label.value = s.label; label.setAttribute("aria-label", "Libellé de l'étape");
-    label.addEventListener("input", () => { s.label = label.value; dirty(); });
-    head.append(field("Libellé", label, "grow"));
-    if (s.kind !== "preavis") {
-      const first = state.steps.findIndex((x) => x.kind !== "preavis");
-      const mv = el("div", "cc-moves");
-      const up = el("button", "btn btn-outline", "↑"); up.type = "button"; up.title = "Monter"; up.setAttribute("aria-label", "Monter l'étape"); up.disabled = i <= first;
-      const down = el("button", "btn btn-outline", "↓"); down.type = "button"; down.title = "Descendre"; down.setAttribute("aria-label", "Descendre l'étape"); down.disabled = i >= state.steps.length - 1;
-      const move = (d) => { const t = state.steps[i]; state.steps[i] = state.steps[i + d]; state.steps[i + d] = t; renderEditor(); dirty(); };
-      up.addEventListener("click", () => move(-1)); down.addEventListener("click", () => move(1));
-      mv.append(up, down);
-      head.append(mv);
-    }
-    card.append(head);
-
-    const opts = el("div", "cc-ed-row");
-    if (s.kind !== "preavis") {
+    label.addEventListener("input", () => { s.label = label.value; changed(); });
+    kids.push(field("Libellé", label));
+    kids.push(check("Étape active", s.active, (on) => { s.active = on; changed(); }));
+    if (s.kind !== "visa") {
+      const row = el("div", "cc-row2");
       const rule = el("select");
       for (const [v, t] of [["all", "Tous doivent valider"], ["any", "Un seul suffit"]]) { const o = el("option", null, t); o.value = v; rule.append(o); }
-      rule.value = s.kind === "visa" ? "any" : s.rule; rule.disabled = s.kind === "visa";
-      rule.addEventListener("change", () => { s.rule = rule.value; dirty(); });
-      opts.append(field("Règle", rule));
-      if (s.kind === "visa") s.blocking = true;
+      rule.value = s.rule;
+      rule.addEventListener("change", () => { s.rule = rule.value; changed(); });
       const bl = el("select");
       for (const [v, t] of [["1", "Bloquant"], ["0", "Consultatif"]]) { const o = el("option", null, t); o.value = v; bl.append(o); }
-      bl.value = s.blocking ? "1" : "0"; bl.disabled = s.kind === "visa";
-      bl.addEventListener("change", () => { s.blocking = bl.value === "1"; dirty(); });
-      opts.append(field("Type d'avis", bl));
-    } else opts.append(el("p", "muted", "Facultatif et consultatif, toujours en tête et en parallèle de la première étape bloquante."));
-    opts.append(check("Étape active", s.active, (on) => { s.active = on; renderEditor(); dirty(); }));
-    card.append(opts);
+      bl.value = s.blocking ? "1" : "0";
+      bl.addEventListener("change", () => { s.blocking = bl.value === "1"; changed(); });
+      row.append(field("Règle", rule), field("Type d'avis", bl));
+      kids.push(row);
+    } else kids.push(el("p", "cc-hint", "Un seul visa suffit ; il est bloquant et signe le formulaire PDF."));
 
-    if (s.kind !== "preavis") {
-      const cond = el("fieldset", "cc-cond-box");
-      cond.append(el("legend", null, "Conditions (vide = toujours)"));
-      const kinds = s.kinds || KINDS.map((k) => k[0]);
-      const row = el("div", "cc-ed-row");
-      for (const [k, t] of KINDS) {
-        row.append(check(t, kinds.includes(k), (on) => {
-          const cur = new Set(s.kinds || KINDS.map((x) => x[0]));
-          if (on) cur.add(k); else cur.delete(k);
-          s.kinds = cur.size === 3 ? null : [...cur];
-          dirty();
-        }));
-      }
-      const md = el("input"); md.type = "number"; md.min = "1"; md.max = "365"; md.step = "1"; md.inputMode = "numeric"; md.placeholder = "toujours"; md.value = s.min_days || "";
-      md.addEventListener("input", () => { s.min_days = md.value === "" ? null : Number(md.value); dirty(); });
-      row.append(field("À partir de (jours ouvrables)", md));
-      cond.append(row);
-      card.append(cond);
-    }
-    if (s.kind === "personnes") {
-      card.append(personsPicker(s));
-      card.append(check("Remplit la case « avis du chef de service » du formulaire PDF", s.pdf_slot === "chef_service", (on) => {
-        for (const x of state.steps) if (x.pdf_slot === "chef_service") x.pdf_slot = null;
-        s.pdf_slot = on ? "chef_service" : null;
-        renderEditor(); dirty();
+    const cond = el("fieldset", "cc-cond-box");
+    cond.append(el("legend", null, "Conditions (vide = toujours)"));
+    const kinds = s.kinds || KINDS.map((k) => k[0]);
+    const crow = el("div", "cc-checks");
+    for (const [k, t] of KINDS) {
+      crow.append(check(t, kinds.includes(k), (on) => {
+        const cur = new Set(s.kinds || KINDS.map((x) => x[0]));
+        if (on) cur.add(k); else cur.delete(k);
+        s.kinds = cur.size === 3 ? null : [...cur];
+        changed();
       }));
-      const del = el("button", "btn btn-outline lt-danger", "Supprimer"); del.type = "button";
-      del.addEventListener("click", () => {
-        if (!confirm("Supprimer l'étape « " + (s.label || "sans libellé") + " » du circuit ?")) return;
-        state.steps.splice(i, 1); renderEditor(); dirty();
-      });
-      const act = el("div", "btn-row"); act.append(del); card.append(act);
     }
-    if (s.kind === "clinique") card.append(el("p", "muted", "Les validateurs de clinique sont désignés par clinique dans « Absences : valideurs »."));
-    return card;
-  }
-  function renderEditor() {
-    const box = $("cc-editor");
-    box.replaceChildren(...state.steps.map((s, i) => editorCard(s, i)));
-  }
-  function say(id, txt, kind) { const m = $(id); m.className = "form-msg" + (kind ? " " + kind : ""); m.textContent = txt || ""; }
+    const md = el("input"); md.type = "number"; md.min = "1"; md.max = "365"; md.step = "1"; md.inputMode = "numeric"; md.placeholder = "toujours"; md.value = s.min_days || "";
+    md.addEventListener("input", () => { s.min_days = md.value === "" ? null : Number(md.value); changed(); });
+    cond.append(crow, field("À partir de (jours ouvrables)", md));
+    kids.push(cond);
 
-  function addStep() {
-    state.steps.push({ kind: "personnes", label: "Nouvelle étape", rule: "all", blocking: true, active: false, persons: [], kinds: null, min_days: null, pdf_slot: null });
-    renderEditor(); dirty();
+    if (s.kind === "personnes") kids.push(personsPicker(s));
+    if (s.kind === "groupe") {
+      const fs = el("fieldset", "cc-cond-box");
+      fs.append(el("legend", null, "Rôles du groupe"));
+      const rc = el("div", "cc-checks");
+      for (const r of ROLE_CODES) {
+        rc.append(check(ROLES[r] || r, s.roles.includes(r), (on) => { s.roles = on ? [...new Set([...s.roles, r])] : s.roles.filter((x) => x !== r); changed(); }));
+      }
+      fs.append(rc);
+      const sc = el("select");
+      for (const [v, t] of [["clinic", "Même clinique que le demandeur"], ["all", "Tout le service"]]) { const o = el("option", null, t); o.value = v; sc.append(o); }
+      sc.value = s.scope;
+      sc.addEventListener("change", () => { s.scope = sc.value; changed(); });
+      kids.push(fs, field("Périmètre", sc), el("p", "cc-hint", "Le demandeur est exclu ; 200 personnes au plus."));
+    }
+    if (s.kind === "personnes" || s.kind === "direction") {
+      kids.push(check("Avis du chef de service (remplit cette case du formulaire PDF)", s.pdf_slot === "chef_service", (on) => {
+        for (const x of allSteps()) if (x.pdf_slot === "chef_service") x.pdf_slot = null;
+        s.pdf_slot = on ? "chef_service" : null;
+        changed();
+      }));
+    }
+    if (s.kind === "clinique") kids.push(el("p", "cc-hint", "Les validateurs sont désignés par clinique dans « Absences : valideurs »."));
+
+    const pos = el("fieldset", "cc-cond-box");
+    pos.append(el("legend", null, "Position"));
+    const mv = el("div", "cc-moves");
+    const mvBtn = (txt, ok, fn) => { const b = el("button", "cc-b", txt); b.type = "button"; b.disabled = !ok; b.addEventListener("click", fn); return b; };
+    mv.append(
+      mvBtn("← colonne précédente", canShift(s, -1), () => shift(s, -1)),
+      mvBtn("colonne suivante →", canShift(s, 1), () => shift(s, 1)),
+      mvBtn("avec la colonne précédente", canJoin(s, -1), () => join(s, -1)),
+      mvBtn("avec la colonne suivante", canJoin(s, 1), () => join(s, 1)),
+    );
+    pos.append(mv);
+    kids.push(pos);
+
+    const del = el("button", "cc-b danger", "Supprimer l'étape"); del.type = "button";
+    del.addEventListener("click", () => {
+      if (!confirm("Supprimer l'étape « " + (s.label || "sans libellé") + " » du circuit ?")) return;
+      const [ci, si] = locate(s);
+      if (ci >= 0) state.cols[ci].splice(si, 1);
+      closePanel(); dirty();
+    });
+    kids.push(del);
+    body.replaceChildren(...kids);
   }
+
+  // ----- Enregistrement -----
   async function save() {
     say("cc-ed-msg", "");
     let payload;
@@ -273,18 +466,22 @@
     state.detail = data;
     await refreshOverview();
     loadSteps(data.steps);
-    flow(state.overview, data.steps); renderAssign();
+    renderAssign();
     log((data && data.log) || []);
     say("cc-ed-msg", "Circuit enregistré.", "ok");
-    if (data && data.warning) { const m = $("cc-ed-msg"); m.append(" "); const w = el("span", null, data.warning); w.style.color = "var(--amber-700)"; m.append(w); }
+    if (data && data.warning) { const m = $("cc-ed-msg"); m.append(" "); m.append(el("span", "cc-warn-text", data.warning)); }
   }
   function loadSteps(steps) {
-    state.steps = fromServer(steps);
+    load(steps);
     state.orig = snapshot();
-    renderEditor(); dirty();
+    closePanelQuiet();
+    renderBuilder(); dirty();
   }
+  function closePanelQuiet() { $("cc-panel").hidden = true; $("cc-scrim").hidden = true; $("cc-tool").classList.remove("has-panel"); }
   function cancel() {
-    state.steps = JSON.parse(state.orig); say("cc-ed-msg", ""); renderEditor(); dirty();
+    const o = JSON.parse(state.orig);
+    state.pre = o.pre; state.cols = o.cols; state.selected = null;
+    say("cc-ed-msg", ""); closePanelQuiet(); renderBuilder(); dirty();
   }
 
   // ----- Journal -----
@@ -295,7 +492,7 @@
   }
   function log(rows) {
     const box = $("cc-log");
-    if (!rows.length) return box.replaceChildren(el("p", "muted", "Aucune modification enregistrée."));
+    if (!rows.length) return box.replaceChildren(el("p", "cc-hint", "Aucune modification enregistrée."));
     const ul = el("ul", "cc-log-list");
     for (const r of rows.slice(0, 20)) ul.append(el("li", null, stamp(r.at) + " · " + (r.by_name || "membre inconnu") + " · " + (r.summary || "")));
     box.replaceChildren(ul);
@@ -344,29 +541,57 @@
     $("cc-sim-draft").addEventListener("click", () => simulate(true));
   }
 
+  function simCard(s) {
+    const c = el("div", "cc-card sim k-" + s.kind + (s.blocking ? "" : " soft"));
+    const top = el("div", "cc-card-top");
+    top.append(el("span", "cc-tag", TYPE_TAG[s.kind] || s.kind), el("span", "cc-card-label", s.label));
+    c.append(top);
+    const pills = el("div", "cc-pills");
+    if (s.kind !== "visa") pills.append(pill(s.rule_code === "any" ? "un seul" : "tous"));
+    if (!s.blocking) pills.append(pill("consultative", "dash"));
+    c.append(pills);
+    c.append(el("div", "cc-card-who", (s.people || []).length ? names(s.people) : "Personne"));
+    if (s.pdf_slot === "chef_service") c.append(el("div", "cc-card-note", "Remplit la case « avis du chef de service »."));
+    if (s.note) c.append(el("div", "cc-card-note", s.note));
+    return c;
+  }
   function result(r, from, to, draft) {
     const box = $("cc-result");
-    const head = el("p", null, (draft ? "Circuit en cours de modification (non enregistré) · " : "Circuit enregistré · ") + r.member.name + " (" + (ROLES[r.member.role] || r.member.role) + ") · " + ((r.clinics || []).length ? r.clinics.join(", ") : "aucune clinique à ces dates") + " · " + (KIND_NAME[r.kind] || r.kind) + " · du " + fr(from) + " au " + fr(to));
+    const head = el("p", "cc-res-head", (draft ? "Circuit en cours de modification (non enregistré) · " : "Circuit enregistré · ") + r.member.name + " (" + (ROLES[r.member.role] || r.member.role) + ") · " + ((r.clinics || []).length ? r.clinics.join(", ") : "aucune clinique à ces dates") + " · " + (KIND_NAME[r.kind] || r.kind) + " · du " + fr(from) + " au " + fr(to));
     const applied = el("p", "cc-applied");
     if (r.circuit) {
       applied.append(el("strong", null, "Circuit appliqué : " + r.circuit.name), " (" + (REASONS[r.circuit.reason] || r.circuit.reason) + (r.circuit.reason === "role" && r.circuit.detail ? " : " + (ROLES[r.circuit.detail] || r.circuit.detail) : r.circuit.detail && r.circuit.reason !== "member" ? " : " + r.circuit.detail : "") + ")");
     }
-    const wrap = el("div", "cc-steps");
-    r.steps.forEach((s, i) => {
-      const n = el("div", "card cc-node" + (s.blocking ? "" : " optional"));
-      n.append(el("h3", null, (i + 1) + ". " + s.label));
-      n.append(pill(s.blocking ? "bloquant" : "consultatif", s.blocking ? "block" : ""));
-      n.append(el("p", null, "Règle : " + s.rule + (s.parallel_with ? " (en parallèle de la première étape bloquante)" : "")));
-      n.append(el("p", null, s.people.length ? names(s.people) : "Personne"));
-      if (s.pdf_slot === "chef_service") n.append(el("p", null, "Remplit la case « avis du chef de service » du formulaire."));
-      if (s.note) n.append(el("p", null, s.note));
-      wrap.append(n);
+    const kids = [head, applied];
+    const pre = (r.steps || []).find((s) => s.kind === "preavis");
+    if (pre) {
+      const p = el("div", "cc-pre sim" + ((pre.people || []).length ? "" : " off"));
+      p.append(el("span", "cc-switch-text", pre.label + " (consultatif)"), el("span", "cc-pre-who", (pre.people || []).length ? names(pre.people) : pre.note || "Personne"));
+      kids.push(p);
+    }
+    let cols = r.columns;
+    if (!Array.isArray(cols)) {
+      const m = new Map();
+      for (const s of (r.steps || []).filter((x) => x.kind !== "preavis")) { const c = s.col != null ? s.col : s.pos; if (!m.has(c)) m.set(c, []); m.get(c).push(s); }
+      cols = [...m.entries()].sort((a, b) => a[0] - b[0]).map(([col, steps]) => ({ col, steps, note: null }));
+    }
+    const row = el("div", "cc-builder sim");
+    cols.forEach((c, i) => {
+      if (i) row.append(el("div", "cc-gap sim"));
+      const ce = el("div", "cc-col");
+      ce.append(el("div", "cc-col-head", "Colonne " + (i + 1) + ((c.steps || []).length > 1 ? " · simultanées" : "")));
+      const stack = el("div", "cc-stack");
+      for (const s of c.steps || []) stack.append(simCard(s));
+      ce.append(stack);
+      if (c.note) ce.append(el("div", "cc-card-note", c.note));
+      row.append(ce);
     });
-    box.replaceChildren(head, applied, wrap);
-    if (draft && r.resolved && r.circuit && r.resolved.id !== r.circuit.id) box.append(el("p", "muted", "Ce membre suit en réalité le circuit « " + r.resolved.name + " » (" + (REASONS[r.resolved.reason] || r.resolved.reason) + ")."));
-    if ((r.excluded || []).length) box.append(el("p", "muted", "Étapes non appliquées à cette demande : " + r.excluded.map((x) => x.label + " (" + x.reason + ")").join(", ") + "."));
-    if (r.self_excluded) box.append(el("p", "muted", "Ce membre est lui-même désigné validateur d'une de ses cliniques : il est exclu de sa propre validation."));
-    box.append(el("p", "muted", r.admin_override));
+    kids.push(row);
+    if (draft && r.resolved && r.circuit && r.resolved.id !== r.circuit.id) kids.push(el("p", "cc-hint", "Ce membre suit en réalité le circuit « " + r.resolved.name + " » (" + (REASONS[r.resolved.reason] || r.resolved.reason) + ")."));
+    if ((r.excluded || []).length) kids.push(el("p", "cc-hint", "Étapes non appliquées à cette demande : " + r.excluded.map((x) => x.label + " (" + x.reason + ")").join(", ") + "."));
+    if (r.self_excluded) kids.push(el("p", "cc-hint", "Ce membre est lui-même désigné validateur d'une de ses cliniques : il est exclu de sa propre validation."));
+    kids.push(el("p", "cc-hint", r.admin_override));
+    box.replaceChildren(...kids);
   }
 
   // ----- Circuits : sélecteur et gestion -----
@@ -383,8 +608,7 @@
     const alt = state.circuits.filter((x) => !x.is_default), i = alt.findIndex((x) => x.id === c.id);
     $("cc-up").hidden = c.is_default; $("cc-down").hidden = c.is_default;
     $("cc-up").disabled = i <= 0; $("cc-down").disabled = i < 0 || i >= alt.length - 1;
-    $("cc-flow-title").textContent = "Schéma du circuit : " + c.name;
-    $("cc-edit-title").textContent = "Modifier le circuit : " + c.name;
+    $("cc-flow-title").textContent = "Circuit : " + c.name;
     $("cc-assign-box").hidden = c.is_default;
     const filter = $("cc-who-circuit"), keep = filter.value;
     filter.replaceChildren(...[["", "Tous les circuits"], ...state.circuits.map((x) => [String(x.id), x.name])].map(([v, t]) => { const o = el("option", null, t); o.value = v; return o; }));
@@ -405,7 +629,6 @@
     if (error) return say("cc-ed-msg", "Chargement impossible : " + error.message, "error");
     state.detail = data;
     renderTabs();
-    flow(state.overview, data.steps);
     loadSteps(data.steps);
     loadAssign(data.assignments || []);
     log(data.log || []);
@@ -484,7 +707,7 @@
     fs.append(el("legend", null, title));
     const filter = el("input"); filter.type = "search"; filter.placeholder = "Filtrer"; filter.setAttribute("aria-label", "Filtrer : " + title);
     const list = el("div", "cc-person-list"), rows = [];
-    const count = el("span", "muted");
+    const count = el("span", "cc-hint");
     const upd = () => { const n = state.assign[type].size; count.textContent = n + " coché" + (n > 1 ? "s" : ""); $("cc-as-save").disabled = assignSnapshot() === state.assignOrig; $("cc-as-dirty").hidden = assignSnapshot() === state.assignOrig; };
     for (const it of items) {
       const other = takenBy(type, it.id);
@@ -526,6 +749,7 @@
     const { data, error } = await sb.rpc("absence_circuit_who");
     if (error) return ($("cc-who-msg").textContent = "Chargement impossible : " + error.message);
     state.who = data || [];
+    $("cc-who-count").textContent = "(" + state.who.length + ")";
     renderWho();
   }
   function renderWho() {
@@ -561,7 +785,6 @@
     $("ug-status").hidden = true;
     $("cc-tool").hidden = false;
     warnings(o); table(o); form(o);
-    $("cc-add").addEventListener("click", addStep);
     $("cc-save").addEventListener("click", save);
     $("cc-cancel").addEventListener("click", cancel);
     $("cc-new").addEventListener("click", () => openBox("create"));
@@ -574,6 +797,13 @@
     $("cc-as-save").addEventListener("click", saveAssign);
     $("cc-who-q").addEventListener("input", renderWho);
     $("cc-who-circuit").addEventListener("change", renderWho);
+    $("cc-panel-close").addEventListener("click", closePanel);
+    $("cc-scrim").addEventListener("click", closePanel);
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Escape") return;
+      if (!$("cc-palette").hidden) closePalette(); else if (!$("cc-panel").hidden) closePanel();
+    });
+    document.addEventListener("click", (ev) => { const p = $("cc-palette"); if (!p.hidden && !p.contains(ev.target)) closePalette(); });
     renderTabs();
     await loadCircuit();
     await loadWho();

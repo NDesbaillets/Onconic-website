@@ -1270,6 +1270,20 @@
       const st = curStep(a);
       if (st.kind !== "clinique") head.append(el("span", "ug-badge", st.label));
       card.append(head);
+      // étapes de la colonne en cours (simultanées), celles qui attendent l'appelant en tête de liste
+      const colSteps = Array.isArray(a.steps) ? a.steps : [];
+      if (colSteps.length > 1 || colSteps.some((x) => x.mine)) {
+        const ul = el("ul", "ab-colsteps");
+        ul.setAttribute("aria-label", "Étapes en cours");
+        colSteps.forEach((x) => {
+          const li = el("li", x.mine ? "ab-colstep mine" : "ab-colstep");
+          li.append(el("span", null, x.label));
+          if (x.mine) li.append(el("span", "ug-badge", "à vous"));
+          ul.append(li);
+        });
+        card.append(ul);
+      }
+      const mineVisa = colSteps.length ? colSteps.some((x) => x.mine && x.kind === "visa") : st.kind === "visa";
       const cur = `${KINDS[a.kind][0]} · ${period(a.start_date, a.end_date)} · ${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}`;
       card.append(el("p", null, isChange ? `Absence validée : ${cur}` : cur));
       if (a.note) card.append(el("p", "muted", "Précision : " + a.note));
@@ -1310,7 +1324,7 @@
         await afterChange();
       };
       const actions = el("div", "btn-row");
-      const yes = button(isChange ? "Accepter le changement" : st.kind === "visa" ? "Viser (valider)" : "Valider", "btn", () => decide(true, yes, no));
+      const yes = button(isChange ? "Accepter le changement" : mineVisa ? "Viser (valider)" : "Valider", "btn", () => decide(true, yes, no));
       const no = button(isChange ? "Refuser le changement" : "Refuser", "btn btn-outline", () => decide(false, yes, no));
       actions.append(yes, no);
       card.append(lab, out, actions);

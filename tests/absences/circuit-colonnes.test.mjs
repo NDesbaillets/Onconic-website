@@ -306,3 +306,21 @@ test('10. migration réexécutable par-dessus la version précédente (circuits 
     assert.equal((await t.rows("select count(*)::int n from absence_circuit_steps where kind in ('direction','groupe')"))[0].n, 2);
   } finally { await t.db.close(); }
 });
+
+test('11. destinataire du visa aussi présent dans une autre étape de la colonne : « à valider » seulement, pas « à la direction »', async () => {
+  const t = await mk();
+  try {
+    await t.save([PRE, CLIN(10, 10), { pos: 20, col: 20, kind: 'personnes', label: 'Direction désignée', rule: 'any', blocking: true, active: true, persons: [uid(2)] }, VISA(20, 30)]);
+    const id = await t.request(4, D1);
+    await t.decide(3, id); await t.decide(5, id);
+    assert.equal(await t.stage(id), 20);
+    const msgs = (k) => t.outbox(k).then((r) => r.filter((x) => x.recipient === uid(2) && x.absence_ids.includes(Number(id))));
+    assert.equal((await msgs('to_validate')).length, 1);
+    assert.equal((await msgs('to_direction')).length, 0);
+    // contrôle : sans doublon de personne, le message « à la direction » part toujours
+    await t.save([PRE, CLIN(10, 10), VISA(20, 20)]);
+    const id2 = await t.request(4, D2);
+    await t.decide(3, id2); await t.decide(5, id2);
+    assert.equal((await t.outbox('to_direction')).filter((x) => x.recipient === uid(2) && x.absence_ids.includes(Number(id2))).length, 1);
+  } finally { await t.db.close(); }
+});

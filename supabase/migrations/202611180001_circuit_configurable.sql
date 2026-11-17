@@ -618,6 +618,27 @@ $$;
 
 -- 4. Moteur ------------------------------------------------------------------------------------------------------------------
 
+-- Message « à la direction » (visa) en omettant les personnes déjà prévenues par « à valider » pour cette colonne : un seul message par personne
+create or replace function public.absence_enqueue_direction(p_ids bigint[], p_owner uuid, p_skip uuid[]) returns void
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare r uuid; oid bigint;
+begin
+  foreach r in array public.absence_direction_recipients(p_owner) loop
+    continue when r = any (coalesce(p_skip, '{}'::uuid[]));
+    select id into oid from public.absence_outbox
+      where kind = 'to_direction' and recipient = r and sent_at is null and claimed_at is null
+        and payload ->> 'owner_id' = p_owner::text and created_at > now() - interval '10 minutes'
+      order by id desc limit 1 for update skip locked;
+    if oid is not null then
+      update public.absence_outbox set absence_ids = array(select distinct x from unnest(absence_ids || p_ids) x order by x) where id = oid;
+    else
+      insert into public.absence_outbox (kind, recipient, absence_ids, payload)
+        values ('to_direction', r, p_ids, jsonb_build_object('owner', public.member_name(p_owner), 'owner_id', p_owner));
+    end if;
+  end loop;
+end;
+$$;
+
 -- Passe à la colonne suivante qui retient la demande, ou conclut la demande. Notifications d'avis des étapes non bloquantes rencontrées avant l'arrêt.
 -- Une colonne est retenue si une de ses étapes bloquantes (hors visa) a des personnes, ou si elle contient le visa (jamais sauté).
 -- p_after : colonne de départ (par défaut la colonne en cours) ; -1 pour partir du début d'un nouveau tour.
@@ -674,7 +695,8 @@ begin
         perform public.absence_enqueue(case when a.change_type is not null then 'to_validate_change' else 'to_validate' end, r, array[p_id],
                                        jsonb_build_object('owner', public.member_name(a.user_id)));
       end loop;
-      if has_visa then perform public.absence_enqueue_direction(array[p_id], a.user_id); end if;
+      -- les destinataires du visa déjà prévenus par « à valider » (autre étape de la colonne) ne reçoivent pas « à la direction » en plus
+      if has_visa then perform public.absence_enqueue_direction(array[p_id], a.user_id, mail); end if;
     end if;
     return;
   end loop;
@@ -1941,7 +1963,7 @@ revoke execute on function
   public.absence_opinion_step(uuid, public.absences), public.absence_advance(bigint, uuid, text, boolean, boolean, int), public.absence_circuit_fallback(),
   public.absence_open_round_core(bigint, boolean), public.absence_circuit_steps_named(bigint), public.absence_peer_people(public.absences), public.absence_step_label(public.absences, int),
   public.absence_decision_rows(public.absences), public.absence_in_personnes_step(uuid, public.absences),
-  public.absence_circuit_default_id(), public.absence_circuit_resolve(uuid, date, date), public.absence_circuit_check_id(bigint),
+  public.absence_enqueue_direction(bigint[], uuid, uuid[]), public.absence_circuit_default_id(), public.absence_circuit_resolve(uuid, date, date), public.absence_circuit_check_id(bigint),
   public.absence_circuit_assignments_json(bigint), public.absence_circuit_who_core(),
   public.absence_circuit_assign_apply(bigint, text, text[]), public.absence_circuit_assign_guard(bigint)
   from public, anon, authenticated;
