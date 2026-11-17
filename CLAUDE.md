@@ -44,7 +44,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Absences** | En ligne (PR #63, 06.11.2026) : demandes (vacances, congrès, autre), planning mensuel avec agenda commun (fériés vaudois, vacances scolaires, événements), validation par tous les validateurs concernés (cadres désignés par clinique), envoi par lot après confirmation, e-mails, agenda iCal, refus supprimables, avertissement de chevauchement, export Word, proposition depuis Congrès (voir memory/projects/absences.md) ; SQL et fonction `notify-absence` déjà déployés ; à régler dans l'admin : rôles Cadre, cliniques des médecins, valideurs, vacances scolaires à confirmer |
 | **Oncoodle** | Développé le 13.11.2026 (voir memory/projects/oncoodle.md) ; migration `202611130002` et fonction `notify-oncoodle` à appliquer sur le projet de test, puis production sur feu vert ; secret Vault `oncoodle_worker_url` à créer |
 | **Infrastructure** | Supabase Pro, sauvegarde nocturne chiffrée, projet de test et aperçus Cloudflare (13.11.2026) ; suite : migration de sécurité, audit avant l'annonce, démarches nLPD |
-| **Administration** | `/admin/membres.html` : membres, rôles, accès par outil (`has_tool`, exceptions `tool_access`) |
+| **Administration** | `/admin/membres.html` : membres, rôles, accès par outil (`has_tool`, exceptions `tool_access`), fin d'accès, case « Cadre administratif », « Renvoyer l'invitation » (fonction `resend-invite`) ; acceptation d'une demande d'adhésion avec rôle, cliniques, validation et outils d'emblée (`/admin/review.html`, 17.11.2026) |
 | **Page d'accueil** | Ton médical, abeilles discrètes (PR #25-26) |
 | **PWA** | Manifeste, service worker, page hors ligne, astuce iPhone (branche en relecture) |
 | **Notifications congrès** | Web Push « un autre membre participe au même congrès » ; SQL et fonction à déployer avant fusion (voir memory/projects/notifications.md) |
@@ -53,7 +53,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Annuaire pour médecins** | Nouvel outil (médecins, pharmaciens) : contacts internes CHUV (numéros complets, raccourcis à 5 chiffres) et externes, recherche libre (voir memory/projects/contacts.md) ; données hors dépôt |
 | **Formation** | Recueils de présentations HTML ou PDF par clinique et pathologie, recherche en texte intégral ; dépôt réservé à l'admin ; premier contenu neuro-oncologie à venir (voir memory/projects/formation.md) |
 | **CTCAE v5 et v6** | Nouvel outil (médecins) : recherche libre d'un symptôme ou d'une anomalie biologique, grades v5 et v6 côte à côte, anglais et français ; données statiques, traduction à relire (voir memory/projects/ctcae.md) |
-| **Planning administratif** | Remplace le tableur des cadres administratifs (postes par demi-journée, couverture, export Excel) ; V1 `/app/planning.html` (migration `202611160003`, test appliqué, production sur feu vert) ; fonction « cadre administratif » et comptes temporaires (migration `202611160002`) (voir memory/projects/planning-admin.md) |
+| **Planning administratif** | Remplace le tableur des cadres administratifs (postes par demi-journée, couverture, export Excel) ; En production le 17.11.2026 : V1 et V2 `/app/planning.html` (migrations `202611160003` et `202611160004`, fonction `plan-feed`) ; fonction « cadre administratif » et comptes temporaires (migration `202611160002`, fonction `temp-account`, 16.11.2026) ; à faire : import du tableur réel par un cadre administratif (voir memory/projects/planning-admin.md) |
 → Détails : memory/projects/
 
 ## Environnements
