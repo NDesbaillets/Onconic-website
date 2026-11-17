@@ -53,7 +53,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Annuaire pour médecins** | Nouvel outil (médecins, pharmaciens) : contacts internes CHUV (numéros complets, raccourcis à 5 chiffres) et externes, recherche libre (voir memory/projects/contacts.md) ; données hors dépôt |
 | **Formation** | Recueils de présentations HTML ou PDF par clinique et pathologie, recherche en texte intégral ; dépôt réservé à l'admin ; premier contenu neuro-oncologie à venir (voir memory/projects/formation.md) |
 | **CTCAE v5 et v6** | Nouvel outil (médecins) : recherche libre d'un symptôme ou d'une anomalie biologique, grades v5 et v6 côte à côte, anglais et français ; données statiques, traduction à relire (voir memory/projects/ctcae.md) |
-| **Planning administratif** | Remplace le tableur des cadres administratifs (postes par demi-journée, couverture, export Excel) ; maquette cliquable sur la branche `maquette-planning` ; nouvelle fonction « cadre administratif », compte générique « Temporaires » (voir memory/projects/planning-admin.md) |
+| **Planning administratif** | Remplace le tableur des cadres administratifs (postes par demi-journée, couverture, export Excel) ; V1 `/app/planning.html` (migration `202611160003`, test appliqué, production sur feu vert) ; fonction « cadre administratif » et comptes temporaires (migration `202611160002`) (voir memory/projects/planning-admin.md) |
 → Détails : memory/projects/
 
 ## Environnements
