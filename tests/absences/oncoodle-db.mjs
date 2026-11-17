@@ -24,6 +24,7 @@ export async function makeDb() {
   for (const m of ['202611110001_absence_hardening', '202611120001_nurse_role', '202611120002_assistant_default_tools', '202611130001_securite_advisors']) {
     try { await db.exec(await read(`supabase/migrations/${m}.sql`)); } catch (e) { throw Error(`${m}: ${e.message} ${e.where || ''}`); }
   }
+  for (const m of ['202611170001_circuit_absences', '202611180001_circuit_configurable']) await db.exec(await read(`supabase/migrations/${m}.sql`));
   await db.query("update profiles set role='nurse' where id=$1", [uid(7)]);
   const migration = await read('supabase/migrations/202611130002_oncoodle.sql');
   await db.exec(migration); await db.exec(migration); // réexécutable
