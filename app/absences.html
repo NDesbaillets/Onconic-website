@@ -19,7 +19,7 @@
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/absences.js?v=20261112nurse" defer></script>
+  <script src="/assets/js/absences.js?v=20261117a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -186,7 +186,7 @@
               <button class="btn btn-outline" id="ab-sub-btn" type="button" aria-expanded="false" aria-controls="ab-sub">S'abonner à mon agenda des absences</button>
             </div>
             <div class="card ab-sub" id="ab-sub" hidden></div>
-            <div class="card ab-balance" id="ab-balance" aria-live="polite"></div>
+            
             <p class="form-msg" id="ab-mine-msg" role="status" aria-live="polite"></p>
             <div id="ab-mine-list" class="ab-list"></div>
           </section>
@@ -247,11 +247,7 @@
               <p class="form-msg" id="ab-dir-msg" role="status" aria-live="polite"></p>
               <div id="ab-dir-warn" role="alert"></div>
             </form>
-            <h2 class="ab-sub-title">Soldes de vacances et de congrès</h2>
-            <p class="muted">Droits par année civile : 25 jours de vacances pour chacun ; congrès et formation, 3 jours (médecin assistant), 5 (CDC), sans limite pour les médecins cadres. Les jours ouvrables (fériés vaudois déduits) des absences demandées ou validées sont décomptés. Un solde insuffisant ne bloque jamais une demande : il génère un avertissement pour la personne et pour la direction. Pour corriger un solde, inscrivez les jours restants (aujourd'hui) : seuls les jours posés après cette date sont encore déduits ; une case vide revient au droit par défaut.</p>
-            <div class="ab-bar-sub"><label>Année <select id="ab-bal-year"></select></label></div>
-            <p class="form-msg" id="ab-bal-msg" role="status" aria-live="polite"></p>
-            <div class="ab-scroll"><table class="ab-bal-table" id="ab-bal-table"><thead><tr><th>Membre</th><th>Vacances</th><th>Reste (vacances)</th><th>Congrès</th><th>Reste (congrès)</th><th></th></tr></thead><tbody></tbody></table></div>
+            
           </section>
         </div>
       </div>

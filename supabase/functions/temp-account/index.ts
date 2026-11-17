@@ -6,10 +6,9 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const SITE = "https://onconic.ch";
 const ORIGINS = [SITE, "https://www.onconic.ch"];
-// Aperçus Cloudflare (projet de test uniquement) : la fonction exige de toute façon un jeton de session valide
-const PREVIEW = /^https:\/\/([a-z0-9-]+\.)?onconic\.pages\.dev$/;
-
 const URL_ = Deno.env.get("SUPABASE_URL")!;
+// Aperçus Cloudflare acceptés seulement sur le projet de test : en production, un lien ne mène jamais vers une branche non relue
+const PREVIEW = URL_.includes("uubowlcyekbgmizrlyxb") ? /^https:\/\/([a-z0-9-]+\.)?onconic\.pages\.dev$/ : /^$/;
 const admin = createClient(URL_, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
 function allowedOrigin(origin: string) {
@@ -86,7 +85,7 @@ Deno.serve(async (req) => {
     });
     if (error || !data.user) {
       const exists = error?.code === "email_exists" || /already/i.test(error?.message ?? "");
-      console.error("invite failed", error?.code, error?.message);
+      console.error("invite failed", error?.code, error?.status);
       return json(req, exists ? 409 : 502, { error: exists ? "user_exists" : "invite_failed" });
     }
     userId = data.user.id;
@@ -95,7 +94,7 @@ Deno.serve(async (req) => {
     const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: fullName } });
     if (error || !data.user) {
       const exists = error?.code === "email_exists" || /already/i.test(error?.message ?? "");
-      console.error("create failed", error?.code, error?.message);
+      console.error("create failed", error?.code, error?.status);
       return json(req, exists ? 409 : 502, { error: exists ? "user_exists" : "create_failed" });
     }
     userId = data.user.id;
