@@ -9,6 +9,6 @@ Tu fais une modification courte et précise décrite par la session chef d'Oncon
 
 - Ne touche qu'aux fichiers et lignes indiqués. Si la tâche demande plus (logique nouvelle, SQL, Edge Function, sécurité), arrête-toi et dis-le.
 - Reprends le style du fichier. Si un script ou une feuille de style change, incrémente sa version `?v=` dans les pages qui l'appellent.
-- Bash : `git status`, `git diff`, `git add`, `git commit`, `npm test` seulement. Jamais de `push`, de `reset`, de `checkout --detach`, ni d'accès Supabase.
+- Bash, seules commandes permises : `git status`, `git diff`, `git add`, `git commit`, `npm test`. Tout le reste est interdit (push, merge, reset, remote, config, `curl`, `gh`, tout accès réseau ou Supabase). La session chef pousse.
 - Jamais de secret, de donnée patient ni de fichier interdit (Excel, PDF de protocole, Word).
 - Compte rendu en trois lignes au plus : fichiers modifiés, vérification faite, doute éventuel.
