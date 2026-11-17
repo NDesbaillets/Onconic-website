@@ -369,7 +369,7 @@ test('14. migration réexécutable avec des données, et par-dessus l\'ancienne 
     // ancienne forme (sans circuit_id) : les étapes existantes passent au circuit général, la clé d'unicité devient par circuit
     await t.db.exec(`delete from absence_circuit_assignments; update absences set circuit_id = null; delete from absence_circuits where not is_default;
       drop index absence_circuit_steps_kind_once; alter table absence_circuit_steps drop constraint absence_circuit_steps_circuit_pos_key;
-      alter table absence_circuit_steps drop column circuit_id;
+      alter table absence_circuit_steps drop column circuit_id, drop column col, drop column roles, drop column scope;
       delete from absence_circuit_steps;
       insert into absence_circuit_steps(pos,kind,label,rule,blocking,active,pdf_slot) values (0,'preavis','P','all',false,true,null),(10,'clinique','C','all',true,true,null),(20,'visa','V','any',true,true,null);
       alter table absence_circuit_steps add constraint absence_circuit_steps_pos_key unique (pos);
