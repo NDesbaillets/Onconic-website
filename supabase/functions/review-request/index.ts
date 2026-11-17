@@ -10,7 +10,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 const SITE = "https://onconic.ch";
 const ORIGINS = [SITE, "https://www.onconic.ch"];
 // Aperçus Cloudflare (projet de test) : l'invitation exige de toute façon le lien signé et, pour « review », une session admin
-const PREVIEW = /^https:\/\/([a-z0-9-]+\.)?onconic\.pages\.dev$/;
+const PREVIEW = (Deno.env.get("SUPABASE_URL") ?? "").includes("uubowlcyekbgmizrlyxb") ? /^https:\/\/([a-z0-9-]+\.)?onconic\.pages\.dev$/ : /^$/;
 const ROLES: Record<string, string> = { invite_clinician: "clinician", invite_assistant: "assistant", invite_pharmacist: "pharmacist" };
 const REVIEW_ROLES = ["clinician", "cdc", "cadre", "assistant", "nurse", "pharmacist", "direction", "admin"];
 
@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
     data: { full_name: request.name },
   });
   if (error || !invited.user) {
-    console.error("invite failed", error);
+    console.error("invite failed", error?.code, error?.status);
     await admin.from("contact_requests").update({ status: "pending" }).eq("id", id);
     const exists = error?.code === "email_exists" || /already/i.test(error?.message ?? "");
     return json(req, exists ? 409 : 500, { error: exists ? "user_exists" : "invite_failed" });
