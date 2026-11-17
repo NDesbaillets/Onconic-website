@@ -712,7 +712,7 @@ $$;
 
 -- Types de notification proposés (préférences de Mon compte) : ajout de peer_rejected pour les validateurs, la direction et les personnes d'une étape
 create or replace function public.notification_kinds_for(p_user uuid) returns text[]
-language plpgsql stable security definer set search_path = public as $$
+language plpgsql stable security definer set search_path = public, pg_temp as $$
 declare r text; v boolean; k text[] := '{}'; validator boolean; direction boolean;
 begin
   select role, coalesce(absence_validator, false) into r, v from public.profiles where id = p_user;
