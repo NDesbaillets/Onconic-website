@@ -58,3 +58,7 @@ python3 tests/absences/browser.py
 ```
 
 `browser.py` démarre et arrête son serveur local. Toutes les requêtes externes du navigateur sont bloquées. Les tests SQL n'envoient aucun e-mail et n'accèdent jamais à la base distante. Ils vérifient notamment les permissions SQL, les deux niveaux et plusieurs validateurs, les refus/changements/retraits, les versions de documents, la confidentialité et les reprises. PGlite utilise une seule connexion : il ne démontre pas les courses de plusieurs connexions PostgreSQL. Les décisions répétées sont testées et les opérations conservent leurs verrous transactionnels.
+
+## Fichiers historiques
+
+Les fichiers `supabase/*.sql` sont des bases historiques : ne plus les rejouer (ils contiennent les anciens noms de cliniques Lower GI et Upper GI). Les migrations font foi.

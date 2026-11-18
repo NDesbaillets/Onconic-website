@@ -27,7 +27,7 @@ test('cliniques GI : conversion des données, dédoublonnage, validation', async
       alter table public.profiles add column agenda_clinics text[] not null default '{}';
       create table public.key_trials (id int primary key, clinic text, diagnosis text);
       create table public.letters (id int primary key, clinic text, diagnosis text);
-      create table public.medletter_templates (id int primary key, clinic text);
+      create table public.medletter_templates (id int primary key, clinic text, title text, treatment text, trial text);
       create table public.protocols (id int primary key, clinic text);
       create table public.trainings (id int primary key, pathology text not null,
         clinic text not null constraint trainings_clinic_check check (clinic in ('Sénologie', 'Lower GI', 'Upper GI', 'ORL', 'ION', 'UTOH')));
@@ -55,8 +55,8 @@ test('cliniques GI : conversion des données, dédoublonnage, validation', async
     await db.query("insert into clinic_requests(user_id,clinics,previous_clinics) values ($1,'{Lower GI,Upper GI}','{Lower GI}')", [uid(2)]);
     await db.query("insert into events(id,title,start_date,end_date,clinics) values (1,'SAMO Workshop Upper GI Tumors 2027','2027-09-03','2027-09-04','{Lower GI,Upper GI}'),(2,'Autre','2027-01-01','2027-01-02','{ORL,Upper GI,Lower GI,Upper GI}'),(3,'Sans','2027-01-01','2027-01-02','{}')");
     await db.query("insert into key_trials values (1,'Lower GI','Cancer colorectal'),(2,'Upper GI','Adénocarcinome du pancréas'),(3,'Upper GI','Carcinome épidermoïde de l''œsophage'),(4,'Upper GI','Cholangiocarcinome'),(5,'Upper GI',null),(6,'ORL','Larynx')");
-    await db.query("insert into letters values (1,'Upper GI','Carcinome hépatocellulaire'),(2,'Upper GI','Adénocarcinome gastrique')");
-    await db.query("insert into medletter_templates values (1,'Upper GI'),(2,'Lower GI')");
+    await db.query("insert into letters values (1,'Upper GI','Carcinome hépatocellulaire'),(2,'Upper GI','Adénocarcinome gastrique, métastases hépatiques')");
+    await db.query("insert into medletter_templates values (1,'Upper GI','Folfirinox','Adénocarcinome du pancréas',null),(2,'Lower GI','Folfox',null,null),(3,'Upper GI','FLOT','Adénocarcinome gastrique, métastases hépatiques',null),(4,'Upper GI','Nivolumab','Carcinome de l''œsophage','CheckMate 648')");
     await db.query("insert into protocols values (1,'Upper GI')");
     await db.query("insert into trainings values (1,'Estomac','Upper GI'),(2,'Pancréas','Upper GI'),(3,'Rectum','Lower GI'),(4,'Larynx','ORL')");
     await db.query(`insert into oncoodle_polls values (1,'{"rules":[{"clinics":["Upper GI","ORL"],"roles":["clinician"]},{"all":true},{"clinics":["Lower GI"],"roles":[]}],"users":[],"exclude":[]}'),(2,'{}')`);
@@ -91,7 +91,7 @@ test('cliniques GI : conversion des données, dédoublonnage, validation', async
     await t.test('colonnes à une seule clinique', async () => {
       assert.deepEqual((await rows('select id, clinic from key_trials order by id')).map((r) => r.clinic), ['GI tube', 'GI solide', 'GI tube', 'GI solide', 'GI tube', 'ORL']);
       assert.deepEqual((await rows('select clinic from letters order by id')).map((r) => r.clinic), ['GI solide', 'GI tube']);
-      assert.deepEqual((await rows('select clinic from medletter_templates order by id')).map((r) => r.clinic), ['GI solide', 'GI tube']);
+      assert.deepEqual((await rows('select clinic from medletter_templates order by id')).map((r) => r.clinic), ['GI solide', 'GI tube', 'GI tube', 'GI tube']);
       assert.equal(await one('select clinic from protocols'), 'GI solide');
       assert.deepEqual((await rows('select clinic from trainings order by id')).map((r) => r.clinic), ['GI tube', 'GI solide', 'GI tube', 'ORL']);
     });

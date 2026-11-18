@@ -4,8 +4,8 @@
 -- Règles de conversion :
 --   tableaux de cliniques : Lower GI -> GI tube ; Upper GI -> GI tube + GI solide ; doublons retirés, ordre conservé ;
 --   lignes rattachées à une clinique par une clé (validateurs, attributions de circuit...) : mêmes règles, par copie puis suppression ;
---   colonne texte à une seule clinique : Lower GI -> GI tube ; Upper GI -> GI solide si la colonne diagnostic ou pathologie
---   évoque pancréas, voies biliaires ou foie, GI tube sinon, et GI solide si la table n'a aucune colonne diagnostic ;
+--   colonne texte à une seule clinique : Lower GI -> GI tube ; Upper GI -> GI solide si diagnosis, pathology (ou à défaut title,
+--   treatment, trial) évoque pancréas, voies biliaires ou carcinome hépatocellulaire, GI tube sinon ; GI solide si la table n'a aucune de ces colonnes ;
 --   réglages d'absences : Lower GI devient GI tube et Upper GI devient GI solide (même position, même seuil).
 -- Les colonnes sont repérées dans le catalogue (colonnes `clinic` texte, colonnes texte[] dont le nom finit par `clinics`), ce qui
 -- couvre aussi les tables des migrations 202611180001 et 202611180002 si elles sont présentes. Aucune dépendance envers elles.
@@ -36,7 +36,7 @@ create or replace function pg_temp.gi_one(c text, diag text, has_diag boolean) r
     when 'Lower GI' then 'GI tube'
     when 'Upper GI' then case
       when not has_diag then 'GI solide'
-      when translate(lower(coalesce(diag, '')), 'éèêëàâîïôùûç', 'eeeeaaiiouuc') ~ 'pancr|biliaire|cholangio|vesicule|hepat|\mchc\M|foie' then 'GI solide'
+      when translate(lower(coalesce(diag, '')), 'éèêëàâîïôùûç', 'eeeeaaiiouuc') ~ 'pancr|biliaire|cholangio|vesicule|hepatocellulaire|\mchc\M|carcinome hepat' then 'GI solide'
       else 'GI tube' end
     else c end;
 $$;
@@ -44,7 +44,7 @@ $$;
 do $mig$
 declare
   r record; chk jsonb := '[]'::jsonb; k jsonb; n bigint;
-  cols text; sel_tube text; sel_solide text; dcol text; keyed boolean;
+  cols text; sel_tube text; sel_solide text; dcol text; dexpr text; keyed boolean;
 begin
   -- 1. Contraintes check qui listent les cliniques (ex. trainings_clinic_check) : retirées, puis recréées avec la nouvelle liste
   for r in
@@ -100,13 +100,23 @@ begin
                      r.t, cols, sel_solide, r.col);
       execute format('delete from public.%I where %I in (''Lower GI'', ''Upper GI'')', r.t, r.col);
     else
+      -- colonne de classement : diagnosis ou pathology ; à défaut, title, treatment et trial concaténés
       select a.attname into dcol
         from pg_attribute a
         where a.attrelid = format('public.%I', r.t)::regclass and a.attnum > 0 and not a.attisdropped
           and a.attname in ('diagnosis', 'pathology') and a.atttypid = 'text'::regtype
         order by (a.attname = 'diagnosis') desc limit 1;
+      if dcol is not null then
+        dexpr := format('%I', dcol);
+      else
+        select string_agg(format('%I', a.attname), ', ' order by a.attnum) into dexpr
+          from pg_attribute a
+          where a.attrelid = format('public.%I', r.t)::regclass and a.attnum > 0 and not a.attisdropped
+            and a.attname in ('title', 'treatment', 'trial') and a.atttypid = 'text'::regtype;
+        if dexpr is not null then dexpr := 'concat_ws('' '', ' || dexpr || ')'; end if;
+      end if;
       execute format('update public.%1$I set %2$I = pg_temp.gi_one(%2$I, %3$s, %4$L::boolean) where %2$I in (''Lower GI'', ''Upper GI'')',
-                     r.t, r.col, case when dcol is null then 'null::text' else format('%I', dcol) end, dcol is not null);
+                     r.t, r.col, coalesce(dexpr, 'null::text'), dexpr is not null);
     end if;
     execute format('alter table public.%I enable trigger user', r.t);
   end loop;
