@@ -12,7 +12,7 @@ const ROOT = new URL('../../', import.meta.url).pathname;
 const SHOTS = process.env.SHOTS_DIR || '';
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 const OWN = ['approved', 'rejected', 'change_approved', 'change_rejected', 'direction_change'];
-const KINDS = { validator: ['to_validate', 'to_validate_change', 'reminder', ...OWN, 'event_join'], direction: ['to_direction', 'to_opinion', 'reminder', ...OWN, 'event_join'], plain: [...OWN, 'event_join'], none: [] };
+const KINDS = { validator: ['to_validate', 'to_validate_change', 'reminder', 'peer_rejected', ...OWN, 'event_join'], direction: ['to_direction', 'to_opinion', 'reminder', 'peer_rejected', ...OWN, 'event_join'], plain: [...OWN, 'event_join'], none: [] };
 
 const MOCK = `
 const who = new URLSearchParams(location.search).get('who') || 'validator';

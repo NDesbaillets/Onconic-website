@@ -21,6 +21,8 @@ test('circuit des absences : droits, aperçu, simulateur', async (t) => {
       await db.exec(await read('supabase/migrations/' + f));
     const mig = await read('supabase/migrations/202611170001_circuit_absences.sql');
     await db.exec(mig); await db.exec(mig);
+    const mig2 = await read('supabase/migrations/202611180001_circuit_configurable.sql');
+    await db.exec(mig2); await db.exec(mig2);
     // 1 admin, 2 direction, 3 cadre validateur Thoracique, 4 médecin Thoracique, 5 cadre non validateur, 6 médecin Gynécologie,
     // 7 cdc, 8 cadre désigné pour Urologie mais case décochée, 9 médecin Urologie
     const people = [[1, 'admin', null], [2, 'direction', null], [3, 'cadre', null], [4, 'clinician', ['Thoracique']], [5, 'cadre', null], [6, 'clinician', ['Gynécologie']], [7, 'cdc', ['Thoracique']], [8, 'cadre', null], [9, 'clinician', ['Urologie']]];

@@ -40,3 +40,28 @@ test('les motifs de refus restent dans l’application et jamais dans le mail',(
   assert.doesNotMatch(m.text+m.html+JSON.stringify(m.push),/SECRET/);
  }
 });
+test('peer_rejected : objet, étape, lien À valider, aucun commentaire dans le mail',()=>{
+ for(const lang of ['fr','en']) {
+  const m=buildEmail({lang,kind:'peer_rejected',owner:'Alice Fictive',by:'Bob Fictif',stepLabel:'Validation de la cheffe de service',absences:[absence],validators:[],approvers:[],comment:'SECRET_COMMENTAIRE'});
+  assert.match(m.subject,lang==='fr'?/^Onconic · Absence refusée : Alice Fictive$/:/Alice Fictive/);
+  assert.match(m.text,/Bob Fictif/); assert.match(m.text,/Validation de la cheffe de service/); assert.match(m.text,/#todo/);
+  assert.doesNotMatch(m.text+m.html+JSON.stringify(m.push),/SECRET/);
+ }
+ const fr=buildEmail({lang:'fr',kind:'peer_rejected',owner:'Alice Fictive',by:'Bob Fictif',stepLabel:'Étape X',absences:[absence],validators:[],approvers:[]});
+ assert.match(fr.text,/Bob Fictif a refusé la demande d'absence de Alice Fictive \(Étape X\)\./);
+});
+test('to_opinion avec step_label : avis demandé au lieu du pré-avis de la direction',()=>{
+ const a=buildEmail({lang:'fr',kind:'to_opinion',owner:'Test',stepLabel:'Avis de la cheffe de service',absences:[{...absence,change_type:null}],validators:[],approvers:[]});
+ assert.match(a.subject,/Avis demandé : Avis de la cheffe de service/); assert.doesNotMatch(a.text,/pré-avis/);
+ const b=buildEmail({lang:'fr',kind:'to_opinion',owner:'Test',absences:[{...absence,change_type:null}],validators:[],approvers:[]});
+ assert.match(b.subject,/pré-avis/);
+});
+test('à valider : au plus 10 noms, puis « et n autres »',()=>{
+ const noms=Array.from({length:37},(_,i)=>`Validateur ${i+1}`);
+ const fr=buildEmail({lang:'fr',kind:'to_validate',owner:'Test',absences:[{...absence,change_type:null}],validators:noms,approvers:[]});
+ assert.match(fr.text,/Validateur 10 et 27 autres\./); assert.doesNotMatch(fr.text,/Validateur 11\b/);
+ const en=buildEmail({lang:'en',kind:'to_validate_change',owner:'Test',absences:[absence],validators:noms,approvers:[]});
+ assert.match(en.text,/Validateur 10 and 27 more\./);
+ const few=buildEmail({lang:'fr',kind:'to_validate',owner:'Test',absences:[{...absence,change_type:null}],validators:noms.slice(0,2),approvers:[]});
+ assert.match(few.text,/Validateur 1, Validateur 2\./);
+});

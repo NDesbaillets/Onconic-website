@@ -16,11 +16,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
-  <link rel="stylesheet" href="/assets/css/circuit.css?v=20261117b">
+  <link rel="stylesheet" href="/assets/css/circuit.css?v=20261118e">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/admin-circuit.js?v=20261117b" defer></script>
+  <script src="/assets/js/admin-circuit.js?v=20261118e" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -44,23 +44,99 @@
         <hr class="rule">
         <p class="form-msg" id="ug-status" role="status">Chargement…</p>
         <div id="cc-tool" hidden>
-          <p class="muted">Vue en lecture seule du circuit actuel. Les modifications se font dans <a href="/admin/absences.html">Absences : valideurs par clinique</a> et dans <a href="/admin/membres.html">Membres et accès</a>.</p>
-          <h2>Schéma du circuit</h2>
-          <div id="cc-flow" class="cc-flow"></div>
-          <p class="muted" id="cc-admin-note">Un administrateur peut valider à toute étape ; sa validation conclut la demande.</p>
-          <h2>Avertissements</h2>
-          <div id="cc-warn" class="card cc-warn"></div>
-          <h2>Cliniques</h2>
-          <div class="cc-scroll"><table class="cc-table" id="cc-table"></table></div>
-          <h2>Simulateur</h2>
-          <form class="card cc-sim" id="cc-form" novalidate>
-            <label>Membre <select id="cc-member"></select></label>
-            <label>Du <input id="cc-from" type="date" required></label>
-            <label>Au (inclus) <input id="cc-to" type="date" required></label>
-            <button class="btn" type="submit">Simuler</button>
+          <div class="cc-head">
+            <div class="cc-tabs" id="cc-tabs" role="tablist" aria-label="Circuits de validation"></div>
+            <div class="cc-tools" role="toolbar" aria-label="Gérer les circuits">
+              <button class="cc-ib" id="cc-new" type="button" aria-label="Nouveau circuit" title="Nouveau circuit">+</button>
+              <button class="cc-ib" id="cc-rename" type="button" aria-label="Renommer le circuit" title="Renommer" hidden>✎</button>
+              <button class="cc-ib danger" id="cc-delete" type="button" aria-label="Supprimer le circuit" title="Supprimer le circuit" hidden>✕</button>
+              <button class="cc-ib" id="cc-up" type="button" aria-label="Monter le circuit dans l'ordre" title="Monter dans l'ordre" hidden>↑</button>
+              <button class="cc-ib" id="cc-down" type="button" aria-label="Descendre le circuit dans l'ordre" title="Descendre dans l'ordre" hidden>↓</button>
+            </div>
+          </div>
+          <form class="cc-box" id="cc-box" hidden novalidate>
+            <strong id="cc-box-title">Nouveau circuit</strong>
+            <label class="cc-field">Nom (60 caractères au plus)<input id="cc-box-name" type="text" maxlength="60" autocomplete="off"></label>
+            <label class="cc-field" id="cc-box-copy-wrap">Point de départ<select id="cc-box-copy"></select></label>
+            <div class="cc-row">
+              <button class="cc-b primary" type="submit">Valider</button>
+              <button class="cc-b" id="cc-box-cancel" type="button">Annuler</button>
+            </div>
+            <p class="form-msg" id="cc-box-msg" role="status" aria-live="polite"></p>
           </form>
-          <p class="form-msg" id="cc-msg" role="status" aria-live="polite"></p>
-          <div id="cc-result"></div>
+          <p class="cc-note">Le circuit général s'applique à tous, sauf aux membres, rôles et cliniques attribués à un circuit alternatif (priorité : membre, rôle, clinique, puis général). Validateurs par clinique : <a href="/admin/absences.html">Absences : valideurs</a>. Rôles et accès : <a href="/admin/membres.html">Membres et accès</a>. Un administrateur peut valider à toute étape.</p>
+
+          <section class="cc-sec cc-build" aria-labelledby="cc-flow-title">
+            <h2 class="cc-eyebrow" id="cc-flow-title">Circuit</h2>
+            <p class="cc-hint">Les étapes d'une même colonne sont simultanées ; les colonnes se suivent de gauche à droite. Les demandes déjà envoyées gardent leur circuit.</p>
+            <div class="cc-pre" id="cc-pre"></div>
+            <div class="cc-builder" id="cc-builder" role="group" aria-label="Colonnes du circuit"></div>
+            <p class="form-msg" id="cc-ed-msg" role="status" aria-live="polite"></p>
+            <div class="cc-bar">
+              <span class="cc-dirty" id="cc-dirty" hidden>modifications non enregistrées</span>
+              <span class="cc-spacer"></span>
+              <button class="cc-b" id="cc-sim-draft" type="button">Simuler</button>
+              <button class="cc-b" id="cc-cancel" type="button" disabled>Annuler</button>
+              <button class="cc-b primary" id="cc-save" type="button" disabled>Enregistrer</button>
+            </div>
+          </section>
+
+          <section class="cc-sec" aria-labelledby="cc-sim-title">
+            <h2 class="cc-eyebrow" id="cc-sim-title">Simulateur</h2>
+            <form class="cc-sim" id="cc-form" novalidate>
+              <label>Membre <select id="cc-member"></select></label>
+              <label>Motif <select id="cc-kind"><option value="vacances">Vacances</option><option value="congres">Congrès</option><option value="autre">Autre</option></select></label>
+              <label>Du <input id="cc-from" type="date" required></label>
+              <label>Au (inclus) <input id="cc-to" type="date" required></label>
+              <button class="cc-b" type="submit">Simuler le circuit enregistré</button>
+            </form>
+            <p class="form-msg" id="cc-msg" role="status" aria-live="polite"></p>
+            <div id="cc-result" class="cc-result"></div>
+          </section>
+
+          <details class="cc-sec cc-fold" id="cc-assign-box" open hidden>
+            <summary>Qui suit ce circuit</summary>
+            <p class="cc-hint">Une cible (membre, rôle ou clinique) ne suit qu'un circuit. Pour revenir au circuit général, retirez la cible de ce circuit.</p>
+            <div class="cc-as-lists" id="cc-as-lists"></div>
+            <p class="form-msg" id="cc-as-msg" role="status" aria-live="polite"></p>
+            <div class="cc-row">
+              <button class="cc-b primary" id="cc-as-save" type="button" disabled>Enregistrer les attributions</button>
+              <span class="cc-dirty" id="cc-as-dirty" hidden>modifications non enregistrées</span>
+            </div>
+          </details>
+
+          <details class="cc-sec cc-fold" id="cc-warn-box">
+            <summary>Avertissements <span id="cc-warn-count">(0)</span></summary>
+            <div id="cc-warn" class="cc-warn"></div>
+          </details>
+          <details class="cc-sec cc-fold" id="cc-clinics-box">
+            <summary>Cliniques et validateurs <span id="cc-clinics-count">(0)</span></summary>
+            <div class="cc-scroll"><table class="cc-table" id="cc-table"></table></div>
+          </details>
+          <details class="cc-sec cc-fold" id="cc-who-box">
+            <summary>Qui suit quel circuit <span id="cc-who-count">(0)</span></summary>
+            <p class="cc-hint">Situation d'aujourd'hui, pour les membres qui ont l'outil Absences.</p>
+            <div class="cc-sim cc-who-filters">
+              <label>Rechercher<input id="cc-who-q" type="search" placeholder="Nom ou circuit" autocomplete="off"></label>
+              <label>Circuit<select id="cc-who-circuit"></select></label>
+            </div>
+            <p class="cc-hint" id="cc-who-msg" role="status" aria-live="polite"></p>
+            <div class="cc-scroll"><table class="cc-table cc-who" id="cc-who-table"></table></div>
+          </details>
+          <details class="cc-sec cc-fold" id="cc-log-box">
+            <summary>Journal des modifications</summary>
+            <div id="cc-log" class="cc-log"></div>
+          </details>
+
+          <div class="cc-scrim" id="cc-scrim" hidden></div>
+          <aside class="cc-panel" id="cc-panel" role="dialog" aria-label="Réglages de l'étape" hidden>
+            <div class="cc-panel-head">
+              <span class="cc-eyebrow" id="cc-panel-title">Réglages de l'étape</span>
+              <button class="cc-ib" id="cc-panel-close" type="button" aria-label="Fermer le panneau">✕</button>
+            </div>
+            <div class="cc-panel-body" id="cc-panel-body"></div>
+          </aside>
+          <div class="cc-palette" id="cc-palette" role="menu" aria-label="Type d'étape à ajouter" hidden></div>
         </div>
       </div>
     </section>

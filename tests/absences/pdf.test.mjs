@@ -15,3 +15,14 @@ test('PDF généré pour chaque rôle : original, rectificatif, annulation',asyn
   if(action==='cancelled') assert.match(pdf.getTitle(),/ANNULATION/);
  }
 });
+test('PDF avec étapes supplémentaires : case du chef de service signée et lignes « Autres validations »',async()=>{
+ const base={action:'approved',owner:'Personne fictive',clinics:['Thoracique'],requestedAt:'2026-11-11T10:00:00Z',absences:[{kind:'congres',start_date:'2027-02-01',end_date:'2027-02-02',note:null}],signers:[{name:'Cadre fictif',at:'2026-11-11T10:00:00Z'}],direction:{name:'Direction fictive',at:'2026-11-11T11:00:00Z'},generatedAt:'2026-11-11T11:00:00Z',ref:'OC-ABS-D2'};
+ for(const role of ['clinician','cdc','cadre']) {
+  const plain=await buildAbsenceForm({...base,role});
+  const chef=await buildAbsenceForm({...base,role,extra:[{label:'Validation de la cheffe de service',name:'Cheffe fictive',at:'2026-11-11T12:00:00Z',slot:'chef_service'}]});
+  const more=await buildAbsenceForm({...base,role,extra:[{label:'Validation de la cheffe de service',name:'Cheffe fictive',at:'2026-11-11T12:00:00Z',slot:'chef_service'},{label:'Finances',name:'Personne fictive 2',at:'2026-11-11T13:00:00Z',slot:null}]});
+  assert.ok((await PDFDocument.load(chef)).getPageCount()>=1);
+  assert.notEqual(plain.length,chef.length);
+  assert.ok(more.length>chef.length);
+ }
+});

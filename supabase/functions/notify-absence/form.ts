@@ -7,7 +7,9 @@ import { PDFDocument, PDFFont, PDFPage, rgb, StandardFonts } from "npm:pdf-lib@1
 export type FormRole = "clinician" | "cdc" | "cadre";
 export type FormAbsence = { kind: "vacances" | "congres" | "autre"; start_date: string; end_date: string; note: string | null };
 export type FormSigner = { name: string; at: string; comment?: string | null };
+export type FormExtra = { label: string; name: string; at: string; slot?: string | null };
 export type FormData = {
+  extra?: FormExtra[];
   role: FormRole; owner: string; clinics: string[]; requestedAt: string; absences: FormAbsence[]; signers: FormSigner[]; direction?: { name: string; at: string } | null;
   generatedAt: string; ref: string; action?: string;
 };
@@ -143,6 +145,16 @@ export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): P
     } else page.drawText("Tampon - signature", { x: ML + 380, y: y - 9, size: 7.5, font: reg, color: GREY });
     y -= 30;
   };
+  // Autres étapes du circuit (personnes désignées) : la case « avis du chef de service » est remplie si une étape porte ce slot
+  const extras = d.extra ?? [];
+  const chef = extras.find((x) => x.slot === "chef_service") ?? null;
+  const others = extras.filter((x) => x !== chef);
+  const chefSign = () => {
+    if (!chef) return;
+    const x = ML + 300;
+    page.drawText(safe(`Signé électroniquement : ${chef.name}`), { x, y: y - 9, size: 8.5, font: bold, color: SIGN });
+    page.drawText(safe(stamp(chef.at)), { x, y: y - 19, size: 8, font: reg, color: SIGN });
+  };
   const comments = () => {
     text("Commentaires : ", ML, bold, 10);
     text(".".repeat(80), ML + bold.widthOfTextAtSize("Commentaires : ", 10), reg, 9, GREY); y -= 18;
@@ -157,19 +169,28 @@ export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): P
     } else comments();
   };
 
+  const chefRow = () => { text("AVIS DU CHEF DE SERVICE :", ML, bold, 10); if (!chef) text("Tampon et signature.", ML + 230, reg, 10); };
+  // Lignes « Autres validations » après le visa : une ligne par étape supplémentaire approuvée
+  const otherRows = () => {
+    if (!others.length) return;
+    y -= 6; need(18 + others.length * 14); text("Autres validations :", ML, bold, 10); y -= 16;
+    others.forEach((x) => para(`${x.label} : ${x.name}, signé électroniquement le ${stamp(x.at)}`, ML + 12, CW - 14, reg, 9, SIGN));
+  };
   if (d.role === "clinician") {
     text("PRÉ-AVIS DES CHEFS DE CLINIQUE :", ML, bold, 10); y -= 20;
     for (let i = 0; i < 3; i++) optionRow("Avis : ", null, false);
     comments(); y -= 4; rule2();
     text("AVIS DU MÉDECIN CADRE RESPONSABLE DE LA CLINIQUE", ML, bold, 10); y -= 20;
     approvals(); y -= 4; directionRow();
+    if (chef) { y -= 4; chefRow(); chefSign(); y -= 22; }
+    otherRows();
   } else if (d.role === "cdc") {
     text("PRÉ-AVIS DU MÉDECIN CADRE RESPONSABLE DE LA CLINIQUE", ML, bold, 10); y -= 20;
     approvals(); y -= 4; directionRow(); rule2();
-    text("AVIS DU CHEF DE SERVICE :", ML, bold, 10); text("Tampon et signature.", ML + 230, reg, 10); y -= 22;
+    chefRow(); y -= 22;
     need(24); text("Demande acceptée :", ML, reg, 10); let x = ML + reg.widthOfTextAtSize("Demande acceptée :", 10) + 14;
-    text("oui", x, reg, 10); box(x + 20, y - 1, false); text("non", x + 55, reg, 10); box(x + 76, y - 1, false); y -= 24;
-    comments();
+    text("oui", x, reg, 10); box(x + 20, y - 1, !!chef); text("non", x + 55, reg, 10); box(x + 76, y - 1, false); chefSign(); y -= 24;
+    comments(); otherRows();
   } else {
     if (signers.length) {
       text("VALIDATION EN LIGNE PRÉALABLE (Onconic)", ML, bold, 10); y -= 16;
@@ -177,10 +198,10 @@ export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): P
       y -= 8;
     }
     directionRow();
-    text("AVIS DU CHEF DE SERVICE :", ML, bold, 10); text("Tampon et signature.", ML + 230, reg, 10); y -= 22;
+    chefRow(); y -= 22;
     need(24); text("Demande acceptée :", ML, reg, 10); const x = ML + reg.widthOfTextAtSize("Demande acceptée :", 10) + 14;
-    text("oui", x, reg, 10); box(x + 20, y - 1, false); text("non", x + 55, reg, 10); box(x + 76, y - 1, false); y -= 24;
-    comments(); dots();
+    text("oui", x, reg, 10); box(x + 20, y - 1, !!chef); text("non", x + 55, reg, 10); box(x + 76, y - 1, false); chefSign(); y -= 24;
+    comments(); dots(); otherRows();
   }
 
   y -= 6;

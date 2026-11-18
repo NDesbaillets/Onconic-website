@@ -1,6 +1,6 @@
 // Messages des absences (e-mail et push). Fonctions pures, testables hors Supabase.
 export type Lang = "fr" | "en";
-export type Kind = "to_validate" | "to_validate_change" | "approved" | "rejected" | "change_approved" | "change_rejected" | "to_direction" | "direction_change" | "to_opinion";
+export type Kind = "to_validate" | "to_validate_change" | "approved" | "rejected" | "change_approved" | "change_rejected" | "to_direction" | "direction_change" | "to_opinion" | "peer_rejected";
 
 export type Abs = {
   id: number; kind: "vacances" | "congres" | "autre"; start_date: string; end_date: string; note: string | null;
@@ -8,7 +8,7 @@ export type Abs = {
   change_start: string | null; change_end: string | null;
 };
 export type Ctx = {
-  lang: Lang; kind: Kind; owner: string; by?: string | null; comment?: string | null; reminder?: boolean; action?: string | null;
+  lang: Lang; kind: Kind; owner: string; by?: string | null; comment?: string | null; reminder?: boolean; action?: string | null; stepLabel?: string | null;
   absences: Abs[]; validators: string[]; approvers: string[];
 };
 
@@ -31,6 +31,12 @@ const T = {
     toOpinion: (who: string, n: number) => `${who} demande ${n > 1 ? `${n} absences` : "une absence"} : pré-avis de la direction possible`,
     toOpinionChange: (who: string, del: boolean) => `${who} demande ${del ? "la suppression" : "la modification"} d'une absence validée : pré-avis de la direction possible`,
     opinionNeed: "Étape facultative, sans effet bloquant : votre pré-avis (favorable ou non, avec un commentaire) s'affiche avec la demande chez les validateurs de la clinique, comme aide à la décision. Vous viserez ensuite la demande une fois les validateurs passés.",
+    toOpinionStep: (who: string, n: number, step: string) => `${who} demande ${n > 1 ? `${n} absences` : "une absence"} : Avis demandé : ${step}`,
+    toOpinionStepChange: (who: string, del: boolean, step: string) => `${who} demande ${del ? "la suppression" : "la modification"} d'une absence validée : Avis demandé : ${step}`,
+    opinionStepNeed: (step: string) => `Avis demandé : ${step}. Étape consultative, sans effet bloquant : votre avis (favorable ou non, avec un commentaire) s'affiche avec la demande comme aide à la décision.`,
+    peerRejected: (by: string, who: string, step: string) => `${by} a refusé la demande d'absence de ${who}${step ? ` (${step})` : ""}`,
+    peerRejectedSubject: (who: string) => `Absence refusée : ${who}`,
+    peerRejectedNote: "Vous n'avez plus de décision à prendre sur cette demande. Le motif est consultable dans l'application.",
     dirAdded: (by: string) => `${by} a ajouté une absence à votre nom`,
     dirEdited: (by: string) => `${by} a modifié votre absence`,
     dirCancelled: (by: string) => `${by} a annulé votre absence`,
@@ -40,7 +46,7 @@ const T = {
     rejected: "Votre demande d'absence a été refusée",
     changeApproved: "Votre demande de changement est acceptée",
     changeRejected: "Votre demande de changement a été refusée",
-    needAll: (names: string[]) => `Chaque absence doit être validée par tous les validateurs concernés${names.length ? ` : ${names.join(", ")}` : ""}.`,
+    needAll: (names: string[]) => `Chaque absence doit être validée par tous les validateurs concernés${names.length ? ` : ${names.slice(0, 10).join(", ")}${names.length > 10 ? ` et ${names.length - 10} autre${names.length - 10 > 1 ? "s" : ""}` : ""}` : ""}.`,
     approvedBy: (names: string[]) => (names.length ? `Validée par : ${names.join(", ")}.` : "Validée."),
     rejectedBy: (by: string) => `Refusée par ${by}.`,
     stays: "L'absence reste validée aux dates actuelles.",
@@ -62,6 +68,12 @@ const T = {
     toOpinion: (who: string, n: number) => `${who} requests ${n > 1 ? `${n} absences` : "an absence"}: management pre-opinion possible`,
     toOpinionChange: (who: string, del: boolean) => `${who} asks to ${del ? "delete" : "change"} an approved absence: management pre-opinion possible`,
     opinionNeed: "Optional, non-blocking step: your pre-opinion (favourable or not, with a comment) is shown with the request to the clinic validators as decision support. You will give the final sign-off once the validators have decided.",
+    toOpinionStep: (who: string, n: number, step: string) => `${who} requests ${n > 1 ? `${n} absences` : "an absence"}: Opinion requested: ${step}`,
+    toOpinionStepChange: (who: string, del: boolean, step: string) => `${who} asks to ${del ? "delete" : "change"} an approved absence: Opinion requested: ${step}`,
+    opinionStepNeed: (step: string) => `Opinion requested: ${step}. Non-blocking step: your opinion (favourable or not, with a comment) is shown with the request as decision support.`,
+    peerRejected: (by: string, who: string, step: string) => `${by} declined the absence request of ${who}${step ? ` (${step})` : ""}`,
+    peerRejectedSubject: (who: string) => `Absence declined: ${who}`,
+    peerRejectedNote: "No further decision is needed from you on this request. The reason is available in the app.",
     dirAdded: (by: string) => `${by} added an absence in your name`,
     dirEdited: (by: string) => `${by} changed your absence`,
     dirCancelled: (by: string) => `${by} cancelled your absence`,
@@ -71,7 +83,7 @@ const T = {
     rejected: "Your absence request was declined",
     changeApproved: "Your change request was accepted",
     changeRejected: "Your change request was declined",
-    needAll: (names: string[]) => `Each absence must be approved by all validators concerned${names.length ? `: ${names.join(", ")}` : ""}.`,
+    needAll: (names: string[]) => `Each absence must be approved by all validators concerned${names.length ? `: ${names.slice(0, 10).join(", ")}${names.length > 10 ? ` and ${names.length - 10} more` : ""}` : ""}.`,
     approvedBy: (names: string[]) => (names.length ? `Approved by: ${names.join(", ")}.` : "Approved."),
     rejectedBy: (by: string) => `Declined by ${by}.`,
     stays: "The absence stays approved on its current dates.",
@@ -101,7 +113,7 @@ function line(l: Lang, a: Abs, withChange: boolean): string {
 export function buildEmail(c: Ctx) {
   const t = T[c.lang] ?? T.fr;
   const lang = c.lang === "en" ? "en" : "fr";
-  const toValidator = c.kind === "to_validate" || c.kind === "to_validate_change" || c.kind === "to_direction" || c.kind === "to_opinion";
+  const toValidator = c.kind === "to_validate" || c.kind === "to_validate_change" || c.kind === "to_direction" || c.kind === "to_opinion" || c.kind === "peer_rejected";
   const url = `${SITE}/app/absences.html#${toValidator ? "todo" : "mine"}`;
   const withChange = toValidator && c.absences.some((a) => !!a.change_type);
   const lines = c.absences.map((a) => line(lang, a, withChange));
@@ -112,7 +124,14 @@ export function buildEmail(c: Ctx) {
   switch (c.kind) {
     case "to_validate": subject = t.toValidate(c.owner, c.absences.length); extra.push(t.needAll(c.validators)); break;
     case "to_validate_change": subject = t.toValidateChange(c.owner, del); extra.push(t.needAll(c.validators)); break;
-    case "to_opinion": subject = c.absences.some((a) => !!a.change_type) ? t.toOpinionChange(c.owner, c.absences[0]?.change_type === "delete") : t.toOpinion(c.owner, c.absences.length); extra.push(t.opinionNeed); break;
+    case "to_opinion": {
+      const step = (c.stepLabel ?? "").trim();
+      const chg = c.absences.some((a) => !!a.change_type);
+      if (step) { subject = chg ? t.toOpinionStepChange(c.owner, c.absences[0]?.change_type === "delete", step) : t.toOpinionStep(c.owner, c.absences.length, step); extra.push(t.opinionStepNeed(step)); }
+      else { subject = chg ? t.toOpinionChange(c.owner, c.absences[0]?.change_type === "delete") : t.toOpinion(c.owner, c.absences.length); extra.push(t.opinionNeed); }
+      break;
+    }
+    case "peer_rejected": subject = t.peerRejectedSubject(c.owner); intro = t.peerRejected(c.by ?? "—", c.owner, (c.stepLabel ?? "").trim()) + "."; extra.push(t.peerRejectedNote); break;
     case "to_direction": subject = t.toDirection(c.owner, c.absences.length); extra.push(t.directionNeed); break;
     case "direction_change": {
       const by = c.by ?? "—";
@@ -126,7 +145,7 @@ export function buildEmail(c: Ctx) {
     case "change_rejected": subject = t.changeRejected; extra.push(t.rejectedBy(c.by ?? "—")); extra.push(lang === "fr" ? "Le motif est consultable dans l’application." : "The reason is available in the app."); extra.push(t.stays); break;
   }
   if (c.reminder && toValidator) { subject = `${t.remind}${lang === "fr" ? " : " : ": "}${subject}`; extra.unshift(t.remindText); }
-  intro = subject + ".";
+  intro = intro || subject + ".";
   const text = [intro, "", ...lines.map((l) => `• ${l}`), "", ...extra, "", `${t.open} : ${url}`, "", t.sent].join("\n");
   const html = `<div style="font-family:Helvetica,Arial,sans-serif;color:#1A2A4A;font-size:15px;line-height:1.5;max-width:560px">
 <p style="font-size:18px;color:#001B4D;margin:0 0 12px">${esc(intro)}</p>

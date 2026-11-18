@@ -16,14 +16,15 @@ test('réglages de notifications : types proposés, enregistrement et droits (Po
   try {
     const migration = await read('supabase/migrations/202611140002_notification_prefs.sql');
     await db.exec(migration); await db.exec(migration); // réexécutable
+    await db.exec(await read('supabase/migrations/202611180001_circuit_configurable.sql')); // la migration du circuit vient après celle-ci
     await db.query('update profiles set absence_validator=false where id=$1', [uid(6)]);
 
     await t.test('types proposés selon le rôle, les outils et la désignation de valideur', async () => {
       await as(3); assert.deepEqual(await names(), [...OWN, 'event_join'], 'médecin assistant : ses absences et les congrès');
-      await as(5); assert.deepEqual(await names(), ['to_validate', 'to_validate_change', 'reminder', ...OWN, 'event_join'], 'médecin cadre valideur');
+      await as(5); assert.deepEqual(await names(), ['to_validate', 'to_validate_change', 'reminder', 'peer_rejected', ...OWN, 'event_join'], 'médecin cadre valideur');
       await as(6); assert.deepEqual(await names(), [...OWN, 'event_join'], 'médecin cadre non valideur : pas de demandes à valider');
-      await as(2); assert.deepEqual(await names(), ['to_direction', 'to_opinion', 'reminder', ...OWN, 'event_join'], 'direction');
-      await as(1); assert.deepEqual((await names()).sort(), ['to_validate', 'to_validate_change', 'to_direction', 'to_opinion', 'reminder', ...OWN, 'event_join'].sort(), 'admin : tout');
+      await as(2); assert.deepEqual(await names(), ['to_direction', 'to_opinion', 'reminder', 'peer_rejected', ...OWN, 'event_join'], 'direction');
+      await as(1); assert.deepEqual((await names()).sort(), ['to_validate', 'to_validate_change', 'to_direction', 'to_opinion', 'reminder', 'peer_rejected', ...OWN, 'event_join'].sort(), 'admin : tout');
       await as(7); assert.deepEqual(await names(), [], 'infirmier·ère : ni Absences ni Congrès par défaut');
       await as(8); assert.deepEqual(await names(), [], 'assistante médicale : ni Absences ni Congrès par défaut');
       await as(9); assert.deepEqual(await names(), [], 'compte en attente');

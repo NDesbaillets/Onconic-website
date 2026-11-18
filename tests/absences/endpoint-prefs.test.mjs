@@ -99,3 +99,13 @@ test('direction : boîte commune servie une fois tant qu\'un destinataire le sou
   await run([row(3, 'to_direction', 'd1'), row(4, 'to_direction', 'd2')], null, 'direction@example.invalid');
   assert.equal(sent.length, 0); assert.deepEqual(skipped, [3, 4]);
 });
+
+test('to_opinion : boîte commune pour le pré-avis de la direction, adresse personnelle pour une personne d\'étape', async () => {
+  const dir = { lang: 'fr', notify_events: false, role: 'direction', notif_prefs: {} };
+  await run([row(1, 'to_opinion', 'd1')], dir, 'direction@example.invalid');
+  assert.deepEqual(sent[0].to, ['direction@example.invalid'], 'pré-avis de la direction');
+  await run([row(2, 'to_opinion', 'val1', { step_label: 'Avis de la cheffe de service' })], validator({}), 'direction@example.invalid');
+  assert.equal(sent[0].to, 'val1@example.invalid', 'personne désignée (non direction)');
+  await run([row(3, 'to_opinion', 'd1', { step_label: 'Avis X' })], dir, 'direction@example.invalid');
+  assert.equal(sent[0].to, 'd1@example.invalid', 'avis d\'étape à une personne de la direction : adresse personnelle');
+});

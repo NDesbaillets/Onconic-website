@@ -24,6 +24,7 @@ test('planning administratif : droits, masquage, écriture', async (t) => {
     await db.exec(mig); await db.exec(mig);
     const v2 = await read('supabase/migrations/202611160004_planning_v2.sql');
     await db.exec(v2); await db.exec(v2);
+    for (const m of ['202611170001_circuit_absences', '202611180001_circuit_configurable']) { const x = await read(`supabase/migrations/${m}.sql`); await db.exec(x); await db.exec(x); }
     // 1 admin, 2 direction, 3 assistante cadre admin, 4 assistante, 5 médecin, 6 médecin hors CHUV, 7 en attente
     for (const [n, role, inst] of [[1, 'admin', 'CHUV'], [2, 'direction', 'CHUV'], [3, 'assistant', 'CHUV'], [4, 'assistant', 'CHUV'], [5, 'clinician', 'CHUV'], [6, 'clinician', null], [7, 'member', 'CHUV']]) {
       await db.query('insert into auth.users(id,email) values($1,$2)', [uid(n), `t${n}@example.invalid`]);
