@@ -15,11 +15,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261118b">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261118e">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/absences.js?v=20261118e" defer></script>
+  <script src="/assets/js/absences.js?v=20261118i" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -48,6 +48,9 @@
           <form class="card ab-new" id="ab-form" novalidate>
             <h2>Demander une absence</h2>
             <p class="muted ab-flow">« Demander l'absence » ouvre une fenêtre qui indique qui sera prévenu ; rien n'est envoyé aux validateurs avant votre confirmation. « Enregistrer en brouillon » garde la demande sans l'envoyer, pour en ajouter d'autres et tout envoyer ensemble.</p>
+            <label class="ab-for" id="ab-for-wrap" hidden>Demande pour
+              <select id="ab-for"></select>
+            </label>
             <div class="ab-fields">
               <label>Motif
                 <select id="ab-kind" required>
@@ -80,6 +83,7 @@
             <button class="ab-tab" id="ab-t-plan" role="tab" aria-selected="true" aria-controls="ab-p-plan" type="button">Planning</button>
             <button class="ab-tab" id="ab-t-mine" role="tab" aria-selected="false" aria-controls="ab-p-mine" type="button">Mes absences</button>
             <button class="ab-tab" id="ab-t-todo" role="tab" aria-selected="false" aria-controls="ab-p-todo" type="button" hidden>À valider <span class="ab-count" id="ab-todo-n"></span></button>
+            <button class="ab-tab" id="ab-t-agenda" role="tab" aria-selected="false" aria-controls="ab-p-agenda" type="button" hidden>Blocage Ultragenda <span class="ab-count" id="ab-agenda-n"></span></button>
             <button class="ab-tab" id="ab-t-dir" role="tab" aria-selected="false" aria-controls="ab-p-dir" type="button" hidden>Direction</button>
             <button class="ab-tab" id="ab-t-exp" role="tab" aria-selected="false" aria-controls="ab-p-exp" type="button" hidden>Export</button>
           </div>
@@ -151,6 +155,7 @@
               <li><span class="ab-key ab-cal-evenement">É</span> Événement important</li>
               <li><span class="ab-key ab-cal-congres">★</span> Congrès important</li>
             </ul>
+            <p class="card ab-temp" id="ab-temp" hidden><span></span> <button class="btn btn-outline" id="ab-temp-back" type="button">Revenir à mes réglages</button></p>
             <p class="muted ab-count-line" id="ab-shown" aria-live="polite"></p>
             <div class="ab-scroll" id="ab-scroll" tabindex="0" role="region" aria-label="Planning mensuel des absences"></div>
             <div class="ab-ov" id="ab-ov" hidden>
@@ -195,7 +200,10 @@
             <h2>À valider</h2>
             <p class="muted">Demandes d'absence et demandes de modification ou de suppression des collaborateurs dont vous validez les absences.</p>
             <p class="form-msg" id="ab-todo-msg" role="status" aria-live="polite"></p>
-            <div id="ab-todo-list" class="ab-list"></div>
+            <div class="ab-todo-layout" id="ab-todo-layout">
+              <div id="ab-todo-list" class="ab-list"></div>
+              <aside class="card ab-side" id="ab-todo-side" aria-label="Planning de la clinique de la demande sélectionnée" hidden></aside>
+            </div>
             <div id="ab-op-wrap" hidden>
               <h3 class="ab-sub-title">Pré-avis et avis demandés (facultatif)</h3>
               <p class="muted">Demandes en cours pour lesquelles le circuit prévoit votre avis. Votre avis, favorable ou non, avec un commentaire, s'affiche avec la demande chez les validateurs comme aide à la décision. Il ne bloque rien : vous validez ou visez la demande ensuite, dans la liste ci-dessus, lorsque c'est votre tour.</p>
@@ -207,6 +215,17 @@
               <p class="muted">Vous pouvez les supprimer ; elles disparaissent d'elles-mêmes 14 jours après le refus.</p>
               <div id="ab-rej-list" class="ab-list"></div>
             </div>
+          </section>
+          <section id="ab-p-agenda" role="tabpanel" aria-labelledby="ab-t-agenda" hidden>
+            <h2>Blocage Ultragenda</h2>
+            <p class="muted">Absences de médecins validées, modifiées ou annulées : plages à bloquer ou à débloquer dans l'agenda de consultation (Ultragenda). Cochez la case une fois l'agenda à jour ; le médecin en est informé. Les motifs ne sont pas affichés.</p>
+            <div class="ab-ag-filters" role="group" aria-label="Filtre des tâches">
+              <button class="btn btn-outline" type="button" data-agf="todo" aria-pressed="true">À faire</button>
+              <button class="btn btn-outline" type="button" data-agf="done" aria-pressed="false">Faites</button>
+              <button class="btn btn-outline" type="button" data-agf="all" aria-pressed="false">Toutes</button>
+            </div>
+            <p class="form-msg" id="ab-agenda-msg" role="status" aria-live="polite"></p>
+            <div id="ab-agenda-list" class="ab-list"></div>
           </section>
           <section id="ab-p-exp" role="tabpanel" aria-labelledby="ab-t-exp" hidden>
             <h2>Exports Excel</h2>

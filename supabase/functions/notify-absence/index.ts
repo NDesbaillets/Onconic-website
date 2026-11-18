@@ -11,7 +11,7 @@ import { Buffer } from "node:buffer";
 import nodemailer from "npm:nodemailer@6.9.16";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import webpush from "npm:web-push@3.6.7";
-import { type Abs, buildEmail, buildFormEmail, type Kind, type Lang } from "./message.ts";
+import { type Abs, buildAgendaEmail, buildEmail, buildFormEmail, type Kind, type Lang } from "./message.ts";
 import { wants } from "./prefs.ts";
 import { buildAbsenceForm, FILE_LABEL, type FormData, stamp } from "./form.ts";
 
@@ -44,7 +44,10 @@ async function vapidKeys() {
   return row!;
 }
 
-type Row = { id: number; kind: Kind | "form"; recipient: string | null; absence_ids: number[]; payload: { owner?: string; by?: string; step_label?: string; comment?: string; reminder?: boolean; action?: string; document_id?: number; absences?: (Abs & { user_id: string })[] } };
+type Row = { id: number; kind: Kind | "form" | "form_copy"; recipient: string | null; absence_ids: number[]; payload: { secretary?: boolean; periods?: { start: string; end: string }[]; owner?: string; by?: string; step_label?: string; comment?: string; reminder?: boolean; action?: string; document_id?: number; absences?: (Abs & { user_id: string })[] } };
+
+// Message d'erreur enregistré dans la boîte d'envoi : jamais d'adresse e-mail (le serveur SMTP peut citer le destinataire)
+const safeError = (e: unknown) => String((e as Error)?.message ?? e).replace(/[^\s@<>"',;:()]+@[^\s@<>"',;:()]+/g, "[adresse]").slice(0, 250);
 
 const ROLE_LABEL: Record<string, string> = { clinician: "médecin assistant", cdc: "chef de clinique", cadre: "médecin cadre" };
 const slug = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "membre";
@@ -80,7 +83,32 @@ async function sendForm(row: Row, transport: ReturnType<typeof nodemailer.create
       attachments: [{ filename: r.file, content: Buffer.from(r.bytes), contentType: "application/pdf" }] });
     return null;
   } catch (e) {
-    return String((e as Error).message ?? e).slice(0, 250);
+    return safeError(e);
+  }
+}
+
+// Diffusion du PDF validé (blocs, responsables, secrétaires, personnalisation) : un second e-mail avec le même PDF et les plages Ultragenda.
+// Destinataires en Bcc s'ils sont plusieurs ; l'expéditeur est le destinataire visible (To). Aucun texte libre.
+async function sendFormCopy(row: Row, transport: ReturnType<typeof nodemailer.createTransport> | null): Promise<string | null> {
+  const documentId = row.payload.document_id;
+  if (!documentId) return "__skip__";
+  const { data: rcp, error: e1 } = await admin.rpc("absence_form_recipients", { p_document: documentId });
+  if (e1) return "form_copy_recipients";
+  const emails: string[] = Array.isArray(rcp?.emails) ? rcp.emails : [];
+  if (!emails.length) return "__skip__";
+  const { data: mail, error: e2 } = await admin.rpc("absence_agenda_mail", { p_document: documentId });
+  if (e2) return "form_copy_agenda";
+  if (!mail) return "__skip__"; // rien à bloquer ni débloquer (tâche remplacée)
+  if (!transport) return "SMTP_PASSWORD manquant";
+  const r = await renderForm(row.absence_ids, documentId);
+  if ("error" in r) return "__skip__";
+  const m = buildAgendaEmail({ owner: mail.owner, action: mail.action, file: r.file, block: mail.block ?? [], unblock: mail.unblock ?? [] });
+  try {
+    await transport.sendMail({ from: `Onconic <${SMTP_USER}>`, to: emails.length === 1 ? emails[0] : SMTP_USER, bcc: emails.length === 1 ? undefined : emails, subject: m.subject, text: m.text, html: m.html,
+      attachments: [{ filename: r.file, content: Buffer.from(r.bytes), contentType: "application/pdf" }] });
+    return null;
+  } catch (e) {
+    return safeError(e);
   }
 }
 
@@ -96,6 +124,7 @@ const VALIDATE_KINDS = ["to_validate", "to_validate_change"];
 
 async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createTransport> | null, sentShared: Set<string>): Promise<string | null> {
   if (row.kind === "form") return await sendForm(row, transport);
+  if (row.kind === "form_copy") return await sendFormCopy(row, transport);
   if (!row.recipient) return "__skip__";
   const { data: allowed, error: scopeError } = await admin.rpc("absence_notification_ids", { p_recipient: row.recipient, p_ids: row.absence_ids, p_kind: row.kind });
   if (scopeError) return "notification_scope";
@@ -127,7 +156,7 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
   const approvers = await names((appr ?? []).filter((a) => a.decision === "approved").map((a) => a.validator_id));
 
   const msg = buildEmail({
-    lang, kind: row.kind, owner: row.payload.owner ?? (ownerName as string) ?? "Un membre", by: row.payload.by, comment: null, stepLabel: row.payload.step_label, reminder: row.payload.reminder, action: row.payload.action,
+    lang, kind: row.kind, owner: row.payload.owner ?? (ownerName as string) ?? "Un membre", by: row.payload.by, comment: null, stepLabel: row.payload.step_label, reminder: row.payload.reminder, action: row.payload.action, secretary: !!row.payload.secretary, periods: row.payload.periods,
     absences: absences as unknown as Abs[], validators, approvers,
   });
 
@@ -174,7 +203,7 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
     else await send();
     return null;
   } catch (e) {
-    return String((e as Error).message ?? e).slice(0, 250);
+    return safeError(e);
   }
 }
 
@@ -223,7 +252,7 @@ Deno.serve(async (req) => {
   const sentShared = new Set<string>();
   for (const row of rows as Row[]) {
     let err: string | null;
-    try { err = await sendOne(row, transport, sentShared); } catch (e) { err = String((e as Error).message ?? e).slice(0, 250); }
+    try { err = await sendOne(row, transport, sentShared); } catch (e) { err = safeError(e); }
     if (err === "__skip__") {
       await admin.rpc("absence_outbox_skip", { p_id: row.id }); skipped++;
     } else {

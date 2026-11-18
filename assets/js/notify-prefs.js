@@ -20,13 +20,15 @@
     change_approved: [fr ? "Ma demande de changement est acceptée" : "My change request is accepted", ""],
     change_rejected: [fr ? "Ma demande de changement est refusée" : "My change request is rejected", ""],
     direction_change: [fr ? "La direction a modifié ou annulé mon absence" : "The direction modified or cancelled my absence", ""],
+    on_behalf: [fr ? "Une secrétaire a saisi une absence en mon nom" : "A secretary entered an absence in my name", ""],
+    agenda_done: [fr ? "Mon absence est bloquée ou débloquée dans Ultragenda" : "My absence is blocked or unblocked in Ultragenda", ""],
     event_join: [fr ? "Un autre membre participe au même congrès que moi" : "Another member attends the same conference as me", ""],
   };
   const GROUPS = [
     ["validate", fr ? "Demandes d'absence à traiter" : "Absence requests to handle", ["to_validate", "to_validate_change", "peer_rejected"]],
     ["direction", fr ? "Direction" : "Direction", ["to_direction", "to_opinion"]],
     ["reminders", fr ? "Rappels" : "Reminders", ["reminder"]],
-    ["mine", fr ? "Mes absences" : "My absences", ["approved", "rejected", "change_approved", "change_rejected", "direction_change"]],
+    ["mine", fr ? "Mes absences" : "My absences", ["approved", "rejected", "change_approved", "change_rejected", "direction_change", "on_behalf", "agenda_done"]],
     ["events", fr ? "Congrès" : "Conferences", ["event_join"]],
   ];
   const T = fr
