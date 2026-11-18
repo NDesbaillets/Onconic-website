@@ -1,7 +1,7 @@
 # Key trials : liste des études à documenter
 
 Liste établie le 03.11.2026 (de mémoire, à vérifier à la rédaction de chaque fiche). Ordre de traitement : de haut en bas. Une étude est « faite » quand une fiche de même acronyme existe dans `key_trials` (slug = acronyme en minuscules, caractères non alphanumériques remplacés par `-`). ✓ = déjà en base.
-Cliniques de référence : celles de l'outil Lettres médicales (Thoracique, Sénologie, Gynécologie, Urologie, Neuro-oncologie, Mélanome, Lower GI, Upper GI, ORL, Sarcomes). Slug particulier : VISION (¹⁷⁷Lu-PSMA) = `vision-psma` (`vision` = tépotinib).
+Cliniques de référence : celles de l'outil Lettres médicales (Thoracique, Sénologie, Gynécologie, Urologie, Neuro-oncologie, Mélanome, GI tube, GI solide, ORL, Sarcomes). Slug particulier : VISION (¹⁷⁷Lu-PSMA) = `vision-psma` (`vision` = tépotinib).
 Résultats non publiés au 09.11.2026 (aucun article trouvé dans PubMed, à sauter et à signaler) : CE.7, STAMP, KEYNOTE-630, TIGER, ANNOUNCE, DESTINY-Breast05, Euro-EWING 99.
 Sources autorisées : PubMed, Europe PMC et PMC (accès libre), éditeurs en accès libre, notices FDA/EMA, Unpaywall/OpenAlex pour les versions libres. Pas de Sci-Hub ni de copie non autorisée.
 
@@ -44,21 +44,22 @@ Sources autorisées : PubMed, Europe PMC et PMC (accès libre), éditeurs en acc
 - Urothélial : CheckMate 901, EV-302, JAVELIN Bladder 100, THOR, SWOG 8710, NIAGARA, KEYNOTE-905, CheckMate 274, AMBASSADOR, KEYNOTE-057, POTOMAC
 - Germinales : TE19, TIGER
 
-## Lower GI
+## GI tube
 - Colorectal métastatique : CRYSTAL, FIRE-3, CALGB/SWOG 80405, PARADIGM, TRIBE2, KEYNOTE-177, CheckMate 8HW, RECOURSE, SUNLIGHT, FRESCO-2, BEACON, CodeBreaK 300, MOUNTAINEER
 - Colon adjuvant : MOSAIC, XELOXA, IDEA, ATOMIC, DYNAMIC, FOxTROT
 - Rectum : CAO/ARO/AIO-94, RAPIDO, PRODIGE 23, PROSPECT, OPRA, NICHE-2
 - Métastases hépatiques : CLOCC, COLLISION
 - Canal anal : ACT II, InterAACT, POD1UM-303
-
-## Upper GI
 - Œsophage et jonction : CROSS, ESOPEC, CheckMate 577, CheckMate 648, KEYNOTE-590, RATIONALE-306
 - Estomac : CheckMate 649, KEYNOTE-859, SPOTLIGHT, GLOW, ToGA, KEYNOTE-811, RAINBOW, DESTINY-Gastric01, DESTINY-Gastric04, MAGIC, FLOT4, MATTERHORN, CLASSIC
+- GIST : Z9001, SSG XVIII, GRID, INVICTUS, INTRIGUE
+- Tumeurs neuroendocrines digestives non pancréatiques : PROMID, CLARINET, RADIANT-4, NETTER-1, NETTER-2, COMPETE, CABINET, SANET
+
+## GI solide
 - Pancréas : CONKO-001, ESPAC-4, PRODIGE 24, PREOPANC, PRODIGE 4, MPACT, NAPOLI-1, NAPOLI-3, POLO
+- Tumeurs neuroendocrines pancréatiques : RADIANT-3
 - Voies biliaires : ABC-02, TOPAZ-1, KEYNOTE-966, BILCAP, ABC-06, ClarIDHy, FIGHT-202
 - CHC : SHARP, REFLECT, IMbrave150, HIMALAYA, CheckMate 9DW, RESORCE, CELESTIAL, REACH-2, EMERALD-1, LEAP-012
-- GIST : Z9001, SSG XVIII, GRID, INVICTUS, INTRIGUE
-- Tumeurs neuroendocrines : PROMID, CLARINET, RADIANT-3, RADIANT-4, NETTER-1, NETTER-2, COMPETE, CABINET, SANET
 
 ## Gynécologie
 - Ovaire : ICON7/GOG-218, SOLO-1, PAOLA-1, PRIMA, OVHIPEC-1, DESKTOP III, SOC-1, AURELIA, MIRASOL, ROSELLA

@@ -42,7 +42,7 @@
   };
   const TOOLS = [["congres", "Congrès"], ["trials", "Key trials"], ["lettres", "Lettres d'assurance"], ["limitations", "Limitations LS"],
     ["duree", "Durée de traitement"], ["absences", "Absences"], ["medletters", "Lettres médicales"]];
-  const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome", "Lower GI", "Upper GI", "ORL", "Sarcomes", "Rad-Inter", "ION", "UTOH"];
+  const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome", "GI tube", "GI solide", "ORL", "Sarcomes", "Rad-Inter", "ION", "UTOH"];
   const ABS_CLINICS = CLINICS.concat(["Plateforme"]);
   const DOCTORS = ["clinician", "cdc", "cadre"];
   // Droits par défaut, identiques à tool_allowed() en base (sans exception)
