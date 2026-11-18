@@ -15,7 +15,8 @@
 | digitized | Courbe relevée sur la figure publiée (vs reconstruite depuis médianes/taux) |
 | seeded_at | Horodatage du dernier passage de `trials.sql` ; protège les fiches modifiées à la main |
 | Neuro-oncologie | Remplace « Neurologie » partout (base comprise) |
-| Blocs | Regroupement des cliniques : Bloc 1 (Sénologie, Gynécologie, Urologie), Bloc 2 (Thoracique, Neuro-oncologie, Mélanome), Bloc 3 (Lower GI, Upper GI, ORL, Sarcomes, Rad-Inter) ; ION et UTOH sont des blocs à part entière (un bloc, une clinique) ; l'outil Absences ajoute Plateforme et Administration |
+| GI tube, GI solide | Depuis le 18.11.2026, remplacent Lower GI et Upper GI. GI tube : œsophage, estomac et jonction œsogastrique, colorectal, canal anal, GIST, tumeurs neuroendocrines digestives non pancréatiques. GI solide : pancréas (y compris TNE pancréatiques), voies biliaires (cholangiocarcinomes, vésicule), carcinome hépatocellulaire. Migration `202611180003` |
+| Blocs | Regroupement des cliniques : Bloc 1 (Sénologie, Gynécologie, Urologie), Bloc 2 (Thoracique, Neuro-oncologie, Mélanome), Bloc 3 (GI tube, GI solide, ORL, Sarcomes, Rad-Inter) ; ION et UTOH sont des blocs à part entière (un bloc, une clinique) ; l'outil Absences ajoute Plateforme et Administration |
 | clinician / assistant / admin | Rôles validés ; « member » = compte en attente |
 | nurse | Rôle infirmier·ère (12.11.2026) : accès par défaut à Durée (planification des traitements), Key trials, Formation, Annuaire prestataires et Annuaire pour médecins ; Durée et les annuaires exigent l'institution CHUV ; aucun autre outil sauf exception posée par l'admin |
 | pharmacist | Rôle pharmacien (01.11.2026) : accès médecin + assistante ; admin des outils Lettres d'assurance, Limitations LS, Durée de traitement via `public.is_app_admin()` ; peut recevoir l'accès « médecin plus » ; invitation « Inviter comme pharmacien·ne » dans l'e-mail de demande d'adhésion |

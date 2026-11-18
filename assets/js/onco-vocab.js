@@ -46,19 +46,20 @@
       markers: ["Ulcération présente", "Ulcération absente", "Index mitotique … /mm²", "BRAF V600E", "BRAF V600K", "BRAF sauvage",
         "NRAS muté", "KIT muté", "LDH … U/l", "HLA-A*02:01 positif", "Ganglion sentinelle positif", "Ganglion sentinelle négatif"]
     },
-    "Lower GI": {
-      histo: ["Adénocarcinome du côlon droit", "Adénocarcinome du côlon gauche", "Adénocarcinome du rectum", "Adénocarcinome mucineux",
-        "Carcinome épidermoïde du canal anal", "Tumeur neuroendocrine de grade …"],
-      markers: ["RAS sauvage", "KRAS muté (…)", "KRAS G12C", "NRAS muté", "BRAF V600E", "dMMR / MSI-H", "pMMR / MSS",
-        "HER2 amplifié", "Fusion NTRK", "POLE muté", "ACE … µg/l", "Résection R0", "TME de bonne qualité"]
-    },
-    "Upper GI": {
+    "GI tube": {
       histo: ["Adénocarcinome gastrique, type … de Lauren", "Adénocarcinome de la jonction œsogastrique",
-        "Carcinome épidermoïde de l'œsophage", "Adénocarcinome canalaire du pancréas", "Cholangiocarcinome intrahépatique",
-        "Cholangiocarcinome extrahépatique", "Carcinome de la vésicule biliaire", "Carcinome hépatocellulaire", "Tumeur stromale gastro-intestinale (GIST)",
-        "Tumeur neuroendocrine pancréatique de grade …"],
-      markers: ["HER2 IHC …", "PD-L1 CPS …", "Claudine 18.2 positive", "dMMR / MSI-H", "Fusion FGFR2", "IDH1 muté", "KRAS G12D",
-        "KRAS sauvage", "BRCA muté", "CA 19-9 … U/ml", "AFP … ng/ml", "Child-Pugh …", "BCLC …", "KIT exon 11"]
+        "Carcinome épidermoïde de l'œsophage", "Adénocarcinome du côlon droit", "Adénocarcinome du côlon gauche", "Adénocarcinome du rectum",
+        "Adénocarcinome mucineux", "Carcinome épidermoïde du canal anal", "Tumeur stromale gastro-intestinale (GIST)",
+        "Tumeur neuroendocrine digestive de grade …"],
+      markers: ["HER2 IHC …", "HER2 amplifié", "PD-L1 CPS …", "Claudine 18.2 positive", "dMMR / MSI-H", "pMMR / MSS", "RAS sauvage",
+        "KRAS muté (…)", "KRAS G12C", "NRAS muté", "BRAF V600E", "Fusion NTRK", "POLE muté", "ACE … µg/l", "Résection R0",
+        "TME de bonne qualité", "KIT exon 11"]
+    },
+    "GI solide": {
+      histo: ["Adénocarcinome canalaire du pancréas", "Tumeur neuroendocrine pancréatique de grade …", "Cholangiocarcinome intrahépatique",
+        "Cholangiocarcinome extrahépatique", "Carcinome de la vésicule biliaire", "Carcinome hépatocellulaire"],
+      markers: ["HER2 IHC …", "dMMR / MSI-H", "Fusion NTRK", "BRAF V600E", "Fusion FGFR2", "IDH1 muté", "KRAS G12D", "KRAS sauvage",
+        "BRCA muté", "CA 19-9 … U/ml", "AFP … ng/ml", "Child-Pugh …", "BCLC …"]
     },
     "ORL": {
       histo: ["Carcinome épidermoïde de l'oropharynx p16-positif", "Carcinome épidermoïde de l'oropharynx p16-négatif",

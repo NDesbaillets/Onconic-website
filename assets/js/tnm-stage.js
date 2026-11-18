@@ -135,7 +135,8 @@
     const h = String(histo || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
     switch (clinic) {
       case "Thoracique": return /mesotheliom|thym/.test(h) ? null : "lung";
-      case "Lower GI": return /anal|anus/.test(h) ? null : "colorectal";
+      // GI tube : seul le colorectal a un système ; œsophage, estomac, canal anal, GIST et tumeurs neuroendocrines n'en ont pas ici
+      case "GI tube": return /anal|anus|oesophag|œsophag|gastri|estomac|jonction|stromal|gist|neuroendocrin/.test(h) ? null : "colorectal";
       case "Sénologie": return "breast";
       case "Mélanome": return /uve|muqueu|merkel|basocell|epidermoide/.test(h) ? null : "melanoma";
       case "Urologie":
