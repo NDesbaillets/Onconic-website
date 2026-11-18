@@ -111,6 +111,24 @@ begin
     execute format('alter table public.%I enable trigger user', r.t);
   end loop;
 
+  -- 3 bis. Attributions de circuit par clinique (202611180001) : lignes target_type = 'clinic', target = nom de la clinique.
+  --        Lower GI -> GI tube ; Upper GI -> GI solide, et GI tube si aucune ligne GI tube n'existe (Lower GI prioritaire).
+  if to_regclass('public.absence_circuit_assignments') is not null
+     and exists (select 1 from public.absence_circuit_assignments where target_type = 'clinic' and target in ('Lower GI', 'Upper GI')) then
+    alter table public.absence_circuit_assignments disable trigger user;
+    insert into public.absence_circuit_assignments (circuit_id, target_type, target)
+      select circuit_id, target_type, 'GI tube' from public.absence_circuit_assignments where target_type = 'clinic' and target = 'Lower GI'
+      on conflict do nothing;
+    insert into public.absence_circuit_assignments (circuit_id, target_type, target)
+      select circuit_id, target_type, 'GI solide' from public.absence_circuit_assignments where target_type = 'clinic' and target = 'Upper GI'
+      on conflict do nothing;
+    insert into public.absence_circuit_assignments (circuit_id, target_type, target)
+      select circuit_id, target_type, 'GI tube' from public.absence_circuit_assignments where target_type = 'clinic' and target = 'Upper GI'
+      on conflict do nothing;
+    delete from public.absence_circuit_assignments where target_type = 'clinic' and target in ('Lower GI', 'Upper GI');
+    alter table public.absence_circuit_assignments enable trigger user;
+  end if;
+
   -- 4. Colonnes texte[] de cliniques : profiles.clinics, cdc_clinics, agenda_clinics, events.clinics, clinic_requests.clinics et
   --    previous_clinics, member_clinic_history.clinics, member_clinic_changes.clinics, absence_blocs si présent...
   for r in

@@ -32,8 +32,9 @@ test('cliniques GI : conversion des données, dédoublonnage, validation', async
       create table public.trainings (id int primary key, pathology text not null,
         clinic text not null constraint trainings_clinic_check check (clinic in ('Sénologie', 'Lower GI', 'Upper GI', 'ORL', 'ION', 'UTOH')));
       create table public.oncoodle_polls (id int primary key, audience jsonb not null default '{}');
-      create table public.absence_circuit_assignments (clinic text not null references public.absence_clinic_settings (clinic) on update cascade on delete cascade,
-        slot text not null, user_id uuid, primary key (clinic, slot));
+      create table public.absence_circuits (id bigint generated always as identity primary key, name text);
+      create table public.absence_circuit_assignments (circuit_id bigint not null references public.absence_circuits (id),
+        target_type text not null check (target_type in ('member','role','clinic')), target text not null, primary key (target_type, target));
       create table public.absence_blocs (bloc text primary key, clinics text[] not null);
       create function public.events_block() returns trigger language plpgsql as $$ begin raise exception 'déclencheur actif'; end $$;
       create trigger events_block before update on public.events for each row execute function public.events_block();
@@ -59,7 +60,9 @@ test('cliniques GI : conversion des données, dédoublonnage, validation', async
     await db.query("insert into protocols values (1,'Upper GI')");
     await db.query("insert into trainings values (1,'Estomac','Upper GI'),(2,'Pancréas','Upper GI'),(3,'Rectum','Lower GI'),(4,'Larynx','ORL')");
     await db.query(`insert into oncoodle_polls values (1,'{"rules":[{"clinics":["Upper GI","ORL"],"roles":["clinician"]},{"all":true},{"clinics":["Lower GI"],"roles":[]}],"users":[],"exclude":[]}'),(2,'{}')`);
-    await db.query("insert into absence_circuit_assignments values ('Lower GI','a',$1),('Upper GI','a',$2),('Upper GI','b',$2),('Thoracique','a',$1)", [uid(5), uid(6)]);
+    await db.query("insert into absence_circuits(name) values ('C1'),('C2'),('C3'),('C4')");
+    // Lower seul (C1), Upper seul (C2), puis conflit : Lower (C3) et Upper (C4) ; plus lignes non concernées
+    await db.query("insert into absence_circuit_assignments values (1,'clinic','Lower GI'),(2,'clinic','Upper GI'),(1,'clinic','Thoracique'),(2,'role','Lower GI')");
     await db.query("insert into absence_blocs values ('Bloc 3','{Lower GI,Upper GI,ORL}')");
     const histBefore = await one("select count(*) from member_clinic_history where 'Upper GI' = any(clinics) or 'Lower GI' = any(clinics)");
     assert.ok(Number(histBefore) >= 3);
@@ -105,9 +108,8 @@ test('cliniques GI : conversion des données, dédoublonnage, validation', async
       assert.ok(!s.some((r) => /Lower|Upper/.test(r.clinic)));
       const v = (await rows("select clinic, user_id from absence_validators order by clinic, user_id")).map((r) => `${r.clinic}:${r.user_id.slice(-1)}`);
       assert.deepEqual(v, ['GI solide:5', 'GI solide:6', 'GI tube:5', 'GI tube:6', 'Thoracique:6']);
-      const a = (await rows('select clinic, slot from absence_circuit_assignments order by clinic, slot')).map((r) => `${r.clinic}:${r.slot}`);
-      assert.deepEqual(a, ['GI solide:a', 'GI solide:b', 'GI tube:a', 'GI tube:b', 'Thoracique:a']);
-      assert.ok(await one("select user_id from absence_circuit_assignments where clinic='GI tube' and slot='a'"));
+      const a = (await rows('select circuit_id, target_type, target from absence_circuit_assignments order by 2, 3')).map((r) => `${r.target_type}:${r.target}:${r.circuit_id}`);
+      assert.deepEqual(a, ['clinic:GI solide:2', 'clinic:GI tube:1', 'clinic:Thoracique:1', 'role:Lower GI:2']);
     });
     await t.test('audience Oncoodle', async () => {
       const aud = (await rows('select audience from oncoodle_polls order by id')).map((r) => r.audience);
@@ -128,6 +130,18 @@ test('cliniques GI : conversion des données, dédoublonnage, validation', async
       await db.exec(mig);
       assert.equal(await snap(), before);
       assert.equal(Number(await one("select count(*) from onconic_migrations where version='202611180003'")), 1);
+    });
+
+    await t.test('attributions de circuit : Upper seul, Lower seul et conflit', async () => {
+      const run = async (rowsIn) => {
+        await db.exec('reset role'); await db.exec("delete from absence_circuit_assignments where target_type='clinic'");
+        for (const [c, n] of rowsIn) await db.query("insert into absence_circuit_assignments values ($1,'clinic',$2)", [c, n]);
+        await db.exec(mig); await db.exec(mig);
+        return (await rows("select target, circuit_id from absence_circuit_assignments where target_type='clinic' order by 1")).map((r) => `${r.target}:${r.circuit_id}`);
+      };
+      assert.deepEqual(await run([[3, 'Upper GI']]), ['GI solide:3', 'GI tube:3']);
+      assert.deepEqual(await run([[3, 'Lower GI']]), ['GI tube:3']);
+      assert.deepEqual(await run([[4, 'Upper GI'], [3, 'Lower GI']]), ['GI solide:4', 'GI tube:3']);
     });
 
     await t.test('validation : nouveaux noms acceptés, anciens refusés', async () => {
