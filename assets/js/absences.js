@@ -16,7 +16,8 @@
   const $ = (id) => document.getElementById(id);
   const state = {
     ctx: null, people: [], clinics: [], month: null, cache: new Map(), cur: null, view: "month", win: { start: null }, ov: { clinic: "", year: new Date().getFullYear() }, prefs: { scope: "mine", ids: [], rows: 20, order: [], winLen: 42 },
-    mine: [], mineWarn: null, agendaCtx: null, agendaStatus: {}, agendaFilter: "todo", secOf: [], todo: [], rejected: [], who: "", drafts: [], approvals: new Map(), whoApprovals: new Map()
+    mine: [], mineWarn: null, agendaCtx: null, agendaStatus: {}, agendaFilter: "todo", secOf: [], todo: [], rejected: [], who: "", drafts: [], approvals: new Map(), whoApprovals: new Map(),
+    todoLoaded: false, mini: { sel: null, shifts: new Map(), open: new Set(), drawn: "", stamp: 0 }
   };
 
   // ----- Utilitaires -----
@@ -421,11 +422,22 @@
     const limit = state.prefs.rows;
     const people = limit ? all.slice(0, limit) : all;
     shownLine(all, people);
+    $("ab-scroll").replaceChildren(buildWindow(days, byUser, cal, people));
+    $("ab-detail").hidden = true;
+  }
+  // Tableau d'une fenêtre de jours pour des personnes données (planning et mini-planning de « À valider »).
+  // opts.mini : { hl: Set de jours surlignés, reqId : personne mise en évidence, count : ligne « absents par jour » } ; sans effet sur le planning principal.
+  function buildWindow(days, byUser, cal, people, opts) {
+    const mini = opts || null;
+    const len = days.length, from = days[0], to = days[len - 1];
     const today = todayIso();
-    const narrow = len >= 91;
+    const narrow = !mini && len >= 91;
+    const hl = mini && mini.hl;
+    const hlc = (day) => (hl && hl.has(day) ? " ab-hl" : "");
     const wk = (day) => { const w = pd(day).getUTCDay(); return w === 0 || w === 6 || holidayOf(day); };
     const ms = (day, i) => (i > 0 && day.slice(8) === "01" ? " ab-ms" : "");
-    const table = el("table", "ab-grid ab-win ab-w" + len + (narrow ? " ab-narrow" : len > 28 ? " ab-mid" : ""));
+    const table = el("table", "ab-grid ab-win ab-w" + len + (narrow ? " ab-narrow" : len > 28 ? " ab-mid" : "") + (mini ? " ab-mini-grid" : ""));
+    if (mini) table.style.minWidth = `${120 + len * 22}px`;
     table.append(el("caption", "visually-hidden", `Absences du ${fmtCH(from)} au ${fmtCH(to)}`));
     const h1 = el("tr"), h2 = el("tr");
     const corner = el("th", "ab-name", "Collaborateur");
@@ -442,7 +454,7 @@
     }
     days.forEach((day, i) => {
       const d = Number(day.slice(8)), w = pd(day).getUTCDay();
-      const th = el("th", "ab-d" + (wk(day) ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i));
+      const th = el("th", "ab-d" + (wk(day) ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i) + hlc(day));
       th.scope = "col"; th.title = fmtCH(day);
       if (narrow) {
         const show = w === 1 || d === 1;
@@ -458,7 +470,7 @@
     cth.append(el("span", "ab-pname", "Fériés et événements"), el("span", "ab-pclinic muted", "Vacances scolaires VD, agenda commun"));
     calTr.append(cth);
     days.forEach((day, i) => {
-      const td = el("td", "ab-c ab-cal-c" + (pd(day).getUTCDay() % 6 === 0 ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i));
+      const td = el("td", "ab-c ab-cal-c" + (pd(day).getUTCDay() % 6 === 0 ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i) + hlc(day));
       const list = calEntries(day, cal);
       if (list.length) {
         const top = list[0];
@@ -468,13 +480,13 @@
         const label = list.map((x) => x.label).join(" ; ");
         td.title = label;
         const prev = i > 0 ? days[i - 1] : null;
-        if (!prev || calEntries(prev, cal).map((x) => x.label).join() !== list.map((x) => x.label).join()) { td.tabIndex = 0; td.setAttribute("role", "button"); td.setAttribute("aria-label", `${fmtCH(day)} : ${label}`); }
+        if (!mini && (!prev || calEntries(prev, cal).map((x) => x.label).join() !== list.map((x) => x.label).join())) { td.tabIndex = 0; td.setAttribute("role", "button"); td.setAttribute("aria-label", `${fmtCH(day)} : ${label}`); }
       }
       calTr.append(td);
     });
     body.append(calTr);
     for (const p of people) {
-      const tr = el("tr", p.is_me ? "ab-me" : "");
+      const tr = el("tr", (p.is_me ? "ab-me" : "") + (mini && mini.reqId === p.id ? " ab-req" : ""));
       const th = el("th", "ab-name"); th.scope = "row";
       th.append(el("span", "ab-pname", p.name + (p.is_me ? " (moi)" : "")), el("span", "ab-pclinic muted", (p.clinics || []).join(", ")));
       tr.append(th);
@@ -483,28 +495,42 @@
         const day = days[i];
         const a = list.find((x) => x.start_date <= day && day <= x.end_date);
         if (!a) {
-          tr.append(el("td", "ab-c" + (wk(day) ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i)));
+          tr.append(el("td", "ab-c" + (wk(day) ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i) + hlc(day)));
           i++;
           continue;
         }
-        let j = i; while (j + 1 < len && days[j + 1] <= a.end_date) j++;
+        // Mini-planning : une barre ne traverse pas la limite des jours surlignés
+        let j = i; while (j + 1 < len && days[j + 1] <= a.end_date && (!hl || hl.has(days[j + 1]) === hl.has(day))) j++;
         const span = j - i + 1, left = a.start_date < from, right = a.end_date > to;
-        const td = el("td", `ab-c ab-bar-c ab-k-${a.kind} ab-s-${a.status}` + (a.change_type ? " ab-chg" : "") + ms(day, i));
+        const td = el("td", `ab-c ab-bar-c ab-k-${a.kind} ab-s-${a.status}` + (a.change_type ? " ab-chg" : "") + ms(day, i) + hlc(day));
         td.colSpan = span;
         const name = span >= 4 ? KINDS[a.kind][0] : KINDS[a.kind][1];
         td.textContent = [left ? "◂" : "", name, span >= 8 ? `${fmtDM(a.start_date)} – ${fmtDM(a.end_date)}` : "", right ? "▸" : ""].filter(Boolean).join(" ");
-        td.dataset.id = a.id; td.dataset.user = p.id;
         const label = `${p.name} : ${KINDS[a.kind][0]}, ${STATUS[a.status].toLowerCase()}, ${period(a.start_date, a.end_date)}`
           + (a.change_type === "delete" ? " (suppression demandée)" : a.change_type === "modify" ? " (modification demandée)" : "");
-        td.title = label; td.tabIndex = 0; td.setAttribute("role", "button"); td.setAttribute("aria-label", label);
+        td.title = label;
+        if (!mini) { td.dataset.id = a.id; td.dataset.user = p.id; td.tabIndex = 0; td.setAttribute("role", "button"); td.setAttribute("aria-label", label); }
         tr.append(td);
         i = j + 1;
       }
       body.append(tr);
     }
+    // Mini-planning : nombre de personnes absentes (demandes comprises) chaque jour ouvrable
+    if (mini && mini.count) {
+      const tr = el("tr", "ab-count-row");
+      const th = el("th", "ab-name"); th.scope = "row";
+      th.append(el("span", "ab-pname", "Absents par jour"));
+      tr.append(th);
+      days.forEach((day, i) => {
+        const n = people.filter((p) => (byUser.get(p.id) || []).some((x) => x.start_date <= day && day <= x.end_date)).length;
+        const td = el("td", "ab-c" + (wk(day) ? " ab-we" : "") + ms(day, i) + hlc(day), !wk(day) && n ? String(n) : "");
+        if (!wk(day)) td.title = `${fmtCH(day)} : ${plur(n, "absent", "absents")}`;
+        tr.append(td);
+      });
+      body.append(tr);
+    }
     table.append(body);
-    $("ab-scroll").replaceChildren(table);
-    $("ab-detail").hidden = true;
+    return table;
   }
 
   // Vue d'ensemble : une clinique sur une année, une ligne par mois, un jour par colonne, teinte selon le nombre d'absents et le seuil
@@ -599,11 +625,17 @@
     box.hidden = false;
   }
 
-  function showDetail(userId, id) {
+  async function showDetail(userId, id) {
     const people = new Map(state.people.map((p) => [p.id, p]));
     const a = (state.cur.byUser.get(userId) || []).find((x) => String(x.id) === String(id));
     if (!a) return;
     const p = people.get(userId);
+    const pending = a.status === "requested" || !!a.change_type;
+    // Décision possible : la demande figure dans « À valider » de cette personne (chargée à la demande si besoin)
+    if (pending && !state.todoLoaded) {
+      try { const { data, error } = await sb.rpc("absence_to_validate"); if (!error) { state.todoLoaded = true; state.todo = normTodo(data); } } catch (_) { /* pas de décision proposée */ }
+    }
+    const t = pending ? state.todo.find((x) => String(x.id) === String(a.id)) : null;
     const box = $("ab-detail");
     box.replaceChildren();
     const head = el("div", "ab-detail-head");
@@ -611,12 +643,26 @@
     box.append(head);
     box.append(el("p", null, `${period(a.start_date, a.end_date)} · ${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}`));
     if (a.note) box.append(el("p", "muted", "Précision : " + a.note));
-    if (p && p.is_me && (a.status === "requested" || a.change_type)) {
+    if (t) {
+      const prog = t.progress || [];
+      box.append(el("p", "muted", prog.length ? `Validation : ${approvalCount(prog)} sur ${prog.length}` : "Validation par l'administration"), approvalsBlock(prog));
+    } else if (p && p.is_me && pending) {
       const rows = state.approvals.get(String(a.id)) || [];
       box.append(el("p", "muted", rows.length ? `Validation : ${approvalCount(rows)} sur ${rows.length}` : "Validation par l'administration"), approvalsBlock(rows));
     }
     if (a.change_type === "delete") box.append(el("p", "muted", "Suppression demandée, en attente de décision."));
     if (a.change_type === "modify") box.append(el("p", "muted", `Modification demandée : ${period(String(a.change_start).slice(0, 10), String(a.change_end).slice(0, 10))}, en attente de décision.`));
+    if (t) {
+      const ops = opinionsBlock(t.opinions);
+      if (ops) box.append(ops);
+      const w = warnBox(t.conflicts, "Attention : trop d'absences en même temps si vous validez");
+      if (w) box.append(w);
+      box.append(...decisionControls(t, async (msg) => {
+        await afterChange();
+        const done = el("p", "form-msg ok", msg); done.setAttribute("role", "status");
+        box.replaceChildren(done); box.hidden = false;
+      }));
+    }
     if (p && p.is_me) box.append(button("Gérer dans « Mes absences »", "btn btn-outline", () => setTab("mine")));
     box.hidden = false;
   }
@@ -701,7 +747,7 @@
   }
   async function afterChange() {
     state.cache.clear();
-    await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending(), (state.ctx.validates.length || state.isDir) ? Promise.all([loadTodo(), loadRejected()]) : null]);
+    await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending(), (state.ctx.validates.length || state.isDir) ? Promise.all([loadTodo(), loadRejected()]) : state.todoLoaded ? loadTodo() : null]);
   }
 
   // ----- Brouillons et popup d'envoi -----
@@ -1204,13 +1250,15 @@
   }
 
   // ----- À valider -----
+  const normTodo = (data) => (data || []).map((a) => Object.assign(a, {
+    start_date: String(a.start_date).slice(0, 10), end_date: String(a.end_date).slice(0, 10),
+    change_start: a.change_start && String(a.change_start).slice(0, 10), change_end: a.change_end && String(a.change_end).slice(0, 10)
+  }));
   async function loadTodo() {
     const { data, error } = await sb.rpc("absence_to_validate");
     if (error) return say($("ab-todo-msg"), "Chargement impossible : " + error.message, "error");
-    state.todo = (data || []).map((a) => Object.assign(a, {
-      start_date: String(a.start_date).slice(0, 10), end_date: String(a.end_date).slice(0, 10),
-      change_start: a.change_start && String(a.change_start).slice(0, 10), change_end: a.change_end && String(a.change_end).slice(0, 10)
-    }));
+    state.todoLoaded = true;
+    state.todo = normTodo(data);
     renderTodo();
     if (state.isDir) loadOpinions();
   }
@@ -1329,10 +1377,132 @@
       box.append(card);
     }
   }
+  // Décision sur une demande (à valider) : commentaire, boutons Valider / Viser / Accepter / Refuser.
+  // Partagé par la liste « À valider » et le détail du planning ; onDone(message) est appelé après une décision enregistrée.
+  function decisionControls(a, onDone) {
+    const isChange = !!a.change_type;
+    const st = curStep(a);
+    const colSteps = Array.isArray(a.steps) ? a.steps : [];
+    const mineVisa = colSteps.length ? colSteps.some((x) => x.mine && x.kind === "visa") : st.kind === "visa";
+    const comment = el("input"); comment.type = "text"; comment.maxLength = 500; comment.placeholder = "Commentaire (obligatoire pour un refus)";
+    const lab = el("label", "ab-comment", "Commentaire");
+    lab.append(comment);
+    const out = el("p", "form-msg"); out.setAttribute("role", "status");
+    const decide = async (approve, b1, b2) => {
+      if (!approve && comment.value.trim().length < 3) { comment.focus(); return say(out, "Un refus demande un commentaire.", "error"); }
+      b1.disabled = b2.disabled = true;
+      const { data: res, error } = await sb.rpc("absence_decide", { p_id: a.id, p_approve: approve, p_comment: comment.value.trim() });
+      if (error) { b1.disabled = b2.disabled = false; return say(out, error.message, "error"); }
+      mailer();
+      await onDone(approve
+        ? (res === "requested" ? `${a.name} : votre validation est enregistrée ; il reste des validateurs ou le visa de la direction.` : `${a.name} : accepté, la notification est mise en file.`)
+        : `${a.name} : refusé, la notification est mise en file.`);
+    };
+    const actions = el("div", "btn-row");
+    const yes = button(isChange ? "Accepter le changement" : mineVisa ? "Viser (valider)" : "Valider", "btn", () => decide(true, yes, no));
+    const no = button(isChange ? "Refuser le changement" : "Refuser", "btn btn-outline", () => decide(false, yes, no));
+    actions.append(yes, no);
+    return [lab, out, actions];
+  }
+
+  // ----- Mini-planning de la clinique (onglet À valider) : état propre, sans toucher au planning ni à ses préférences -----
+  const wideMq = window.matchMedia ? window.matchMedia("(min-width: 1100px)") : null;
+  const isWide = () => !!(wideMq && wideMq.matches);
+  const cards = new Map();
+  const fridayOf = (s) => addD(mondayOf(s), 4);
+  // Fenêtre : du lundi de la semaine du début au vendredi de la semaine de la fin (3 semaines au moins, 9 au plus) ; pour une modification, ancienne et nouvelle période
+  function miniSpan(a) {
+    const mod = a.change_type === "modify" && a.change_start && a.change_end;
+    const lo = mod && a.change_start < a.start_date ? a.change_start : a.start_date;
+    const hi = mod && a.change_end > a.end_date ? a.change_end : a.end_date;
+    const start = mondayOf(lo);
+    let end = fridayOf(hi);
+    if (end < addD(start, 18)) end = addD(start, 18);
+    if (end > addD(start, 60)) end = addD(start, 60);
+    const sh = (state.mini.shifts.get(String(a.id)) || 0) * 7;
+    return { start: addD(start, sh), end: addD(end, sh), shift: sh / 7 };
+  }
+  async function miniPlanning(box, a) {
+    const tok = String(Math.random());
+    box.dataset.tok = tok;
+    const { start, end, shift } = miniSpan(a);
+    const days = [];
+    for (let d = start; d <= end; d = addD(d, 1)) days.push(d);
+    const clinics = a.clinics || [];
+    const hl = new Set();
+    const mark = (x, y) => { for (const d of days) if (x <= d && d <= y) hl.add(d); };
+    mark(a.start_date, a.end_date);
+    if (a.change_type === "modify" && a.change_start && a.change_end) mark(a.change_start, a.change_end);
+    box.replaceChildren();
+    const head = el("div", "ab-mini-head");
+    head.append(el("strong", "ab-mini-title", `Planning de ${clinics.join(", ") || "la clinique"}`));
+    const nav = el("div", "ab-mini-nav");
+    const prev = button("‹", "btn btn-outline", () => { state.mini.shifts.set(String(a.id), shift - 1); miniPlanning(box, a); });
+    prev.setAttribute("aria-label", "Semaine précédente");
+    const next = button("›", "btn btn-outline", () => { state.mini.shifts.set(String(a.id), shift + 1); miniPlanning(box, a); });
+    next.setAttribute("aria-label", "Semaine suivante");
+    nav.append(prev, el("span", "ab-mini-range", `${fmtCH(start)} – ${fmtCH(end)}`), next,
+      button("Ouvrir dans le planning", "btn btn-outline", () => openInPlanning(a, start)));
+    head.append(nav);
+    box.append(head);
+    const body = el("div", "ab-scroll ab-mini-scroll");
+    body.tabIndex = 0; body.setAttribute("role", "region"); body.setAttribute("aria-label", `Planning de ${clinics.join(", ") || "la clinique"}, ${fmtCH(start)} au ${fmtCH(end)}`);
+    body.append(el("p", "muted ab-mini-load", "Chargement…"));
+    box.append(body);
+    let data;
+    try { data = await loadRange(start, end); } catch (e) {
+      if (box.dataset.tok === tok) body.replaceChildren(el("p", "form-msg error", "Chargement du planning impossible : " + e.message));
+      return;
+    }
+    if (box.dataset.tok !== tok) return;
+    // Membres des cliniques de la demande (ceux que les fonctions existantes montrent à ce validateur), demandeur en tête
+    const req = state.people.find((p) => p.id === a.user_id) || { id: a.user_id, name: a.name, clinics, is_me: false };
+    const others = state.people.filter((p) => p.id !== a.user_id && sharesClinic(p, clinics)).sort((x, y) => x.name.localeCompare(y.name, "fr"));
+    const people = [req, ...others];
+    const byUser = new Map(data.byUser);
+    // Nouvelle période d'une modification : barre « en attente » ajoutée au demandeur pour la lire dans la grille
+    if (a.change_type === "modify" && a.change_start && a.change_end) {
+      byUser.set(a.user_id, (byUser.get(a.user_id) || []).concat([{ id: "chg-" + a.id, kind: a.change_kind || a.kind, status: "requested", start_date: a.change_start, end_date: a.change_end, change_type: null }]));
+    }
+    body.replaceChildren(buildWindow(days, byUser, data.cal, people, { hl, reqId: a.user_id, count: true }));
+    const note = el("p", "muted ab-mini-note", "Colonnes surlignées : jours demandés. Hachuré : demande en attente. Les personnes affichées sont celles que vous voyez dans le planning.");
+    box.append(note);
+  }
+  function selectTodo(id) {
+    id = String(id);
+    const a = state.todo.find((x) => String(x.id) === id);
+    if (!a) return;
+    if (state.mini.sel !== id) { state.mini.sel = id; }
+    cards.forEach((c, k) => {
+      const on = k === id;
+      c.classList.toggle("ab-sel", on);
+      if (on) c.setAttribute("aria-current", "true"); else c.removeAttribute("aria-current");
+    });
+    if (state.mini.drawn === id + "|" + state.mini.stamp) return;
+    state.mini.drawn = id + "|" + state.mini.stamp;
+    miniPlanning($("ab-todo-side"), a);
+  }
+  // « Ouvrir dans le planning » : fenêtre glissante sur ces semaines, personnes de ces cliniques (sans enregistrer de préférence)
+  function openInPlanning(a, start) {
+    const clinics = a.clinics || [];
+    const ids = state.people.filter((p) => p.id === a.user_id || sharesClinic(p, clinics)).map((p) => p.id);
+    if (clinics.length === 1 && state.clinics.some((c) => c.clinic === clinics[0])) state.prefs.scope = clinics[0];
+    else { state.prefs.scope = "custom"; state.prefs.ids = ids; }
+    state.view = "window";
+    state.win.start = start;
+    fillScope();
+    setTab("plan");
+  }
+
   function renderTodo() {
     const list = $("ab-todo-list");
     list.replaceChildren();
+    cards.clear();
+    const wide = isWide();
+    $("ab-todo-side").hidden = !(wide && state.todo.length);
+    $("ab-todo-layout").classList.toggle("ab-split", wide && state.todo.length > 0);
     if (!state.todo.length) { list.append(el("p", "muted", "Aucune demande en attente.")); return; }
+    if (!state.todo.some((x) => String(x.id) === String(state.mini.sel))) state.mini.sel = String(state.todo[0].id);
     for (const a of state.todo) {
       const card = el("article", "card ab-item ab-item-requested");
       const head = el("div", "ab-item-head");
@@ -1355,7 +1525,6 @@
         });
         card.append(ul);
       }
-      const mineVisa = colSteps.length ? colSteps.some((x) => x.mine && x.kind === "visa") : st.kind === "visa";
       const cur = `${KINDS[a.kind][0]} · ${period(a.start_date, a.end_date)} · ${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}`;
       card.append(el("p", null, isChange ? `Absence validée : ${cur}` : cur));
       if (a.note) card.append(el("p", "muted", "Précision : " + a.note));
@@ -1380,28 +1549,31 @@
       if (ops) card.append(ops);
       const w = warnBox(a.conflicts, "Attention : trop d'absences en même temps si vous validez");
       if (w) card.append(w);
-      const comment = el("input"); comment.type = "text"; comment.maxLength = 500; comment.placeholder = "Commentaire (obligatoire pour un refus)";
-      const lab = el("label", "ab-comment", "Commentaire");
-      lab.append(comment);
-      const out = el("p", "form-msg"); out.setAttribute("role", "status");
-      const decide = async (approve, b1, b2) => {
-        if (!approve && comment.value.trim().length < 3) { comment.focus(); return say(out, "Un refus demande un commentaire.", "error"); }
-        b1.disabled = b2.disabled = true;
-        const { data: res, error } = await sb.rpc("absence_decide", { p_id: a.id, p_approve: approve, p_comment: comment.value.trim() });
-        if (error) { b1.disabled = b2.disabled = false; return say(out, error.message, "error"); }
-        mailer();
-        say($("ab-todo-msg"), approve
-          ? (res === "requested" ? `${a.name} : votre validation est enregistrée ; il reste des validateurs ou le visa de la direction.` : `${a.name} : accepté, la notification est mise en file.`)
-          : `${a.name} : refusé, la notification est mise en file.`, "ok");
-        await afterChange();
-      };
-      const actions = el("div", "btn-row");
-      const yes = button(isChange ? "Accepter le changement" : mineVisa ? "Viser (valider)" : "Valider", "btn", () => decide(true, yes, no));
-      const no = button(isChange ? "Refuser le changement" : "Refuser", "btn btn-outline", () => decide(false, yes, no));
-      actions.append(yes, no);
-      card.append(lab, out, actions);
+      card.append(...decisionControls(a, (msg) => { say($("ab-todo-msg"), msg, "ok"); return afterChange(); }));
+      cards.set(String(a.id), card);
+      if (wide) {
+        card.tabIndex = 0;
+        card.classList.add("ab-pick-card");
+        card.addEventListener("click", (e) => { if (!e.target.closest("input, button, a, summary, label, select, textarea")) selectTodo(a.id); });
+        card.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === card) { e.preventDefault(); selectTodo(a.id); } });
+      } else {
+        const holder = el("div", "ab-mini-wrap"); holder.hidden = !state.mini.open.has(String(a.id));
+        const toggle = button(holder.hidden ? "Voir le planning de la clinique" : "Masquer le planning de la clinique", "btn btn-outline ab-mini-toggle", () => {
+          const open = holder.hidden;
+          holder.hidden = !open;
+          toggle.setAttribute("aria-expanded", String(open));
+          toggle.textContent = open ? "Masquer le planning de la clinique" : "Voir le planning de la clinique";
+          open ? state.mini.open.add(String(a.id)) : state.mini.open.delete(String(a.id));
+          if (open) miniPlanning(holder, a);
+        });
+        toggle.setAttribute("aria-expanded", String(!holder.hidden));
+        card.append(toggle, holder);
+        if (!holder.hidden) miniPlanning(holder, a);
+      }
       list.append(card);
     }
+    state.mini.stamp++;
+    if (wide) selectTodo(state.mini.sel);
   }
 
   // ----- Abonnement à son agenda des absences (flux iCal privé) -----
@@ -2002,6 +2174,7 @@
     $("ab-t-plan").addEventListener("click", () => setTab("plan"));
     $("ab-t-mine").addEventListener("click", () => setTab("mine"));
     $("ab-t-todo").addEventListener("click", () => setTab("todo"));
+    if (wideMq) wideMq.addEventListener("change", () => { if (!$("ab-p-todo").hidden) renderTodo(); });
     $("ab-docx").addEventListener("click", exportDocx);
     // Popup d'envoi
     $("ab-drafts-open").addEventListener("click", () => { const c = sd.pending || []; sd.pending = []; openSend(c); });

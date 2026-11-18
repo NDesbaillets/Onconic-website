@@ -1171,6 +1171,44 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .ab-grid td.ab-cal-c[data-cal]:focus-visible { outline: 3px solid var(--amber-500); outline-offset: -3px; }
 .ab-detail p .ug-badge { margin-right: 6px; }
 
+/* Absences : planning de la clinique à côté de la liste À valider, décision depuis le planning */
+.ab-todo-layout { display: block; }
+.ab-todo-layout .ab-item { grid-template-columns: minmax(0, 1fr); }
+.ab-side[hidden] { display: none; }
+.ab-detail .ab-comment, .ab-detail .btn-row { margin-top: var(--space-2); }
+.ab-detail .form-msg:empty { display: none; }
+@media (min-width: 1100px) {
+  .ab-todo-layout.ab-split { display: grid; grid-template-columns: minmax(320px, 2fr) minmax(0, 3fr); gap: var(--space-4); align-items: start; }
+  .ab-side { position: sticky; top: 88px; padding: var(--space-3); margin-top: var(--space-3); border-top: 3px solid var(--amber-500); min-width: 0; display: grid; gap: var(--space-2); }
+}
+@media (max-width: 1099px) { .ab-side { display: none; } }
+.ab-pick-card { cursor: pointer; }
+.ab-pick-card:focus-visible { outline: 3px solid var(--amber-500); outline-offset: 2px; }
+.ab-pick-card.ab-sel { border-left-style: solid; box-shadow: 0 0 0 2px var(--navy-800); }
+.ab-mini-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.ab-mini-title { color: var(--navy-800); font-size: 1rem; }
+.ab-mini-nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ab-mini-nav .btn { min-height: 44px; padding: 0 12px; }
+.ab-mini-range { font-size: .88rem; color: var(--ink-600); }
+.ab-mini-wrap { display: grid; gap: var(--space-2); min-width: 0; }
+.ab-mini-wrap[hidden] { display: none; }
+.ab-mini-toggle { justify-self: start; min-height: 44px; }
+.ab-mini-scroll { max-width: 100%; }
+.ab-mini-note { margin: 0; font-size: .8rem; }
+.ab-mini-load { margin: var(--space-2); }
+.ab-grid.ab-mini-grid { font-size: .76rem; }
+.ab-mini-grid .ab-name { width: 120px; min-width: 120px; max-width: 120px; font-size: .78rem; padding: 3px 6px; }
+.ab-mini-grid .ab-pclinic { display: none; }
+.ab-mini-grid thead th.ab-d { height: 34px; }
+.ab-mini-grid td.ab-c { height: 28px; }
+.ab-mini-grid td.ab-bar-c { padding: 0 4px; font-size: .7rem; }
+.ab-mini-grid .ab-hl { box-shadow: inset 0 0 0 100px rgba(255, 191, 0, .14); }
+.ab-mini-grid thead th.ab-hl { background: #F8DB9A; color: var(--navy-800); font-weight: 700; }
+.ab-mini-grid tr.ab-req .ab-name { background: var(--amber-50); border-left: 4px solid var(--amber-500); }
+.ab-mini-grid tr.ab-req .ab-pname { font-weight: 700; }
+.ab-mini-grid tr.ab-count-row td, .ab-mini-grid tr.ab-count-row .ab-name { background: var(--mist); font-weight: 600; color: var(--navy-800); }
+.ab-mini-grid tr.ab-count-row td.ab-we { background: #E8ECF3; }
+
 /* Administration : agenda commun */
 .aa-cal { margin-top: var(--space-5); display: grid; gap: var(--space-3); }
 .aa-cal h2 { margin: 0; font-size: 1.6rem; }
