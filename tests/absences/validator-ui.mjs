@@ -142,15 +142,43 @@ try {
   ok('sélection au clavier (Entrée)');
   await p.locator('#ab-todo-side button[aria-label="Semaine suivante"]').click();
   await p.waitForFunction(() => /30\.11\.2026 – 18\.12\.2026/.test(document.querySelector('#ab-todo-side .ab-mini-range')?.textContent || ''));
+  assert.equal(await p.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Semaine suivante', 'focus redonné au bouton ›');
   await p.locator('#ab-todo-side button[aria-label="Semaine précédente"]').click();
   await p.waitForFunction(() => /23\.11\.2026 – 11\.12\.2026/.test(document.querySelector('#ab-todo-side .ab-mini-range')?.textContent || ''));
+  assert.equal(await p.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Semaine précédente', 'focus redonné au bouton ‹');
+  ok('navigation d\'une semaine, focus conservé sur le bouton utilisé');
+
+  // Sélection au focus : saisir dans la 2e carte la sélectionne ; groupe nommé ; commentaire conservé au changement de largeur
+  assert.equal(await cardsLoc.nth(1).getAttribute('role'), 'group');
+  assert.match(await cardsLoc.nth(1).getAttribute('aria-label'), /Erik Fictif, 07\.12\.2026 – 11\.12\.2026/);
+  await cardsLoc.nth(1).locator('.ab-comment input').focus();
+  assert.equal(await cardsLoc.nth(1).getAttribute('aria-current'), 'true', 'sélection au focus dans la carte');
+  await p.waitForFunction(() => /07\.12\.2026/.test(document.querySelector('#ab-todo-side .ab-mini-range')?.textContent || ''));
+  await p.keyboard.type('Pour avis');
+  await p.setViewportSize({ width: 900, height: 900 });
+  await p.locator('#ab-todo-list .ab-mini-toggle').first().waitFor();
+  assert.equal(await p.locator('#ab-todo-list article').nth(1).locator('.ab-comment input').inputValue(), 'Pour avis', 'commentaire conservé');
+  await p.setViewportSize({ width: 1280, height: 900 });
+  await p.locator('#ab-todo-side .ab-mini-grid').waitFor();
+  ok('sélection au focus, carte nommée, commentaire conservé au passage du seuil');
+
+  // Ouvrir dans le planning : filtre temporaire, aucune préférence écrite
   const prefsBefore = await p.evaluate(() => localStorage.getItem('onconic.absences.v1'));
   await p.locator('#ab-todo-side').getByRole('button', { name: 'Ouvrir dans le planning' }).click();
   assert.equal(await p.locator('#ab-t-plan').getAttribute('aria-selected'), 'true');
   assert.equal(await p.locator('#ab-scroll table.ab-win').count(), 1, 'fenêtre glissante');
-  assert.match(await p.locator('#ab-title').innerText(), /23\.11\.2026/);
-  assert.equal(await p.evaluate(() => localStorage.getItem('onconic.absences.v1')), prefsBefore, 'préférences enregistrées intactes');
-  ok('navigation d\'une semaine, ouverture dans le planning sans écrire de préférence');
+  assert.match(await p.locator('#ab-title').innerText(), /\d\d\.\d\d\.2026/);
+  assert.equal(await p.locator('#ab-temp').isVisible(), true, 'mention de la vue temporaire');
+  assert.equal(await p.locator('#ab-scroll tbody tr:not(.ab-cal) th .ab-pname').count(), 4, 'les 4 membres de Thoracique');
+  assert.equal(await p.locator('#ab-scope').inputValue(), 'mine', 'sélecteur inchangé');
+  assert.equal(await p.evaluate(() => localStorage.getItem('onconic.absences.v1')), prefsBefore, 'préférences intactes');
+  await p.locator('#ab-rows').selectOption('5');
+  const saved = await p.evaluate(() => JSON.parse(localStorage.getItem('onconic.absences.v1')));
+  assert.equal(saved.scope, 'mine', 'le filtre temporaire n\'est jamais enregistré');
+  assert.equal(await p.locator('#ab-scroll tbody tr:not(.ab-cal) th .ab-pname').count(), 4, 'pas tronqué par « lignes affichées »');
+  await p.getByRole('button', { name: 'Revenir à mes réglages' }).click();
+  assert.equal(await p.locator('#ab-temp').isVisible(), false);
+  ok('ouverture dans le planning : filtre temporaire, non tronqué, non enregistré, retirable');
   await p.context().close();
 
   // ===== À valider, 390 px =====

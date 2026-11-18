@@ -17,7 +17,7 @@
   const state = {
     ctx: null, people: [], clinics: [], month: null, cache: new Map(), cur: null, view: "month", win: { start: null }, ov: { clinic: "", year: new Date().getFullYear() }, prefs: { scope: "mine", ids: [], rows: 20, order: [], winLen: 42 },
     mine: [], mineWarn: null, agendaCtx: null, agendaStatus: {}, agendaFilter: "todo", secOf: [], todo: [], rejected: [], who: "", drafts: [], approvals: new Map(), whoApprovals: new Map(),
-    todoLoaded: false, mini: { sel: null, shifts: new Map(), open: new Set(), drawn: "", stamp: 0 }
+    todoLoaded: false, todoTried: false, todoAt: 0, detailTok: 0, tempScope: null, comments: new Map(), mini: { sel: null, shifts: new Map(), open: new Set(), drawn: "", stamp: 0 }
   };
 
   // ----- Utilitaires -----
@@ -159,7 +159,8 @@
     const me = state.ctx.me;
     const { scope, ids } = state.prefs;
     let list;
-    if (scope === "all") list = state.people.slice();
+    if (state.tempScope) { const set = new Set(state.tempScope.ids); list = state.people.filter((p) => set.has(p.id)); }
+    else if (scope === "all") list = state.people.slice();
     else if (scope === "custom") { const set = new Set(ids); list = state.people.filter((p) => set.has(p.id)); }
     else if (scope === "mine") {
       const mine = state.ctx.clinics || [];
@@ -235,7 +236,7 @@
     }
     state.cur = { byUser, cal };
     const all = selection();
-    const limit = state.prefs.rows;
+    const limit = state.tempScope ? 0 : state.prefs.rows;
     const people = limit ? all.slice(0, limit) : all;
     $("ab-shown").textContent = all.length
       ? `${plur(people.length, "personne affichée", "personnes affichées")}` + (all.length > people.length ? ` sur ${all.length} (augmentez « Lignes affichées » pour voir les autres)` : "")
@@ -347,6 +348,9 @@
   // Interface du planning selon la vue : boutons, titres, contrôles utiles seulement
   function chrome() {
     const v = state.view;
+    const tb = $("ab-temp");
+    tb.hidden = !state.tempScope || v === "year";
+    if (state.tempScope) tb.querySelector("span").textContent = `Vue ouverte depuis À valider : ${state.tempScope.label}.`;
     $("ab-view").replaceChildren(...VIEWS.map(([k, label]) => {
       const b = button(label, "ug-chip", () => setView(k));
       b.setAttribute("aria-pressed", String(v === k));
@@ -419,7 +423,7 @@
     }
     state.cur = { byUser, cal };
     const all = selection();
-    const limit = state.prefs.rows;
+    const limit = state.tempScope ? 0 : state.prefs.rows;
     const people = limit ? all.slice(0, limit) : all;
     shownLine(all, people);
     $("ab-scroll").replaceChildren(buildWindow(days, byUser, cal, people));
@@ -519,7 +523,7 @@
     if (mini && mini.count) {
       const tr = el("tr", "ab-count-row");
       const th = el("th", "ab-name"); th.scope = "row";
-      th.append(el("span", "ab-pname", "Absents par jour"));
+      th.append(el("span", "ab-pname", "Absents ou en demande (personnes affichées)"));
       tr.append(th);
       days.forEach((day, i) => {
         const n = people.filter((p) => (byUser.get(p.id) || []).some((x) => x.start_date <= day && day <= x.end_date)).length;
@@ -631,9 +635,20 @@
     if (!a) return;
     const p = people.get(userId);
     const pending = a.status === "requested" || !!a.change_type;
-    // Décision possible : la demande figure dans « À valider » de cette personne (chargée à la demande si besoin)
-    if (pending && !state.todoLoaded) {
-      try { const { data, error } = await sb.rpc("absence_to_validate"); if (!error) { state.todoLoaded = true; state.todo = normTodo(data); } } catch (_) { /* pas de décision proposée */ }
+    const tok = ++state.detailTok;
+    // Décision possible : la demande figure dans « À valider » de cette personne. Chargée à la demande (une seule tentative par session,
+    // sauf pour un validateur, dont la liste est rafraîchie si elle date de plus de 60 s)
+    const validator = state.isDir || state.ctx.validates.length > 0;
+    const stale = state.todoLoaded && validator && Date.now() - state.todoAt > 60000;
+    if (pending && (!state.todoTried || stale)) {
+      state.todoTried = true;
+      const box0 = $("ab-detail");
+      box0.replaceChildren(el("p", "muted", "Chargement…")); box0.hidden = false;
+      try {
+        const { data, error } = await sb.rpc("absence_to_validate");
+        if (!error) { state.todoLoaded = true; state.todoAt = Date.now(); state.todo = normTodo(data); }
+      } catch (_) { /* pas de décision proposée */ }
+      if (tok !== state.detailTok) return;
     }
     const t = pending ? state.todo.find((x) => String(x.id) === String(a.id)) : null;
     const box = $("ab-detail");
@@ -690,6 +705,7 @@
     renderOrder();
   }
   function setCustom(ids) {
+    state.tempScope = null;
     state.prefs.scope = "custom"; state.prefs.ids = ids;
     savePrefs(); fillScope(); renderGrid();
   }
@@ -1257,7 +1273,7 @@
   async function loadTodo() {
     const { data, error } = await sb.rpc("absence_to_validate");
     if (error) return say($("ab-todo-msg"), "Chargement impossible : " + error.message, "error");
-    state.todoLoaded = true;
+    state.todoLoaded = true; state.todoTried = true; state.todoAt = Date.now();
     state.todo = normTodo(data);
     renderTodo();
     if (state.isDir) loadOpinions();
@@ -1385,6 +1401,8 @@
     const colSteps = Array.isArray(a.steps) ? a.steps : [];
     const mineVisa = colSteps.length ? colSteps.some((x) => x.mine && x.kind === "visa") : st.kind === "visa";
     const comment = el("input"); comment.type = "text"; comment.maxLength = 500; comment.placeholder = "Commentaire (obligatoire pour un refus)";
+    comment.value = state.comments.get(String(a.id)) || "";
+    comment.addEventListener("input", () => state.comments.set(String(a.id), comment.value));
     const lab = el("label", "ab-comment", "Commentaire");
     lab.append(comment);
     const out = el("p", "form-msg"); out.setAttribute("role", "status");
@@ -1393,6 +1411,7 @@
       b1.disabled = b2.disabled = true;
       const { data: res, error } = await sb.rpc("absence_decide", { p_id: a.id, p_approve: approve, p_comment: comment.value.trim() });
       if (error) { b1.disabled = b2.disabled = false; return say(out, error.message, "error"); }
+      state.comments.delete(String(a.id));
       mailer();
       await onDone(approve
         ? (res === "requested" ? `${a.name} : votre validation est enregistrée ; il reste des validateurs ou le visa de la direction.` : `${a.name} : accepté, la notification est mise en file.`)
@@ -1422,7 +1441,7 @@
     const sh = (state.mini.shifts.get(String(a.id)) || 0) * 7;
     return { start: addD(start, sh), end: addD(end, sh), shift: sh / 7 };
   }
-  async function miniPlanning(box, a) {
+  async function miniPlanning(box, a, refocus) {
     const tok = String(Math.random());
     box.dataset.tok = tok;
     const { start, end, shift } = miniSpan(a);
@@ -1437,14 +1456,15 @@
     const head = el("div", "ab-mini-head");
     head.append(el("strong", "ab-mini-title", `Planning de ${clinics.join(", ") || "la clinique"}`));
     const nav = el("div", "ab-mini-nav");
-    const prev = button("‹", "btn btn-outline", () => { state.mini.shifts.set(String(a.id), shift - 1); miniPlanning(box, a); });
+    const prev = button("‹", "btn btn-outline", () => { state.mini.shifts.set(String(a.id), shift - 1); miniPlanning(box, a, "Semaine précédente"); });
     prev.setAttribute("aria-label", "Semaine précédente");
-    const next = button("›", "btn btn-outline", () => { state.mini.shifts.set(String(a.id), shift + 1); miniPlanning(box, a); });
+    const next = button("›", "btn btn-outline", () => { state.mini.shifts.set(String(a.id), shift + 1); miniPlanning(box, a, "Semaine suivante"); });
     next.setAttribute("aria-label", "Semaine suivante");
     nav.append(prev, el("span", "ab-mini-range", `${fmtCH(start)} – ${fmtCH(end)}`), next,
       button("Ouvrir dans le planning", "btn btn-outline", () => openInPlanning(a, start)));
     head.append(nav);
     box.append(head);
+    if (refocus) { const f = head.querySelector(`[aria-label="${refocus}"]`); if (f) f.focus(); }
     const body = el("div", "ab-scroll ab-mini-scroll");
     body.tabIndex = 0; body.setAttribute("role", "region"); body.setAttribute("aria-label", `Planning de ${clinics.join(", ") || "la clinique"}, ${fmtCH(start)} au ${fmtCH(end)}`);
     body.append(el("p", "muted ab-mini-load", "Chargement…"));
@@ -1478,19 +1498,17 @@
       c.classList.toggle("ab-sel", on);
       if (on) c.setAttribute("aria-current", "true"); else c.removeAttribute("aria-current");
     });
-    if (state.mini.drawn === id + "|" + state.mini.stamp) return;
+    if ($("ab-p-todo").hidden || state.mini.drawn === id + "|" + state.mini.stamp) return;
     state.mini.drawn = id + "|" + state.mini.stamp;
     miniPlanning($("ab-todo-side"), a);
   }
-  // « Ouvrir dans le planning » : fenêtre glissante sur ces semaines, personnes de ces cliniques (sans enregistrer de préférence)
+  // « Ouvrir dans le planning » : fenêtre glissante sur ces semaines, personnes de ces cliniques (filtre temporaire, aucune préférence modifiée)
   function openInPlanning(a, start) {
     const clinics = a.clinics || [];
-    const ids = state.people.filter((p) => p.id === a.user_id || sharesClinic(p, clinics)).map((p) => p.id);
-    if (clinics.length === 1 && state.clinics.some((c) => c.clinic === clinics[0])) state.prefs.scope = clinics[0];
-    else { state.prefs.scope = "custom"; state.prefs.ids = ids; }
+    // Filtre temporaire, séparé des préférences : jamais enregistré
+    state.tempScope = { ids: state.people.filter((p) => p.id === a.user_id || sharesClinic(p, clinics)).map((p) => p.id), label: clinics.join(", ") || a.name };
     state.view = "window";
     state.win.start = start;
-    fillScope();
     setTab("plan");
   }
 
@@ -1553,7 +1571,10 @@
       cards.set(String(a.id), card);
       if (wide) {
         card.tabIndex = 0;
+        card.setAttribute("role", "group");
+        card.setAttribute("aria-label", `Demande de ${a.name}, ${period(a.start_date, a.end_date)}`);
         card.classList.add("ab-pick-card");
+        card.addEventListener("focusin", () => selectTodo(a.id));
         card.addEventListener("click", (e) => { if (!e.target.closest("input, button, a, summary, label, select, textarea")) selectTodo(a.id); });
         card.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === card) { e.preventDefault(); selectTodo(a.id); } });
       } else {
@@ -1564,11 +1585,11 @@
           toggle.setAttribute("aria-expanded", String(open));
           toggle.textContent = open ? "Masquer le planning de la clinique" : "Voir le planning de la clinique";
           open ? state.mini.open.add(String(a.id)) : state.mini.open.delete(String(a.id));
-          if (open) miniPlanning(holder, a);
+          if (open && !$("ab-p-todo").hidden) miniPlanning(holder, a);
         });
         toggle.setAttribute("aria-expanded", String(!holder.hidden));
         card.append(toggle, holder);
-        if (!holder.hidden) miniPlanning(holder, a);
+        if (!holder.hidden && !$("ab-p-todo").hidden) miniPlanning(holder, a);
       }
       list.append(card);
     }
@@ -2133,7 +2154,8 @@
     // Planning
     fillScope();
     $("ab-rows").value = String(state.prefs.rows);
-    $("ab-scope").addEventListener("change", (e) => { state.prefs.scope = e.target.value; savePrefs(); fillScope(); renderGrid(); if (!$("ab-pick").hidden) renderPicker(); });
+    $("ab-scope").addEventListener("change", (e) => { state.tempScope = null; state.prefs.scope = e.target.value; savePrefs(); fillScope(); renderGrid(); if (!$("ab-pick").hidden) renderPicker(); });
+    $("ab-temp-back").addEventListener("click", () => { state.tempScope = null; renderGrid(); if (!$("ab-pick").hidden) renderPicker(); });
     $("ab-rows").addEventListener("change", (e) => { state.prefs.rows = Number(e.target.value); savePrefs(); renderGrid(); });
     if (window.monthPicker) window.monthPicker($("ab-title"), { get: pickerValue, onPick: pickMonth });
     $("ab-prev").addEventListener("click", () => shiftView(-1));
