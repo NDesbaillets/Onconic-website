@@ -20,6 +20,7 @@ test('comptes temporaires : droits, fin d\'accès, blocage et journal', async (t
       await db.exec(await read('supabase/migrations/' + f));
     const mig = await read('supabase/migrations/202611160002_comptes_temporaires.sql');
     await db.exec(mig); await db.exec(mig); // réexécutable
+    for (const m of ['202611170001_circuit_absences', '202611180001_circuit_configurable']) await db.exec(await read(`supabase/migrations/${m}.sql`));
     // 1 admin, 2 direction, 3 assistante cadre admin, 4 assistante, 5 temporaire actif, 6 temporaire échu, 7 médecin
     for (const [n, role] of [[1, 'admin'], [2, 'direction'], [3, 'assistant'], [4, 'assistant'], [5, 'assistant'], [6, 'assistant'], [7, 'clinician']]) {
       await db.query('insert into auth.users(id,email) values($1,$2)', [uid(n), `t${n}@example.invalid`]);

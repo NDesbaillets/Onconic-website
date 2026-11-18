@@ -11,7 +11,7 @@ import { Buffer } from "node:buffer";
 import nodemailer from "npm:nodemailer@6.9.16";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import webpush from "npm:web-push@3.6.7";
-import { type Abs, buildEmail, buildFormEmail, type Kind, type Lang } from "./message.ts";
+import { type Abs, buildAgendaEmail, buildEmail, buildFormEmail, type Kind, type Lang } from "./message.ts";
 import { wants } from "./prefs.ts";
 import { buildAbsenceForm, FILE_LABEL, type FormData, stamp } from "./form.ts";
 
@@ -44,7 +44,10 @@ async function vapidKeys() {
   return row!;
 }
 
-type Row = { id: number; kind: Kind | "form"; recipient: string | null; absence_ids: number[]; payload: { owner?: string; by?: string; comment?: string; reminder?: boolean; action?: string; document_id?: number; absences?: (Abs & { user_id: string })[] } };
+type Row = { id: number; kind: Kind | "form" | "form_copy"; recipient: string | null; absence_ids: number[]; payload: { secretary?: boolean; periods?: { start: string; end: string }[]; owner?: string; by?: string; step_label?: string; comment?: string; reminder?: boolean; action?: string; document_id?: number; absences?: (Abs & { user_id: string })[] } };
+
+// Message d'erreur enregistré dans la boîte d'envoi : jamais d'adresse e-mail (le serveur SMTP peut citer le destinataire)
+const safeError = (e: unknown) => String((e as Error)?.message ?? e).replace(/[^\s@<>"',;:()]+@[^\s@<>"',;:()]+/g, "[adresse]").slice(0, 250);
 
 const ROLE_LABEL: Record<string, string> = { clinician: "médecin assistant", cdc: "chef de clinique", cadre: "médecin cadre" };
 const slug = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "membre";
@@ -59,6 +62,7 @@ async function renderForm(ids: number[], documentId?: number) {
   const now = d.generated_at ?? new Date().toISOString();
   const form: FormData = {
     role: d.role, owner: d.owner, clinics: d.clinics ?? [], requestedAt: d.requested_at ?? now, absences: d.absences.map((a: Abs) => externalAbsence(a)), signers: (d.signers ?? []).map((s: { name: string; at: string }) => ({ name: s.name, at: s.at })), direction: d.direction ?? null,
+    extra: (d.extra ?? []).map((x: { label: string; name: string; at: string; slot: string | null }) => ({ label: x.label, name: x.name, at: x.at, slot: x.slot ?? null })),
     generatedAt: now, ref: `OC-ABS-D${d.document_id}`, action: d.action,
   };
   const bytes = await buildAbsenceForm(form, logo);
@@ -79,7 +83,32 @@ async function sendForm(row: Row, transport: ReturnType<typeof nodemailer.create
       attachments: [{ filename: r.file, content: Buffer.from(r.bytes), contentType: "application/pdf" }] });
     return null;
   } catch (e) {
-    return String((e as Error).message ?? e).slice(0, 250);
+    return safeError(e);
+  }
+}
+
+// Diffusion du PDF validé (blocs, responsables, secrétaires, personnalisation) : un second e-mail avec le même PDF et les plages Ultragenda.
+// Destinataires en Bcc s'ils sont plusieurs ; l'expéditeur est le destinataire visible (To). Aucun texte libre.
+async function sendFormCopy(row: Row, transport: ReturnType<typeof nodemailer.createTransport> | null): Promise<string | null> {
+  const documentId = row.payload.document_id;
+  if (!documentId) return "__skip__";
+  const { data: rcp, error: e1 } = await admin.rpc("absence_form_recipients", { p_document: documentId });
+  if (e1) return "form_copy_recipients";
+  const emails: string[] = Array.isArray(rcp?.emails) ? rcp.emails : [];
+  if (!emails.length) return "__skip__";
+  const { data: mail, error: e2 } = await admin.rpc("absence_agenda_mail", { p_document: documentId });
+  if (e2) return "form_copy_agenda";
+  if (!mail) return "__skip__"; // rien à bloquer ni débloquer (tâche remplacée)
+  if (!transport) return "SMTP_PASSWORD manquant";
+  const r = await renderForm(row.absence_ids, documentId);
+  if ("error" in r) return "__skip__";
+  const m = buildAgendaEmail({ owner: mail.owner, action: mail.action, file: r.file, block: mail.block ?? [], unblock: mail.unblock ?? [] });
+  try {
+    await transport.sendMail({ from: `Onconic <${SMTP_USER}>`, to: emails.length === 1 ? emails[0] : SMTP_USER, bcc: emails.length === 1 ? undefined : emails, subject: m.subject, text: m.text, html: m.html,
+      attachments: [{ filename: r.file, content: Buffer.from(r.bytes), contentType: "application/pdf" }] });
+    return null;
+  } catch (e) {
+    return safeError(e);
   }
 }
 
@@ -90,11 +119,12 @@ function b64(bytes: Uint8Array): string {
 
 // Adresses de la boîte commune de la direction (secret ABSENCE_FORMS_TO, séparées par une virgule)
 const sharedBox = () => (Deno.env.get("ABSENCE_FORMS_TO") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-const DIRECTION_KINDS = ["to_direction", "to_opinion"];
+const DIRECTION_KINDS = ["to_direction"]; // peer_rejected va à chaque personne concernée ; to_opinion : voir toDirection
 const VALIDATE_KINDS = ["to_validate", "to_validate_change"];
 
 async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createTransport> | null, sentShared: Set<string>): Promise<string | null> {
   if (row.kind === "form") return await sendForm(row, transport);
+  if (row.kind === "form_copy") return await sendFormCopy(row, transport);
   if (!row.recipient) return "__skip__";
   const { data: allowed, error: scopeError } = await admin.rpc("absence_notification_ids", { p_recipient: row.recipient, p_ids: row.absence_ids, p_kind: row.kind });
   if (scopeError) return "notification_scope";
@@ -114,13 +144,19 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
   const lang: Lang = prof?.lang === "en" ? "en" : "fr";
   const first = absences[0];
   const { data: ownerName } = await admin.rpc("member_name", { p_user: first.user_id });
-  const { data: appr } = await admin.from("absence_approvals").select("validator_id, decision").eq("absence_id", first.id);
+  const { data: appr } = await admin.from("absence_approvals").select("validator_id, decision, step").eq("absence_id", first.id);
+  const { data: cur } = await admin.from("absences").select("stage, circuit").eq("id", first.id).maybeSingle();
   const names = async (ids: string[]) => (await Promise.all(ids.map(async (i) => (await admin.rpc("member_name", { p_user: i })).data as string))).filter(Boolean);
-  const validators = await names((appr ?? []).map((a) => a.validator_id));
+  // « à valider par » : les personnes de l'étape en cours seulement (circuit configurable, plusieurs étapes) ; « validée par » : toutes les étapes
+  // stage = colonne en cours, step = position de l'étape : on retient les positions des étapes de la colonne (col, à défaut la position)
+  const curSteps = Array.isArray(cur?.circuit) ? (cur!.circuit as { pos?: number; col?: number | null }[]) : null;
+  const colPos = new Set((curSteps ?? []).filter((e) => (e.col ?? e.pos) === cur?.stage).map((e) => e.pos));
+  const inCol = (step: number) => cur?.stage == null || (curSteps ? colPos.has(step) : step === cur.stage);
+  const validators = [...new Set(await names([...new Set((appr ?? []).filter((a) => inCol(a.step)).map((a) => a.validator_id))]))];
   const approvers = await names((appr ?? []).filter((a) => a.decision === "approved").map((a) => a.validator_id));
 
   const msg = buildEmail({
-    lang, kind: row.kind, owner: row.payload.owner ?? (ownerName as string) ?? "Un membre", by: row.payload.by, comment: null, reminder: row.payload.reminder, action: row.payload.action,
+    lang, kind: row.kind, owner: row.payload.owner ?? (ownerName as string) ?? "Un membre", by: row.payload.by, comment: null, stepLabel: row.payload.step_label, reminder: row.payload.reminder, action: row.payload.action, secretary: !!row.payload.secretary, periods: row.payload.periods,
     absences: absences as unknown as Abs[], validators, approvers,
   });
 
@@ -147,7 +183,8 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
   if (!wantsEmail) return pushSent ? null : "__skip__";
 
   // E-mail : boîte commune de la direction pour ses messages (un seul envoi par message), sinon adresse du destinataire
-  const toDirection = DIRECTION_KINDS.includes(row.kind) || (VALIDATE_KINDS.includes(row.kind) && prof?.role === "direction");
+  // to_opinion : boîte commune seulement pour le pré-avis de la direction (destinataire direction, sans step_label) ; une personne d'une étape reçoit l'avis à son adresse
+  const toDirection = DIRECTION_KINDS.includes(row.kind) || (row.kind === "to_opinion" && prof?.role === "direction" && !row.payload.step_label) || (VALIDATE_KINDS.includes(row.kind) && prof?.role === "direction");
   const box = toDirection ? sharedBox() : [];
   let to: string | string[] | undefined;
   if (box.length) {
@@ -166,7 +203,7 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
     else await send();
     return null;
   } catch (e) {
-    return String((e as Error).message ?? e).slice(0, 250);
+    return safeError(e);
   }
 }
 
@@ -215,7 +252,7 @@ Deno.serve(async (req) => {
   const sentShared = new Set<string>();
   for (const row of rows as Row[]) {
     let err: string | null;
-    try { err = await sendOne(row, transport, sentShared); } catch (e) { err = String((e as Error).message ?? e).slice(0, 250); }
+    try { err = await sendOne(row, transport, sentShared); } catch (e) { err = safeError(e); }
     if (err === "__skip__") {
       await admin.rpc("absence_outbox_skip", { p_id: row.id }); skipped++;
     } else {

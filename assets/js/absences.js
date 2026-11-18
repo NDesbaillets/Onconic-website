@@ -16,7 +16,8 @@
   const $ = (id) => document.getElementById(id);
   const state = {
     ctx: null, people: [], clinics: [], month: null, cache: new Map(), cur: null, view: "month", win: { start: null }, ov: { clinic: "", year: new Date().getFullYear() }, prefs: { scope: "mine", ids: [], rows: 20, order: [], winLen: 42 },
-    mine: [], mineWarn: null, todo: [], rejected: [], who: "", drafts: [], approvals: new Map(), whoApprovals: new Map()
+    mine: [], mineWarn: null, agendaCtx: null, agendaStatus: {}, agendaFilter: "todo", secOf: [], todo: [], rejected: [], who: "", drafts: [], approvals: new Map(), whoApprovals: new Map(),
+    todoLoaded: false, todoTried: false, todoAt: 0, detailTok: 0, tempScope: null, comments: new Map(), mini: { sel: null, shifts: new Map(), open: new Set(), drawn: "", stamp: 0 }
   };
 
   // ----- Utilitaires -----
@@ -158,7 +159,8 @@
     const me = state.ctx.me;
     const { scope, ids } = state.prefs;
     let list;
-    if (scope === "all") list = state.people.slice();
+    if (state.tempScope) { const set = new Set(state.tempScope.ids); list = state.people.filter((p) => set.has(p.id)); }
+    else if (scope === "all") list = state.people.slice();
     else if (scope === "custom") { const set = new Set(ids); list = state.people.filter((p) => set.has(p.id)); }
     else if (scope === "mine") {
       const mine = state.ctx.clinics || [];
@@ -234,7 +236,7 @@
     }
     state.cur = { byUser, cal };
     const all = selection();
-    const limit = state.prefs.rows;
+    const limit = state.tempScope ? 0 : state.prefs.rows;
     const people = limit ? all.slice(0, limit) : all;
     $("ab-shown").textContent = all.length
       ? `${plur(people.length, "personne affichée", "personnes affichées")}` + (all.length > people.length ? ` sur ${all.length} (augmentez « Lignes affichées » pour voir les autres)` : "")
@@ -346,6 +348,9 @@
   // Interface du planning selon la vue : boutons, titres, contrôles utiles seulement
   function chrome() {
     const v = state.view;
+    const tb = $("ab-temp");
+    tb.hidden = !state.tempScope || v === "year";
+    if (state.tempScope) tb.querySelector("span").textContent = `Vue ouverte depuis À valider : ${state.tempScope.label}.`;
     $("ab-view").replaceChildren(...VIEWS.map(([k, label]) => {
       const b = button(label, "ug-chip", () => setView(k));
       b.setAttribute("aria-pressed", String(v === k));
@@ -418,14 +423,25 @@
     }
     state.cur = { byUser, cal };
     const all = selection();
-    const limit = state.prefs.rows;
+    const limit = state.tempScope ? 0 : state.prefs.rows;
     const people = limit ? all.slice(0, limit) : all;
     shownLine(all, people);
+    $("ab-scroll").replaceChildren(buildWindow(days, byUser, cal, people));
+    $("ab-detail").hidden = true;
+  }
+  // Tableau d'une fenêtre de jours pour des personnes données (planning et mini-planning de « À valider »).
+  // opts.mini : { hl: Set de jours surlignés, reqId : personne mise en évidence, count : ligne « absents par jour » } ; sans effet sur le planning principal.
+  function buildWindow(days, byUser, cal, people, opts) {
+    const mini = opts || null;
+    const len = days.length, from = days[0], to = days[len - 1];
     const today = todayIso();
-    const narrow = len >= 91;
+    const narrow = !mini && len >= 91;
+    const hl = mini && mini.hl;
+    const hlc = (day) => (hl && hl.has(day) ? " ab-hl" : "");
     const wk = (day) => { const w = pd(day).getUTCDay(); return w === 0 || w === 6 || holidayOf(day); };
     const ms = (day, i) => (i > 0 && day.slice(8) === "01" ? " ab-ms" : "");
-    const table = el("table", "ab-grid ab-win ab-w" + len + (narrow ? " ab-narrow" : len > 28 ? " ab-mid" : ""));
+    const table = el("table", "ab-grid ab-win ab-w" + len + (narrow ? " ab-narrow" : len > 28 ? " ab-mid" : "") + (mini ? " ab-mini-grid" : ""));
+    if (mini) table.style.minWidth = `${120 + len * 22}px`;
     table.append(el("caption", "visually-hidden", `Absences du ${fmtCH(from)} au ${fmtCH(to)}`));
     const h1 = el("tr"), h2 = el("tr");
     const corner = el("th", "ab-name", "Collaborateur");
@@ -442,7 +458,7 @@
     }
     days.forEach((day, i) => {
       const d = Number(day.slice(8)), w = pd(day).getUTCDay();
-      const th = el("th", "ab-d" + (wk(day) ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i));
+      const th = el("th", "ab-d" + (wk(day) ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i) + hlc(day));
       th.scope = "col"; th.title = fmtCH(day);
       if (narrow) {
         const show = w === 1 || d === 1;
@@ -458,7 +474,7 @@
     cth.append(el("span", "ab-pname", "Fériés et événements"), el("span", "ab-pclinic muted", "Vacances scolaires VD, agenda commun"));
     calTr.append(cth);
     days.forEach((day, i) => {
-      const td = el("td", "ab-c ab-cal-c" + (pd(day).getUTCDay() % 6 === 0 ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i));
+      const td = el("td", "ab-c ab-cal-c" + (pd(day).getUTCDay() % 6 === 0 ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i) + hlc(day));
       const list = calEntries(day, cal);
       if (list.length) {
         const top = list[0];
@@ -468,13 +484,13 @@
         const label = list.map((x) => x.label).join(" ; ");
         td.title = label;
         const prev = i > 0 ? days[i - 1] : null;
-        if (!prev || calEntries(prev, cal).map((x) => x.label).join() !== list.map((x) => x.label).join()) { td.tabIndex = 0; td.setAttribute("role", "button"); td.setAttribute("aria-label", `${fmtCH(day)} : ${label}`); }
+        if (!mini && (!prev || calEntries(prev, cal).map((x) => x.label).join() !== list.map((x) => x.label).join())) { td.tabIndex = 0; td.setAttribute("role", "button"); td.setAttribute("aria-label", `${fmtCH(day)} : ${label}`); }
       }
       calTr.append(td);
     });
     body.append(calTr);
     for (const p of people) {
-      const tr = el("tr", p.is_me ? "ab-me" : "");
+      const tr = el("tr", (p.is_me ? "ab-me" : "") + (mini && mini.reqId === p.id ? " ab-req" : ""));
       const th = el("th", "ab-name"); th.scope = "row";
       th.append(el("span", "ab-pname", p.name + (p.is_me ? " (moi)" : "")), el("span", "ab-pclinic muted", (p.clinics || []).join(", ")));
       tr.append(th);
@@ -483,28 +499,42 @@
         const day = days[i];
         const a = list.find((x) => x.start_date <= day && day <= x.end_date);
         if (!a) {
-          tr.append(el("td", "ab-c" + (wk(day) ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i)));
+          tr.append(el("td", "ab-c" + (wk(day) ? " ab-we" : "") + (day === today ? " ab-today" : "") + ms(day, i) + hlc(day)));
           i++;
           continue;
         }
-        let j = i; while (j + 1 < len && days[j + 1] <= a.end_date) j++;
+        // Mini-planning : une barre ne traverse pas la limite des jours surlignés
+        let j = i; while (j + 1 < len && days[j + 1] <= a.end_date && (!hl || hl.has(days[j + 1]) === hl.has(day))) j++;
         const span = j - i + 1, left = a.start_date < from, right = a.end_date > to;
-        const td = el("td", `ab-c ab-bar-c ab-k-${a.kind} ab-s-${a.status}` + (a.change_type ? " ab-chg" : "") + ms(day, i));
+        const td = el("td", `ab-c ab-bar-c ab-k-${a.kind} ab-s-${a.status}` + (a.change_type ? " ab-chg" : "") + ms(day, i) + hlc(day));
         td.colSpan = span;
         const name = span >= 4 ? KINDS[a.kind][0] : KINDS[a.kind][1];
         td.textContent = [left ? "◂" : "", name, span >= 8 ? `${fmtDM(a.start_date)} – ${fmtDM(a.end_date)}` : "", right ? "▸" : ""].filter(Boolean).join(" ");
-        td.dataset.id = a.id; td.dataset.user = p.id;
         const label = `${p.name} : ${KINDS[a.kind][0]}, ${STATUS[a.status].toLowerCase()}, ${period(a.start_date, a.end_date)}`
           + (a.change_type === "delete" ? " (suppression demandée)" : a.change_type === "modify" ? " (modification demandée)" : "");
-        td.title = label; td.tabIndex = 0; td.setAttribute("role", "button"); td.setAttribute("aria-label", label);
+        td.title = label;
+        if (!mini) { td.dataset.id = a.id; td.dataset.user = p.id; td.tabIndex = 0; td.setAttribute("role", "button"); td.setAttribute("aria-label", label); }
         tr.append(td);
         i = j + 1;
       }
       body.append(tr);
     }
+    // Mini-planning : nombre de personnes absentes (demandes comprises) chaque jour ouvrable
+    if (mini && mini.count) {
+      const tr = el("tr", "ab-count-row");
+      const th = el("th", "ab-name"); th.scope = "row";
+      th.append(el("span", "ab-pname", "Absents ou en demande (personnes affichées)"));
+      tr.append(th);
+      days.forEach((day, i) => {
+        const n = people.filter((p) => (byUser.get(p.id) || []).some((x) => x.start_date <= day && day <= x.end_date)).length;
+        const td = el("td", "ab-c" + (wk(day) ? " ab-we" : "") + ms(day, i) + hlc(day), !wk(day) && n ? String(n) : "");
+        if (!wk(day)) td.title = `${fmtCH(day)} : ${plur(n, "absent", "absents")}`;
+        tr.append(td);
+      });
+      body.append(tr);
+    }
     table.append(body);
-    $("ab-scroll").replaceChildren(table);
-    $("ab-detail").hidden = true;
+    return table;
   }
 
   // Vue d'ensemble : une clinique sur une année, une ligne par mois, un jour par colonne, teinte selon le nombre d'absents et le seuil
@@ -599,11 +629,28 @@
     box.hidden = false;
   }
 
-  function showDetail(userId, id) {
+  async function showDetail(userId, id) {
     const people = new Map(state.people.map((p) => [p.id, p]));
     const a = (state.cur.byUser.get(userId) || []).find((x) => String(x.id) === String(id));
     if (!a) return;
     const p = people.get(userId);
+    const pending = a.status === "requested" || !!a.change_type;
+    const tok = ++state.detailTok;
+    // Décision possible : la demande figure dans « À valider » de cette personne. Chargée à la demande (une seule tentative par session,
+    // sauf pour un validateur, dont la liste est rafraîchie si elle date de plus de 60 s)
+    const validator = state.isDir || state.ctx.validates.length > 0;
+    const stale = state.todoLoaded && validator && Date.now() - state.todoAt > 60000;
+    if (pending && (!state.todoTried || stale)) {
+      state.todoTried = true;
+      const box0 = $("ab-detail");
+      box0.replaceChildren(el("p", "muted", "Chargement…")); box0.hidden = false;
+      try {
+        const { data, error } = await sb.rpc("absence_to_validate");
+        if (!error) { state.todoLoaded = true; state.todoAt = Date.now(); state.todo = normTodo(data); }
+      } catch (_) { /* pas de décision proposée */ }
+      if (tok !== state.detailTok) return;
+    }
+    const t = pending ? state.todo.find((x) => String(x.id) === String(a.id)) : null;
     const box = $("ab-detail");
     box.replaceChildren();
     const head = el("div", "ab-detail-head");
@@ -611,12 +658,26 @@
     box.append(head);
     box.append(el("p", null, `${period(a.start_date, a.end_date)} · ${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}`));
     if (a.note) box.append(el("p", "muted", "Précision : " + a.note));
-    if (p && p.is_me && (a.status === "requested" || a.change_type)) {
+    if (t) {
+      const prog = t.progress || [];
+      box.append(el("p", "muted", prog.length ? `Validation : ${approvalCount(prog)} sur ${prog.length}` : "Validation par l'administration"), approvalsBlock(prog));
+    } else if (p && p.is_me && pending) {
       const rows = state.approvals.get(String(a.id)) || [];
       box.append(el("p", "muted", rows.length ? `Validation : ${approvalCount(rows)} sur ${rows.length}` : "Validation par l'administration"), approvalsBlock(rows));
     }
     if (a.change_type === "delete") box.append(el("p", "muted", "Suppression demandée, en attente de décision."));
     if (a.change_type === "modify") box.append(el("p", "muted", `Modification demandée : ${period(String(a.change_start).slice(0, 10), String(a.change_end).slice(0, 10))}, en attente de décision.`));
+    if (t) {
+      const ops = opinionsBlock(t.opinions);
+      if (ops) box.append(ops);
+      const w = warnBox(t.conflicts, "Attention : trop d'absences en même temps si vous validez");
+      if (w) box.append(w);
+      box.append(...decisionControls(t, async (msg) => {
+        await afterChange();
+        const done = el("p", "form-msg ok", msg); done.setAttribute("role", "status");
+        box.replaceChildren(done); box.hidden = false;
+      }));
+    }
     if (p && p.is_me) box.append(button("Gérer dans « Mes absences »", "btn btn-outline", () => setTab("mine")));
     box.hidden = false;
   }
@@ -644,6 +705,7 @@
     renderOrder();
   }
   function setCustom(ids) {
+    state.tempScope = null;
     state.prefs.scope = "custom"; state.prefs.ids = ids;
     savePrefs(); fillScope(); renderGrid();
   }
@@ -667,13 +729,17 @@
     btns.forEach((b) => (b.disabled = true));
     say(msg, "Préparation…");
     try {
-      const { data, error } = await sb.rpc("absence_request", { p_kind: kind, p_note: note, p_start: start, p_end: end });
+      const target = $("ab-for").value;
+      if ((target || "") !== (sd.target || "")) { sd.target = target; sd.pending = []; }
+      const { data, error } = target
+        ? await sb.rpc("absence_request_for", { p_user: target, p_kind: kind, p_note: note, p_start: start, p_end: end })
+        : await sb.rpc("absence_request", { p_kind: kind, p_note: note, p_start: start, p_end: end });
       if (error) return say(msg, error.message, "error");
       $("ab-note").value = "";
       if (openAfter) {
         say(msg, "");
         await loadDrafts();
-        await openSend((data.conflicts || []).concat(sd.pending || []));
+        await openSend((data.conflicts || []).concat(sd.pending || []), target);
         sd.pending = [];
       } else {
         sd.pending = (data.conflicts || []).concat(sd.pending || []);
@@ -697,19 +763,20 @@
   }
   async function afterChange() {
     state.cache.clear();
-    await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending(), (state.ctx.validates.length || state.isDir) ? Promise.all([loadTodo(), loadRejected()]) : null]);
+    await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending(), (state.ctx.validates.length || state.isDir) ? Promise.all([loadTodo(), loadRejected()]) : state.todoLoaded ? loadTodo() : null]);
   }
 
   // ----- Brouillons et popup d'envoi -----
-  const sd = { info: { validators: [], fallback: false }, conflicts: [], pending: [] };
+  const sd = { target: "", info: { validators: [], fallback: false }, conflicts: [], pending: [] };
   const names = (list) => list.map((v) => v.name).join(", ");
   async function loadDrafts() {
-    const [list, appr] = await Promise.all([sb.rpc("absence_list", { p_user: null }), sb.rpc("absence_approvals_all", { p_user: null })]);
-    state.drafts = (list.data || []).filter((a) => a.status === "draft").map((a) => Object.assign(a, { start_date: String(a.start_date).slice(0, 10), end_date: String(a.end_date).slice(0, 10) }));
-    state.approvals = groupApprovals(appr.data);
+    const tgt = sd.target || null;
+    const [list, appr] = await Promise.all([sb.rpc("absence_list", { p_user: tgt }), sb.rpc("absence_approvals_all", { p_user: tgt })]);
+    state.drafts = (list.data || []).filter((a) => a.status === "draft" && (!tgt || a.requested_by === state.ctx.me)).map((a) => Object.assign(a, { start_date: String(a.start_date).slice(0, 10), end_date: String(a.end_date).slice(0, 10) }));
+    if (!tgt) state.approvals = groupApprovals(appr.data);
     const n = state.drafts.length;
     $("ab-drafts").hidden = !n || $("sd").open;
-    $("ab-drafts-text").textContent = n ? `${plur(n, "demande", "demandes")} en brouillon, pas encore envoyée${n > 1 ? "s" : ""} aux validateurs.` : "";
+    $("ab-drafts-text").textContent = n ? `${plur(n, "demande", "demandes")} en brouillon, pas encore envoyée${n > 1 ? "s" : ""} aux validateurs${tgt ? " (pour " + secName(tgt) + ")" : ""}.` : "";
     if (!state.who) renderMine(); // l'avancement des validations vient d'arriver
   }
   function groupApprovals(rows) {
@@ -717,27 +784,42 @@
     for (const r of rows || []) { const k = String(r.absence_id); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }
     return m;
   }
-  async function openSend(conflicts) {
+  const secName = (id) => (state.secOf.find((c) => c.id === id) || {}).name || "votre médecin cadre";
+  async function openSend(conflicts, target) {
+    if (target !== undefined) { sd.target = target || ""; await loadDrafts(); }
     sd.conflicts = conflicts || [];
     $("sd-main").hidden = false; $("sd-confirm").hidden = true; $("sd-done").hidden = true;
     say($("sd-msg"), "");
-    const { data } = await sb.rpc("absence_my_validators");
+    const { data } = sd.target ? await sb.rpc("absence_my_validators_for", { p_user: sd.target }) : await sb.rpc("absence_my_validators");
     sd.info = data || { validators: [], fallback: false };
     renderSend();
     if (!$("sd").open) $("sd").showModal();
     $("ab-drafts").hidden = true;
   }
+  // 12 noms au plus venant du serveur ; au-delà, un résumé suivi des premiers noms
+  function listWho(info) {
+    const v = info.validators || [];
+    if (!v.length) return "";
+    return info.more > 0 ? `${info.summary || plur(v.length + info.more, "personne", "personnes")} (${names(v)} et ${plur(info.more, "autre", "autres")})` : names(v);
+  }
   function recipients() {
-    const v = sd.info.validators || [];
-    return v.length ? names(v) : "l'administration";
+    return (sd.info.validators || []).length ? listWho(sd.info) : "l'administration";
+  }
+  function ruleText(info) {
+    const st = info.steps || [];
+    const rules = new Set(st.map((x) => x.rule));
+    if (st.length > 1 && rules.size > 1) return `Règle selon l'étape : ${st.map((x) => `${x.label} (${x.rule === "any" ? "un seul suffit" : "tous"})`).join(" ; ")}.`;
+    return info.step_rule === "any" ? "Un seul de ces validateurs suffit à valider chaque absence." : "Chaque absence doit être validée par tous ces validateurs.";
   }
   function renderSend() {
     const v = sd.info.validators || [];
-    $("sd-to").textContent = !v.length ? "Aucun validateur n'est disponible pour l'instant : la demande sera adressée à l'administration."
-      : sd.info.fallback ? `Aucun validateur n'est désigné pour vos cliniques : votre demande sera envoyée à l'administration (${names(v)}).`
-      : `Vous allez envoyer une demande de validation à : ${names(v)}.`;
-    $("sd-rule").textContent = v.length > 1 && !sd.info.fallback
-      ? "Chaque absence doit être validée par tous ces validateurs. Ils reçoivent un seul e-mail pour l'ensemble de vos demandes ; vous êtes prévenu·e dès que tout est validé, ou dès qu'un validateur refuse."
+    $("sd-to").textContent = sd.target && v.length ? `Demande pour ${secName(sd.target)} : validateurs prévenus : ${listWho(sd.info)}. ${secName(sd.target)} est aussi informé·e par e-mail.` : !v.length ? "Aucun validateur n'est disponible pour l'instant : la demande sera adressée à l'administration."
+      : sd.info.step_kind === "personnes" && sd.info.step_label ? `Validateurs : ${listWho(sd.info)} (${sd.info.step_label})`
+      : sd.info.fallback ? `Aucun validateur n'est désigné pour vos cliniques : votre demande sera envoyée à l'administration (${listWho(sd.info)}).`
+      : `Vous allez envoyer une demande de validation à : ${listWho(sd.info)}.`;
+    $("sd-rule").textContent = (v.length > 1 || sd.info.more > 0) && !sd.info.fallback
+      ? ruleText(sd.info)
+      + " Ils reçoivent un seul e-mail pour l'ensemble de vos demandes ; vous êtes prévenu·e dès que tout est validé, ou dès qu'un validateur refuse."
       : "Le validateur reçoit un seul e-mail pour l'ensemble de vos demandes ; vous êtes prévenu·e de sa décision.";
     const list = $("sd-list");
     list.replaceChildren();
@@ -746,7 +828,7 @@
       li.append(el("span", "ab-draft-when", period(a.start_date, a.end_date)), el("span", "ug-badge", KINDS[a.kind][0]),
         el("span", "muted", `${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}${a.note ? " · " + a.note : ""}`));
       li.append(button("Retirer", "btn btn-outline ab-mini", async () => {
-        const { error } = await sb.rpc("absence_withdraw", { p_id: a.id });
+        const { error } = sd.target ? await sb.rpc("absence_withdraw_for", { p_id: a.id }) : await sb.rpc("absence_withdraw", { p_id: a.id });
         if (error) return say($("sd-msg"), error.message, "error");
         await loadDrafts(); renderSend();
       }));
@@ -770,12 +852,12 @@
     btn.disabled = true;
     say($("sd-confirm-msg"), "Envoi en cours…");
     try {
-      const { data, error } = await sb.rpc("absence_submit");
+      const { data, error } = sd.target ? await sb.rpc("absence_submit_for", { p_user: sd.target }) : await sb.rpc("absence_submit");
       if (error) return say($("sd-confirm-msg"), error.message, "error");
       mailer();
       $("sd-confirm").hidden = true; $("sd-done").hidden = false;
-      const who = (data.validators || []).length ? names(data.validators) : "l'administration";
-      $("sd-done-text").textContent = `${plur(data.count, "demande envoyée", "demandes envoyées")}. ${who} ${(data.validators || []).length > 1 ? "seront prévenus" : "sera prévenu·e"} par e-mail. Vous serez prévenu·e par e-mail dès que tout est validé, ou dès qu'un validateur refuse.`;
+      const who = (data.validators || []).length ? listWho(data) : "l'administration";
+      $("sd-done-text").textContent = `${plur(data.count, "demande envoyée", "demandes envoyées")}. ${who} ${(data.validators || []).length > 1 || data.more > 0 ? "seront prévenus" : "sera prévenu·e"} par e-mail. Vous serez prévenu·e par e-mail dès que tout est validé, ou dès qu'un validateur refuse.`;
       say($("sd-confirm-msg"), "");
       await afterChange();
     } finally { btn.disabled = false; }
@@ -792,6 +874,11 @@
     // Avancement des validations (rechargé à chaque ouverture : un validateur a pu décider entre-temps)
     const r = await sb.rpc("absence_approvals_all", { p_user: state.who || null });
     if (state.who) state.whoApprovals = groupApprovals(r.data); else state.approvals = groupApprovals(r.data);
+    state.agendaStatus = {};
+    if (state.who || ["clinician", "cdc", "cadre"].includes(state.ctx.role)) {
+      const ag = await sb.rpc("absence_agenda_status", { p_user: state.who || null });
+      if (!ag.error && ag.data) state.agendaStatus = ag.data;
+    }
     fillYears();
     renderMine();
   }
@@ -832,7 +919,7 @@
     const out = el("p", "form-msg");
     out.setAttribute("role", "status");
     const actions = el("div", "btn-row");
-    const save = el("button", "btn", mode === "change" ? "Envoyer la demande de modification" : mode === "direction" ? "Enregistrer (validée d'office)" : a.status === "rejected" ? "Renvoyer en validation" : "Enregistrer");
+    const save = el("button", "btn", mode === "change" || mode === "changefor" ? "Envoyer la demande de modification" : mode === "direction" ? "Enregistrer (validée d'office)" : a.status === "rejected" ? "Renvoyer en validation" : "Enregistrer");
     save.type = "submit";
     actions.append(save, button("Annuler", "btn btn-outline", () => renderMine()));
     f.append(row, out, actions);
@@ -841,39 +928,64 @@
       if (!start.value || !end.value || end.value < start.value) return say(out, "Vérifiez les dates.", "error");
       save.disabled = true;
       const args = { p_kind: kind.value, p_note: note.value.trim(), p_start: start.value, p_end: end.value };
-      const { data, error } = mode === "change"
+      const { data, error } = mode === "changefor"
+        ? await sb.rpc("absence_request_change_for", Object.assign({ p_user: state.who, p_id: a.id, p_type: "modify" }, args))
+        : mode === "change"
         ? await sb.rpc("absence_request_change", Object.assign({ p_id: a.id, p_type: "modify" }, args))
         : mode === "direction"
           ? await sb.rpc("absence_direction_update", Object.assign({ p_id: a.id, p_confidential: kind.value === "autre" ? !!(conf && conf.checked) : false }, args))
           : await sb.rpc("absence_update", Object.assign({ p_id: a.id }, args));
       if (error) { save.disabled = false; return say(out, error.message, "error"); }
       state.mineWarn = warnBox(data.conflicts, "Attention : trop d'absences en même temps");
-      say($("ab-mine-msg"), mode === "change" ? "Demande de modification envoyée aux validateurs : l'absence reste validée aux anciennes dates jusqu'à leur décision (tous doivent l'accepter)." : "Demande modifiée : elle repasse en brouillon, envoyez-la pour relancer la validation.", "ok");
+      say($("ab-mine-msg"), mode === "change" || mode === "changefor" ? "Demande de modification envoyée aux validateurs : l'absence reste validée aux anciennes dates jusqu'à leur décision (tous doivent l'accepter)." : "Demande modifiée : elle repasse en brouillon, envoyez-la pour relancer la validation.", "ok");
       if (mode === "direction") {
         say($("ab-mine-msg"), a.user_id === state.ctx.me ? "Absence modifiée." : "Absence modifiée par la direction : notification mise en file.", "ok"); mailer();
       }
-      if (mode === "change") mailer();
+      if (mode === "change" || mode === "changefor") mailer();
       await afterChange();
     });
     return f;
   }
 
-  // Avancement de la validation : qui a validé, qui attend, qui a refusé
+  // Étape en cours d'une demande (circuit configurable) : champs step_kind / step_label, sinon instantané `circuit` (étape « current »), sinon `stage` de compatibilité
+  function curStep(r) {
+    if (r.step_kind || r.step_label) return { kind: r.step_kind || "clinique", label: r.step_label || (r.step_kind === "visa" ? "Visa de la direction" : "Validateurs de clinique") };
+    // étapes bloquantes de la colonne en cours, jointes par « + » (les étapes consultatives n'arrêtent pas la demande)
+    const cur = (r.circuit || []).filter((x) => x.current && x.blocking !== false);
+    if (cur.length) return { kind: cur.some((x) => x.kind === "visa") ? "visa" : cur[0].kind, label: cur.map((x) => x.label).join(" + ") };
+    return r.stage === 2 ? { kind: "visa", label: "Visa de la direction" } : { kind: "clinique", label: "Validateurs de clinique" };
+  }
+  // Avancement de la validation : qui a validé, qui attend, qui a refusé (regroupé par étape quand le circuit en compte plusieurs)
   function approvalsBlock(rows) {
     const box = el("div", "ab-appr");
     if (!rows.length) { box.append(el("p", "muted", "Aucun validateur désigné : l'administration décide.")); return box; }
-    const ul = el("ul", "ab-appr-list");
     const LABEL = { approved: "a validé", pending: "en attente", rejected: "a refusé", skipped: "étape close sans décision individuelle" };
-    rows.forEach((r) => {
-      const li = el("li", "ab-appr-" + r.decision);
-      li.append(el("strong", null, r.validator_name || r.name),
-        document.createTextNode(` : ${LABEL[r.decision]}${r.decided_at && ["approved", "rejected"].includes(r.decision) ? " le " + fmtCH(r.decided_at) : ""}${r.comment ? " · « " + r.comment + " »" : ""}`));
-      ul.append(li);
+    const list = (items) => {
+      const ul = el("ul", "ab-appr-list");
+      items.forEach((r) => {
+        const li = el("li", "ab-appr-" + r.decision);
+        li.append(el("strong", null, r.validator_name || r.name),
+          document.createTextNode(` : ${LABEL[r.decision] || r.decision}${r.decided_at && ["approved", "rejected"].includes(r.decision) ? " le " + fmtCH(r.decided_at) : ""}${r.comment ? " · « " + r.comment + " »" : ""}`));
+        ul.append(li);
+      });
+      return ul;
+    };
+    const groups = new Map();
+    [...rows].sort((a, b) => (a.step ?? 0) - (b.step ?? 0)).forEach((r) => {
+      const k = r.step_label || "";
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(r);
     });
-    box.append(ul);
+    if (groups.size <= 1) { box.append(list(rows)); return box; }
+    for (const [label, items] of groups) box.append(el("p", "ab-appr-step", label), list(items));
     return box;
   }
   const approvalCount = (rows) => rows.filter((r) => r.decision === "approved").length;
+  // Date et heure d'une case Ultragenda : toujours à l'heure de Zurich, JJ.MM.AAAA HH:MM
+  function zurich(ts) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("fr-CH", { timeZone: "Europe/Zurich", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(ts)).map((p) => [p.type, p.value]));
+    return { date: `${parts.day}.${parts.month}.${parts.year}`, time: `${parts.hour}:${parts.minute}` };
+  }
   const fmtDT = (ts) => new Date(ts).toLocaleString("fr-CH", { dateStyle: "short", timeStyle: "short" });
 
   // Renvoyer l'e-mail de validation (rappel) aux validateurs qui n'ont pas encore décidé
@@ -920,7 +1032,7 @@
       if (!details.open || loaded) return;
       loaded = true;
       try {
-        if (own || ["admin", "direction"].includes(state.ctx.role)) {
+        if (own || isBehalf() || ["admin", "direction"].includes(state.ctx.role)) {
           const { data, error } = await sb.rpc("absence_history", { p_id: a.id });
           if (error) throw error;
           for (const event of data || []) {
@@ -933,7 +1045,7 @@
         const { data: docs, error } = await sb.rpc("absence_document_versions", { p_id: a.id });
         if (error) throw error;
         for (const doc of docs || []) {
-          const labels = { approved: "Formulaire", modified: "Rectificatif", modified_direct: "Rectificatif direction", cancelled: "Annulation", cancelled_direct: "Annulation direction", legacy_snapshot: "État repris à la mise en service" };
+          const labels = { approved: "Formulaire", modified: "Rectificatif", modified_direct: "Rectificatif direction", cancelled: "Annulation", cancelled_direct: "Annulation direction", approved_direct: "Saisie direction", legacy_snapshot: "État repris à la mise en service" };
           details.append(button(`${labels[doc.action] || "Document"} D${doc.id} · ${fmtDT(doc.at)}`, "btn btn-outline", () => downloadForm(a, doc.id)));
         }
         if (!docs?.length) details.append(el("p", "muted", "Aucun document disponible."));
@@ -949,6 +1061,8 @@
     head.append(el("strong", null, period(a.start_date, a.end_date)), el("span", "ug-badge", KINDS[a.kind][0]),
       el("span", `ug-badge ab-st ab-st-${a.status}`, STATUS[a.status]));
     if (a.confidential) head.append(el("span", "ug-badge", "Confidentiel"));
+    const ug = a.status === "approved" ? state.agendaStatus[String(a.id)] : null;
+    if (ug) head.append(el("span", "ug-badge " + (ug.status === "done" ? "ab-ug-done" : "ab-ug-todo"), ug.status === "done" ? `Ultragenda : bloqué le ${zurich(ug.done_at).date}` : "Ultragenda : à bloquer"));
     card.append(head);
     card.append(el("p", "muted ab-item-meta", plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")
       + (a.note ? " · " + a.note : "")));
@@ -969,8 +1083,9 @@
       d.append(approvalsBlock(rows));
       card.append(d);
     }
-    if (a.stage === 2 && (a.status === "requested" || (a.status === "approved" && a.change_type))) {
-      card.append(el("p", "ab-pending-change", "Validée par les validateurs de la clinique : en attente du visa de la direction."));
+    const mySt = curStep(a);
+    if (mySt.kind !== "clinique" && (a.status === "requested" || (a.status === "approved" && a.change_type))) {
+      card.append(el("p", "ab-pending-change", mySt.kind === "visa" ? "Validée par les validateurs de la clinique : en attente du visa de la direction." : `En cours : ${mySt.label}.`));
     }
     if (a.status === "rejected" && a.decided_at) {
       const gone = new Date(new Date(a.decided_at).getTime() + 14 * 864e5);
@@ -979,6 +1094,7 @@
     if (own && (a.status === "requested" || (a.status === "approved" && a.change_type)) && (a.submitted_at || a.resent_at)) {
       card.append(el("p", "muted ab-item-meta", `${a.submitted_at ? "Envoyée aux validateurs le " + fmtDT(a.change_requested_at && a.status === "approved" ? a.change_requested_at : a.submitted_at) : ""}${a.resent_at ? (a.submitted_at ? " · " : "") + "dernier rappel le " + fmtDT(a.resent_at) : ""}`));
     }
+    if (a.requested_by_name) card.append(el("p", "muted ab-item-meta", `Saisie par ${a.requested_by_name}`));
     if (a.status === "draft") card.append(el("p", "muted ab-item-meta", "Brouillon : les validateurs ne sont pas encore prévenus. Envoyez-le pour lancer la validation."));
     if (!own && a.status === "rejected" && state.who) {
       const del = el("div", "btn-row ab-actions");
@@ -989,6 +1105,43 @@
         await afterChange();
       }));
       card.append(del);
+    }
+    if (!own && isBehalf()) {
+      // la secrétaire agit pour son médecin cadre : mêmes règles que pour lui, hors annulation de changement et refus
+      const act = el("div", "btn-row ab-actions");
+      const mineEntered = a.requested_by === state.ctx.me;
+      if (a.status === "draft" && mineEntered) {
+        act.append(button("Envoyer pour validation…", "btn", () => openSend([], state.who)),
+          button("Retirer", "btn btn-outline lt-danger", async () => {
+            if (!confirm(`Retirer ce brouillon (${period(a.start_date, a.end_date)}) ?`)) return;
+            const { error } = await sb.rpc("absence_withdraw_for", { p_id: a.id });
+            if (error) return say($("ab-mine-msg"), error.message, "error");
+            say($("ab-mine-msg"), "Brouillon retiré.", "ok");
+            await afterChange();
+          }));
+      } else if (a.status === "requested" && mineEntered) {
+        act.append(button("Annuler la demande", "btn btn-outline lt-danger", async () => {
+          if (!confirm(`Annuler cette demande en cours (${period(a.start_date, a.end_date)}) ?`)) return;
+          const { error } = await sb.rpc("absence_withdraw_for", { p_id: a.id });
+          if (error) return say($("ab-mine-msg"), error.message, "error");
+          say($("ab-mine-msg"), "Demande annulée.", "ok");
+          await afterChange();
+        }));
+      } else if (a.status === "approved" && !a.change_type) {
+        act.append(button("Demander une modification", "btn btn-outline", () => act.replaceWith(editForm(a, "changefor"))),
+          button("Demander la suppression", "btn btn-outline lt-danger", async () => {
+            if (!confirm("Demander la suppression de cette absence validée ? Elle reste validée jusqu'à la décision des validateurs.")) return;
+            const { error } = await sb.rpc("absence_request_change_for", { p_user: state.who, p_id: a.id, p_type: "delete", p_kind: null, p_note: null, p_start: null, p_end: null });
+            if (error) return say($("ab-mine-msg"), error.message, "error");
+            say($("ab-mine-msg"), "Demande de suppression envoyée. L'absence reste validée jusqu'à la décision.", "ok");
+            mailer();
+            await afterChange();
+          }));
+      }
+      const fbb = formButton(a, false);
+      if (fbb) act.append(fbb);
+      if (act.children.length) card.append(act);
+      return card;
     }
     if (!own) {
       const row = el("div", "btn-row ab-actions");
@@ -1079,6 +1232,7 @@
     return card;
   }
 
+  const isBehalf = () => !!state.who && state.secOf.some((c) => c.id === state.who);
   function renderMine() {
     const own = !state.who;
     const list = $("ab-mine-list");
@@ -1112,13 +1266,15 @@
   }
 
   // ----- À valider -----
+  const normTodo = (data) => (data || []).map((a) => Object.assign(a, {
+    start_date: String(a.start_date).slice(0, 10), end_date: String(a.end_date).slice(0, 10),
+    change_start: a.change_start && String(a.change_start).slice(0, 10), change_end: a.change_end && String(a.change_end).slice(0, 10)
+  }));
   async function loadTodo() {
     const { data, error } = await sb.rpc("absence_to_validate");
     if (error) return say($("ab-todo-msg"), "Chargement impossible : " + error.message, "error");
-    state.todo = (data || []).map((a) => Object.assign(a, {
-      start_date: String(a.start_date).slice(0, 10), end_date: String(a.end_date).slice(0, 10),
-      change_start: a.change_start && String(a.change_start).slice(0, 10), change_end: a.change_end && String(a.change_end).slice(0, 10)
-    }));
+    state.todoLoaded = true; state.todoTried = true; state.todoAt = Date.now();
+    state.todo = normTodo(data);
     renderTodo();
     if (state.isDir) loadOpinions();
   }
@@ -1154,6 +1310,7 @@
       const isChange = !!a.change_type;
       head.append(el("strong", null, a.name), el("span", "ug-badge", (a.clinics || []).join(", ") || "Sans clinique"),
         el("span", "ug-badge ug-warn", isChange ? (a.change_type === "delete" ? "Suppression demandée" : "Modification demandée") : "Nouvelle demande"));
+      head.append(el("span", "ug-badge", a.step_label || "Pré-avis de la direction"));
       if (a.my_opinion) head.append(el("span", "ug-badge ab-op-ok", "Votre pré-avis : " + OPINION[a.my_opinion]));
       card.append(head);
       const cur = `${KINDS[a.kind][0]} · ${period(a.start_date, a.end_date)} · ${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}`;
@@ -1164,7 +1321,7 @@
       if (prog.length) { const d = el("details", "ab-progress"); d.append(el("summary", null, `Validation par la clinique : ${approvalCount(prog)} sur ${prog.length}`), approvalsBlock(prog)); card.append(d); }
       const w = warnBox(a.conflicts, "Attention : trop d'absences en même temps si la demande est validée");
       if (w) card.append(w);
-      const others = opinionsBlock(a.opinions, "Autres pré-avis de la direction");
+      const others = opinionsBlock(a.opinions, a.step_label ? `Autres avis : ${a.step_label}` : "Autres pré-avis de la direction");
       if (others) card.append(others);
       const fs = el("fieldset", "ab-op-choice");
       fs.append(el("legend", null, "Votre pré-avis"));
@@ -1218,6 +1375,12 @@
       card.append(head);
       const gone = new Date(new Date(a.decided_at).getTime() + 14 * 864e5);
       card.append(el("p", "ab-decision", `Refusée${a.decided_by_name ? " par " + a.decided_by_name : ""} le ${fmtCH(a.decided_at)}${a.decision_comment ? " : « " + a.decision_comment + " »" : ""}. Disparaît d'elle-même le ${fmtCH(iso(gone))}.`));
+      const hist = (a.approvals || []).map((x) => ({ validator_name: x.name, decision: x.decision, comment: x.comment, decided_at: x.at, step: x.step, step_label: x.step_label }));
+      if (hist.length) {
+        const d = el("details", "ab-progress");
+        d.append(el("summary", null, "Historique des décisions"), approvalsBlock(hist));
+        card.append(d);
+      }
       const act = el("div", "btn-row ab-actions");
       act.append(button("Supprimer", "btn btn-outline lt-danger", async () => {
         if (!confirm(`Supprimer la demande refusée de ${a.name} (${period(a.start_date, a.end_date)}) ?`)) return;
@@ -1230,18 +1393,156 @@
       box.append(card);
     }
   }
+  // Décision sur une demande (à valider) : commentaire, boutons Valider / Viser / Accepter / Refuser.
+  // Partagé par la liste « À valider » et le détail du planning ; onDone(message) est appelé après une décision enregistrée.
+  function decisionControls(a, onDone) {
+    const isChange = !!a.change_type;
+    const st = curStep(a);
+    const colSteps = Array.isArray(a.steps) ? a.steps : [];
+    const mineVisa = colSteps.length ? colSteps.some((x) => x.mine && x.kind === "visa") : st.kind === "visa";
+    const comment = el("input"); comment.type = "text"; comment.maxLength = 500; comment.placeholder = "Commentaire (obligatoire pour un refus)";
+    comment.value = state.comments.get(String(a.id)) || "";
+    comment.addEventListener("input", () => state.comments.set(String(a.id), comment.value));
+    const lab = el("label", "ab-comment", "Commentaire");
+    lab.append(comment);
+    const out = el("p", "form-msg"); out.setAttribute("role", "status");
+    const decide = async (approve, b1, b2) => {
+      if (!approve && comment.value.trim().length < 3) { comment.focus(); return say(out, "Un refus demande un commentaire.", "error"); }
+      b1.disabled = b2.disabled = true;
+      const { data: res, error } = await sb.rpc("absence_decide", { p_id: a.id, p_approve: approve, p_comment: comment.value.trim() });
+      if (error) { b1.disabled = b2.disabled = false; return say(out, error.message, "error"); }
+      state.comments.delete(String(a.id));
+      mailer();
+      await onDone(approve
+        ? (res === "requested" ? `${a.name} : votre validation est enregistrée ; il reste des validateurs ou le visa de la direction.` : `${a.name} : accepté, la notification est mise en file.`)
+        : `${a.name} : refusé, la notification est mise en file.`);
+    };
+    const actions = el("div", "btn-row");
+    const yes = button(isChange ? "Accepter le changement" : mineVisa ? "Viser (valider)" : "Valider", "btn", () => decide(true, yes, no));
+    const no = button(isChange ? "Refuser le changement" : "Refuser", "btn btn-outline", () => decide(false, yes, no));
+    actions.append(yes, no);
+    return [lab, out, actions];
+  }
+
+  // ----- Mini-planning de la clinique (onglet À valider) : état propre, sans toucher au planning ni à ses préférences -----
+  const wideMq = window.matchMedia ? window.matchMedia("(min-width: 1100px)") : null;
+  const isWide = () => !!(wideMq && wideMq.matches);
+  const cards = new Map();
+  const fridayOf = (s) => addD(mondayOf(s), 4);
+  // Fenêtre : du lundi de la semaine du début au vendredi de la semaine de la fin (3 semaines au moins, 9 au plus) ; pour une modification, ancienne et nouvelle période
+  function miniSpan(a) {
+    const mod = a.change_type === "modify" && a.change_start && a.change_end;
+    const lo = mod && a.change_start < a.start_date ? a.change_start : a.start_date;
+    const hi = mod && a.change_end > a.end_date ? a.change_end : a.end_date;
+    const start = mondayOf(lo);
+    let end = fridayOf(hi);
+    if (end < addD(start, 18)) end = addD(start, 18);
+    if (end > addD(start, 60)) end = addD(start, 60);
+    const sh = (state.mini.shifts.get(String(a.id)) || 0) * 7;
+    return { start: addD(start, sh), end: addD(end, sh), shift: sh / 7 };
+  }
+  async function miniPlanning(box, a, refocus) {
+    const tok = String(Math.random());
+    box.dataset.tok = tok;
+    const { start, end, shift } = miniSpan(a);
+    const days = [];
+    for (let d = start; d <= end; d = addD(d, 1)) days.push(d);
+    const clinics = a.clinics || [];
+    const hl = new Set();
+    const mark = (x, y) => { for (const d of days) if (x <= d && d <= y) hl.add(d); };
+    mark(a.start_date, a.end_date);
+    if (a.change_type === "modify" && a.change_start && a.change_end) mark(a.change_start, a.change_end);
+    box.replaceChildren();
+    const head = el("div", "ab-mini-head");
+    head.append(el("strong", "ab-mini-title", `Planning de ${clinics.join(", ") || "la clinique"}`));
+    const nav = el("div", "ab-mini-nav");
+    const prev = button("‹", "btn btn-outline", () => { state.mini.shifts.set(String(a.id), shift - 1); miniPlanning(box, a, "Semaine précédente"); });
+    prev.setAttribute("aria-label", "Semaine précédente");
+    const next = button("›", "btn btn-outline", () => { state.mini.shifts.set(String(a.id), shift + 1); miniPlanning(box, a, "Semaine suivante"); });
+    next.setAttribute("aria-label", "Semaine suivante");
+    nav.append(prev, el("span", "ab-mini-range", `${fmtCH(start)} – ${fmtCH(end)}`), next,
+      button("Ouvrir dans le planning", "btn btn-outline", () => openInPlanning(a, start)));
+    head.append(nav);
+    box.append(head);
+    if (refocus) { const f = head.querySelector(`[aria-label="${refocus}"]`); if (f) f.focus(); }
+    const body = el("div", "ab-scroll ab-mini-scroll");
+    body.tabIndex = 0; body.setAttribute("role", "region"); body.setAttribute("aria-label", `Planning de ${clinics.join(", ") || "la clinique"}, ${fmtCH(start)} au ${fmtCH(end)}`);
+    body.append(el("p", "muted ab-mini-load", "Chargement…"));
+    box.append(body);
+    let data;
+    try { data = await loadRange(start, end); } catch (e) {
+      if (box.dataset.tok === tok) body.replaceChildren(el("p", "form-msg error", "Chargement du planning impossible : " + e.message));
+      return;
+    }
+    if (box.dataset.tok !== tok) return;
+    // Membres des cliniques de la demande (ceux que les fonctions existantes montrent à ce validateur), demandeur en tête
+    const req = state.people.find((p) => p.id === a.user_id) || { id: a.user_id, name: a.name, clinics, is_me: false };
+    const others = state.people.filter((p) => p.id !== a.user_id && sharesClinic(p, clinics)).sort((x, y) => x.name.localeCompare(y.name, "fr"));
+    const people = [req, ...others];
+    const byUser = new Map(data.byUser);
+    // Nouvelle période d'une modification : barre « en attente » ajoutée au demandeur pour la lire dans la grille
+    if (a.change_type === "modify" && a.change_start && a.change_end) {
+      byUser.set(a.user_id, (byUser.get(a.user_id) || []).concat([{ id: "chg-" + a.id, kind: a.change_kind || a.kind, status: "requested", start_date: a.change_start, end_date: a.change_end, change_type: null }]));
+    }
+    body.replaceChildren(buildWindow(days, byUser, data.cal, people, { hl, reqId: a.user_id, count: true }));
+    const note = el("p", "muted ab-mini-note", "Colonnes surlignées : jours demandés. Hachuré : demande en attente. Les personnes affichées sont celles que vous voyez dans le planning.");
+    box.append(note);
+  }
+  function selectTodo(id) {
+    id = String(id);
+    const a = state.todo.find((x) => String(x.id) === id);
+    if (!a) return;
+    if (state.mini.sel !== id) { state.mini.sel = id; }
+    cards.forEach((c, k) => {
+      const on = k === id;
+      c.classList.toggle("ab-sel", on);
+      if (on) c.setAttribute("aria-current", "true"); else c.removeAttribute("aria-current");
+    });
+    if ($("ab-p-todo").hidden || state.mini.drawn === id + "|" + state.mini.stamp) return;
+    state.mini.drawn = id + "|" + state.mini.stamp;
+    miniPlanning($("ab-todo-side"), a);
+  }
+  // « Ouvrir dans le planning » : fenêtre glissante sur ces semaines, personnes de ces cliniques (filtre temporaire, aucune préférence modifiée)
+  function openInPlanning(a, start) {
+    const clinics = a.clinics || [];
+    // Filtre temporaire, séparé des préférences : jamais enregistré
+    state.tempScope = { ids: state.people.filter((p) => p.id === a.user_id || sharesClinic(p, clinics)).map((p) => p.id), label: clinics.join(", ") || a.name };
+    state.view = "window";
+    state.win.start = start;
+    setTab("plan");
+  }
+
   function renderTodo() {
     const list = $("ab-todo-list");
     list.replaceChildren();
+    cards.clear();
+    const wide = isWide();
+    $("ab-todo-side").hidden = !(wide && state.todo.length);
+    $("ab-todo-layout").classList.toggle("ab-split", wide && state.todo.length > 0);
     if (!state.todo.length) { list.append(el("p", "muted", "Aucune demande en attente.")); return; }
+    if (!state.todo.some((x) => String(x.id) === String(state.mini.sel))) state.mini.sel = String(state.todo[0].id);
     for (const a of state.todo) {
       const card = el("article", "card ab-item ab-item-requested");
       const head = el("div", "ab-item-head");
       const isChange = !!a.change_type;
       head.append(el("strong", null, a.name), el("span", "ug-badge", (a.clinics || []).join(", ") || "Sans clinique"),
         el("span", "ug-badge ug-warn", isChange ? (a.change_type === "delete" ? "Suppression demandée" : "Modification demandée") : "Nouvelle demande"));
-      if (a.stage === 2) head.append(el("span", "ug-badge", "Visa de la direction"));
+      const st = curStep(a);
+      if (st.kind !== "clinique") head.append(el("span", "ug-badge", st.label));
       card.append(head);
+      // étapes de la colonne en cours (simultanées), celles qui attendent l'appelant en tête de liste
+      const colSteps = Array.isArray(a.steps) ? a.steps : [];
+      if (colSteps.length > 1 || colSteps.some((x) => x.mine)) {
+        const ul = el("ul", "ab-colsteps");
+        ul.setAttribute("aria-label", "Étapes en cours");
+        colSteps.forEach((x) => {
+          const li = el("li", x.mine ? "ab-colstep mine" : "ab-colstep");
+          li.append(el("span", null, x.label));
+          if (x.mine) li.append(el("span", "ug-badge", "à vous"));
+          ul.append(li);
+        });
+        card.append(ul);
+      }
       const cur = `${KINDS[a.kind][0]} · ${period(a.start_date, a.end_date)} · ${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}`;
       card.append(el("p", null, isChange ? `Absence validée : ${cur}` : cur));
       if (a.note) card.append(el("p", "muted", "Précision : " + a.note));
@@ -1254,38 +1555,46 @@
         d.open = true;
         d.append(el("summary", null, `Validation : ${approvalCount(prog)} sur ${prog.length}`), approvalsBlock(prog));
         card.append(d);
-        card.append(el("p", "muted ab-item-meta", a.stage === 2
+        card.append(el("p", "muted ab-item-meta", st.kind === "visa"
           ? "Les validateurs de la clinique ont validé : votre visa conclut la demande."
-          : "L'absence n'est validée que lorsque tous les validateurs concernés ont validé, puis visée par la direction ; un seul refus suffit à la refuser."));
-      } else if (a.stage === 2) {
+          : st.kind === "clinique"
+            ? "L'absence n'est validée que lorsque tous les validateurs concernés ont validé, puis visée par la direction ; un seul refus suffit à la refuser."
+            : `Étape en cours : ${st.label}. Les étapes précédentes sont validées ; un seul refus suffit à refuser la demande.`));
+      } else if (st.kind === "visa") {
         card.append(el("p", "muted ab-item-meta", "Aucun validateur de clinique : votre visa conclut la demande."));
       }
       const ops = opinionsBlock(a.opinions);
       if (ops) card.append(ops);
       const w = warnBox(a.conflicts, "Attention : trop d'absences en même temps si vous validez");
       if (w) card.append(w);
-      const comment = el("input"); comment.type = "text"; comment.maxLength = 500; comment.placeholder = "Commentaire (obligatoire pour un refus)";
-      const lab = el("label", "ab-comment", "Commentaire");
-      lab.append(comment);
-      const out = el("p", "form-msg"); out.setAttribute("role", "status");
-      const decide = async (approve, b1, b2) => {
-        if (!approve && comment.value.trim().length < 3) { comment.focus(); return say(out, "Un refus demande un commentaire.", "error"); }
-        b1.disabled = b2.disabled = true;
-        const { data: res, error } = await sb.rpc("absence_decide", { p_id: a.id, p_approve: approve, p_comment: comment.value.trim() });
-        if (error) { b1.disabled = b2.disabled = false; return say(out, error.message, "error"); }
-        mailer();
-        say($("ab-todo-msg"), approve
-          ? (res === "requested" ? `${a.name} : votre validation est enregistrée ; il reste des validateurs ou le visa de la direction.` : `${a.name} : accepté, la notification est mise en file.`)
-          : `${a.name} : refusé, la notification est mise en file.`, "ok");
-        await afterChange();
-      };
-      const actions = el("div", "btn-row");
-      const yes = button(isChange ? "Accepter le changement" : a.stage === 2 ? "Viser (valider)" : "Valider", "btn", () => decide(true, yes, no));
-      const no = button(isChange ? "Refuser le changement" : "Refuser", "btn btn-outline", () => decide(false, yes, no));
-      actions.append(yes, no);
-      card.append(lab, out, actions);
+      card.append(...decisionControls(a, (msg) => { say($("ab-todo-msg"), msg, "ok"); return afterChange(); }));
+      cards.set(String(a.id), card);
+      if (wide) {
+        card.tabIndex = 0;
+        card.setAttribute("role", "group");
+        card.setAttribute("aria-label", `Demande de ${a.name}, ${period(a.start_date, a.end_date)}`);
+        card.classList.add("ab-pick-card");
+        card.addEventListener("focusin", () => selectTodo(a.id));
+        card.addEventListener("click", (e) => { if (!e.target.closest("input, button, a, summary, label, select, textarea")) selectTodo(a.id); });
+        card.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === card) { e.preventDefault(); selectTodo(a.id); } });
+      } else {
+        const holder = el("div", "ab-mini-wrap"); holder.hidden = !state.mini.open.has(String(a.id));
+        const toggle = button(holder.hidden ? "Voir le planning de la clinique" : "Masquer le planning de la clinique", "btn btn-outline ab-mini-toggle", () => {
+          const open = holder.hidden;
+          holder.hidden = !open;
+          toggle.setAttribute("aria-expanded", String(open));
+          toggle.textContent = open ? "Masquer le planning de la clinique" : "Voir le planning de la clinique";
+          open ? state.mini.open.add(String(a.id)) : state.mini.open.delete(String(a.id));
+          if (open && !$("ab-p-todo").hidden) miniPlanning(holder, a);
+        });
+        toggle.setAttribute("aria-expanded", String(!holder.hidden));
+        card.append(toggle, holder);
+        if (!holder.hidden && !$("ab-p-todo").hidden) miniPlanning(holder, a);
+      }
       list.append(card);
     }
+    state.mini.stamp++;
+    if (wide) selectTodo(state.mini.sel);
   }
 
   // ----- Abonnement à son agenda des absences (flux iCal privé) -----
@@ -1440,10 +1749,10 @@
   const FILL = { approved: "FFE3F1E4", requested: "FFFFF3D6", direction: "FFFCE4C8", rejected: "FFF9DADA", cancelled: "FFE6E8EC", change: "FFDDE8F7" };
   function statusLabel(r) {
     if (r.status === "approved") return r.change_type === "delete" ? "Validée, suppression demandée" : r.change_type === "modify" ? "Validée, modification demandée" : "Validée";
-    if (r.status === "requested") return r.stage === 2 ? "En cours : visa de la direction" : "En cours : chez les validateurs";
+    if (r.status === "requested") return r.state_label || `En cours : ${curStep(r).label}`;
     return r.status === "rejected" ? "Refusée" : r.status === "cancelled" ? "Annulée" : r.status;
   }
-  const statusFill = (r) => (r.status === "approved" ? (r.change_type ? FILL.change : FILL.approved) : r.status === "requested" ? (r.stage === 2 ? FILL.direction : FILL.requested) : FILL[r.status]);
+  const statusFill = (r) => (r.status === "approved" ? (r.change_type ? FILL.change : FILL.approved) : r.status === "requested" ? (curStep(r).kind === "clinique" ? FILL.requested : FILL.direction) : FILL[r.status]);
   const DECISION_LABEL = { approved: "Acceptée", rejected: "Refusée", change_approved: "Changement accepté", change_rejected: "Changement refusé" };
   function exportWindow() {
     const from = $("ab-exp-from").value, to = $("ab-exp-to").value;
@@ -1577,7 +1886,7 @@
     add(CAL.weekend, "Week-end ou jour férié vaudois (nom du férié en commentaire sur le numéro du jour)");
     lg.addRow([]);
     add(null, "Absences : une ligne par absence avec son état ; couleur de la ligne selon l'état");
-    [["Validée", FILL.approved], ["En cours : chez les validateurs", FILL.requested], ["En cours : visa de la direction", FILL.direction], ["Validée, modification ou suppression demandée", FILL.change], ["Refusée", FILL.rejected], ["Annulée", FILL.cancelled]].forEach(([t, c]) => add(c, t));
+    [["Validée", FILL.approved], ["En cours : chez les validateurs", FILL.requested], ["En cours : visa de la direction ou autre étape du circuit", FILL.direction], ["Validée, modification ou suppression demandée", FILL.change], ["Refusée", FILL.rejected], ["Annulée", FILL.cancelled]].forEach(([t, c]) => add(c, t));
     lg.addRow([]);
     add(null, scope);
     add(null, `Fenêtre : du ${fmtCH(w.from)} au ${fmtCH(w.to)}. Brouillons non exportés. Jours ouvrables : lundi à vendredi, fériés vaudois déduits.`);
@@ -1713,8 +2022,88 @@
     });
   }
 
+  // ----- Blocage Ultragenda -----
+  const DOWL = ["di", "lu", "ma", "me", "je", "ve", "sa"];
+  const dayLbl = (d) => `${DOWL[pd(d).getUTCDay()]} ${d.slice(8, 10)}.${d.slice(5, 7)}`;
+  function daysText(days) {
+    if (!days.length) return "aucun jour ouvrable";
+    const shown = days.slice(0, 10).map(dayLbl).join(", ");
+    return `${plur(days.length, "jour ouvrable", "jours ouvrables")} : ${shown}${days.length > 10 ? "…" : ""}`;
+  }
+  async function refreshAgendaCount() {
+    if (!state.agendaCtx || !state.agendaCtx.tab) return;
+    const { data } = await sb.rpc("absence_agenda_pending_count");
+    $("ab-agenda-n").textContent = data ? String(data) : "";
+  }
+  function agendaEntries(title, list) {
+    const box = el("div");
+    if (!list.length) return box;
+    if (title) box.append(el("p", "ab-item-meta", title));
+    const ul = el("ul");
+    list.forEach((e) => {
+      const li = el("li", e.void ? "muted" : null);
+      li.append(document.createTextNode(period(e.start, e.end)), el("span", "ab-ag-days", " · " + daysText(e.days || [])));
+      ul.append(li);
+    });
+    box.append(ul);
+    return box;
+  }
+  async function loadAgenda() {
+    const list = $("ab-agenda-list"), msg = $("ab-agenda-msg");
+    say(msg, "");
+    const { data, error } = await sb.rpc("absence_agenda_tasks_list", { p_status: state.agendaFilter });
+    if (error) return say(msg, "Chargement impossible : " + error.message, "error");
+    list.replaceChildren();
+    if (!data.length) list.append(el("p", "muted", state.agendaFilter === "todo" ? "Aucun agenda à mettre à jour." : "Aucune tâche."));
+    const groups = new Map();
+    data.forEach((t) => { if (!groups.has(t.owner_id)) groups.set(t.owner_id, []); groups.get(t.owner_id).push(t); });
+    for (const [, tasks] of groups) {
+      const h = el("h3", "ab-ag-owner", tasks[0].owner_name);
+      if ((tasks[0].clinics || []).length) h.append(el("span", "muted", " · " + tasks[0].clinics.join(", ")));
+      list.append(h);
+      tasks.forEach((t) => {
+        const sup = t.status === "superseded";
+        const card = el("article", "card ab-ag" + (t.status === "done" ? " ab-ag-done" : "") + (sup ? " ab-ag-sup" : ""));
+        const head = el("div", "ab-ag-head");
+        const label = t.kind === "cancelled" ? ["Débloquer", "ab-ag-debloquer"] : t.kind === "modified" ? ["Modifier", "ab-ag-bloquer"] : ["Bloquer", "ab-ag-bloquer"];
+        head.append(el("span", "ug-badge " + label[1], label[0]), el("strong", null, "Absence"));
+        if (t.past) head.append(el("span", "ab-ag-late", "Période passée, non faite"));
+        card.append(head);
+        if (t.unblock.length) card.append(agendaEntries("À débloquer", t.unblock));
+        if (t.block.length) card.append(agendaEntries(t.kind === "modified" ? "À bloquer" : "", t.block));
+        if (sup) {
+          card.append(el("p", "muted", "Remplacée : l'absence a été modifiée ou annulée avant le blocage. Rien à faire pour cette tâche."));
+        } else {
+          const lab = el("label", "ab-ag-check");
+          const cb = el("input"); cb.type = "checkbox"; cb.checked = t.status === "done";
+          cb.addEventListener("change", async () => {
+            cb.disabled = true;
+            const { error: e2 } = await sb.rpc("absence_agenda_set", { p_task: t.id, p_done: cb.checked });
+            if (e2) { cb.checked = !cb.checked; cb.disabled = false; return say(msg, e2.message, "error"); }
+            mailer();
+            await loadAgenda(); refreshAgendaCount();
+          });
+          lab.append(cb, el("span", null, t.kind === "cancelled" ? "Débloqué dans Ultragenda" : "Bloqué dans Ultragenda"));
+          card.append(lab);
+          if (t.status === "done") card.append(el("p", "muted ab-item-meta", `Fait par ${t.done_by_name || "—"} le ${zurich(t.done_at).date} ${zurich(t.done_at).time}`));
+        }
+        list.append(card);
+      });
+    }
+  }
+  function initAgenda() {
+    $("ab-t-agenda").hidden = false;
+    $("ab-t-agenda").addEventListener("click", () => setTab("agenda"));
+    document.querySelectorAll("[data-agf]").forEach((b) => b.addEventListener("click", () => {
+      state.agendaFilter = b.dataset.agf;
+      document.querySelectorAll("[data-agf]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      loadAgenda();
+    }));
+    refreshAgendaCount();
+  }
+
   function setTab(name) {
-    for (const t of ["plan", "mine", "todo", "dir", "exp"]) {
+    for (const t of ["plan", "mine", "todo", "agenda", "dir", "exp"]) {
       const on = t === name;
       $("ab-t-" + t).setAttribute("aria-selected", String(on));
       $("ab-p-" + t).hidden = !on;
@@ -1722,6 +2111,7 @@
     if (name === "plan") renderGrid();
     if (name === "todo") loadTodo();
     if (name === "mine") loadMine();
+    if (name === "agenda") { loadAgenda(); refreshAgendaCount(); }
   }
 
   // ----- Démarrage -----
@@ -1764,7 +2154,8 @@
     // Planning
     fillScope();
     $("ab-rows").value = String(state.prefs.rows);
-    $("ab-scope").addEventListener("change", (e) => { state.prefs.scope = e.target.value; savePrefs(); fillScope(); renderGrid(); if (!$("ab-pick").hidden) renderPicker(); });
+    $("ab-scope").addEventListener("change", (e) => { state.tempScope = null; state.prefs.scope = e.target.value; savePrefs(); fillScope(); renderGrid(); if (!$("ab-pick").hidden) renderPicker(); });
+    $("ab-temp-back").addEventListener("click", () => { state.tempScope = null; renderGrid(); if (!$("ab-pick").hidden) renderPicker(); });
     $("ab-rows").addEventListener("change", (e) => { state.prefs.rows = Number(e.target.value); savePrefs(); renderGrid(); });
     if (window.monthPicker) window.monthPicker($("ab-title"), { get: pickerValue, onPick: pickMonth });
     $("ab-prev").addEventListener("click", () => shiftView(-1));
@@ -1805,6 +2196,7 @@
     $("ab-t-plan").addEventListener("click", () => setTab("plan"));
     $("ab-t-mine").addEventListener("click", () => setTab("mine"));
     $("ab-t-todo").addEventListener("click", () => setTab("todo"));
+    if (wideMq) wideMq.addEventListener("change", () => { if (!$("ab-p-todo").hidden) renderTodo(); });
     $("ab-docx").addEventListener("click", exportDocx);
     // Popup d'envoi
     $("ab-drafts-open").addEventListener("click", () => { const c = sd.pending || []; sd.pending = []; openSend(c); });
@@ -1842,8 +2234,26 @@
       $("ab-who-wrap").hidden = false;
       loadRejected();
     }
+    // Blocage Ultragenda et secrétaires de médecin cadre (absents si la migration n'est pas appliquée)
+    const ac = await sb.rpc("absence_agenda_context");
+    state.agendaCtx = ac.error ? null : ac.data;
+    state.secOf = (state.agendaCtx && state.agendaCtx.secretary_of) || [];
+    if (state.agendaCtx && state.agendaCtx.tab) initAgenda();
+    if (state.secOf.length) {
+      const forSel = $("ab-for");
+      const meOpt = el("option", null, "Moi"); meOpt.value = ""; forSel.append(meOpt);
+      state.secOf.forEach((c) => { const o = el("option", null, c.name); o.value = c.id; forSel.append(o); });
+      forSel.addEventListener("change", () => { sd.target = forSel.value; sd.pending = []; loadDrafts(); });
+      $("ab-for-wrap").hidden = false;
+      const who = $("ab-who");
+      if (!who.options.length) { const me = el("option", null, "Moi"); me.value = ""; who.append(me); }
+      state.secOf.forEach((c) => { if (![...who.options].some((o) => o.value === c.id)) { const o = el("option", null, c.name); o.value = c.id; who.append(o); } });
+      if (!who.dataset.bound && !(ctx.validates.length || state.isDir)) { who.dataset.bound = "1"; who.addEventListener("change", () => { state.who = who.value; loadMine(); }); }
+      $("ab-who-wrap").hidden = false;
+    }
     await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending()]);
-    if (location.hash === "#todo" && (ctx.validates.length || state.isDir)) setTab("todo");
+    if (location.hash === "#agenda" && state.agendaCtx && state.agendaCtx.tab) setTab("agenda");
+    else if (location.hash === "#todo" && (ctx.validates.length || state.isDir)) setTab("todo");
     else if (location.hash === "#mine") setTab("mine");
   })();
 })();

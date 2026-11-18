@@ -1171,6 +1171,47 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .ab-grid td.ab-cal-c[data-cal]:focus-visible { outline: 3px solid var(--amber-500); outline-offset: -3px; }
 .ab-detail p .ug-badge { margin-right: 6px; }
 
+/* Absences : planning de la clinique à côté de la liste À valider, décision depuis le planning */
+.ab-todo-layout { display: block; }
+.ab-todo-layout .ab-item { grid-template-columns: minmax(0, 1fr); }
+.ab-side[hidden] { display: none; }
+.ab-temp { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin: 0 0 var(--space-2); padding: var(--space-2) var(--space-3); border-left: 4px solid var(--amber-500); background: var(--amber-50); font-size: .9rem; max-width: none; }
+.ab-temp[hidden] { display: none; }
+.ab-temp .btn { min-height: 44px; }
+.ab-detail .ab-comment, .ab-detail .btn-row { margin-top: var(--space-2); }
+.ab-detail .form-msg:empty { display: none; }
+@media (min-width: 1100px) {
+  .ab-todo-layout.ab-split { display: grid; grid-template-columns: minmax(320px, 2fr) minmax(0, 3fr); gap: var(--space-4); align-items: start; }
+  .ab-side { position: sticky; top: 88px; padding: var(--space-3); margin-top: var(--space-3); border-top: 3px solid var(--amber-500); min-width: 0; display: grid; gap: var(--space-2); }
+}
+@media (max-width: 1099px) { .ab-side { display: none; } }
+.ab-pick-card .ab-item-head { cursor: pointer; }
+.ab-pick-card:focus-visible { outline: 3px solid var(--amber-500); outline-offset: 2px; }
+.ab-pick-card.ab-sel { border-left-style: solid; box-shadow: 0 0 0 2px var(--navy-800); }
+.ab-mini-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.ab-mini-title { color: var(--navy-800); font-size: 1rem; }
+.ab-mini-nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ab-mini-nav .btn { min-height: 44px; padding: 0 12px; }
+.ab-mini-range { font-size: .88rem; color: var(--ink-600); }
+.ab-mini-wrap { display: grid; gap: var(--space-2); min-width: 0; }
+.ab-mini-wrap[hidden] { display: none; }
+.ab-mini-toggle { justify-self: start; min-height: 44px; }
+.ab-mini-scroll { max-width: 100%; }
+.ab-mini-note { margin: 0; font-size: .8rem; }
+.ab-mini-load { margin: var(--space-2); }
+.ab-grid.ab-mini-grid { font-size: .76rem; }
+.ab-mini-grid .ab-name { width: 120px; min-width: 120px; max-width: 120px; font-size: .78rem; padding: 3px 6px; }
+.ab-mini-grid .ab-pclinic { display: none; }
+.ab-mini-grid thead th.ab-d { height: 34px; }
+.ab-mini-grid td.ab-c { height: 28px; }
+.ab-mini-grid td.ab-bar-c { padding: 0 4px; font-size: .7rem; }
+.ab-mini-grid .ab-hl { box-shadow: inset 0 0 0 100px rgba(255, 191, 0, .14); }
+.ab-mini-grid thead th.ab-hl { background: #F8DB9A; color: var(--navy-800); font-weight: 700; }
+.ab-mini-grid tr.ab-req .ab-name { background: var(--amber-50); border-left: 4px solid var(--amber-500); }
+.ab-mini-grid tr.ab-req .ab-pname { font-weight: 700; }
+.ab-mini-grid tr.ab-count-row td, .ab-mini-grid tr.ab-count-row .ab-name { background: var(--mist); font-weight: 600; color: var(--navy-800); }
+.ab-mini-grid tr.ab-count-row td.ab-we { background: #E8ECF3; }
+
 /* Administration : agenda commun */
 .aa-cal { margin-top: var(--space-5); display: grid; gap: var(--space-3); }
 .aa-cal h2 { margin: 0; font-size: 1.6rem; }
@@ -1227,6 +1268,10 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .ab-appr-list li.ab-appr-rejected { border-left-color: var(--danger); }
 .ab-appr-list li.ab-appr-skipped { opacity: .75; }
 .ab-appr p { margin: 0; }
+.ab-appr p.ab-appr-step { margin: var(--space-2) 0 4px; font-weight: 600; color: var(--navy-800); }
+.ab-colsteps { list-style: none; margin: var(--space-2) 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ab-colstep { display: inline-flex; align-items: center; gap: var(--space-2); padding: 2px 10px; border: 1px dashed var(--navy-200); border-radius: 999px; font-size: .875rem; color: var(--ink-600); }
+.ab-colstep.mine { border-style: solid; border-color: var(--navy-700); color: var(--ink-900); font-weight: 600; }
 .ab-sub-title { margin: var(--space-5) 0 0; font-size: 1.3rem; }
 .ab-bar-sub { margin-top: var(--space-3); }
 .ab-sub { margin: var(--space-2) 0 var(--space-3); display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-top: 3px solid var(--amber-500); }
@@ -1399,3 +1444,23 @@ details:not(.ug-card) > summary { padding-block: 10px; }
 .ug-badge.ab-op-ok { background: var(--navy-800); color: var(--white); }
 .ab-op-choice { border: 0; padding: 0; margin: var(--space-2) 0; display: flex; flex-wrap: wrap; gap: 4px var(--space-3); align-items: center; }
 .ab-op-choice legend { font-weight: 500; color: var(--navy-800); padding: 0; margin-right: var(--space-3); float: left; }
+
+/* Absences : blocage Ultragenda et secrétaires de médecin cadre */
+.ab-for { display: grid; gap: 4px; max-width: 360px; margin-bottom: var(--space-3); font-weight: 500; font-size: .9rem; color: var(--navy-800); }
+.ab-for select { font: inherit; font-weight: 400; min-height: 44px; padding: 8px 12px; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); }
+.ab-ag-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0; }
+.ab-ag-filters .btn[aria-pressed="true"] { background: var(--navy-800); color: var(--white); }
+.ab-ag-owner { margin: var(--space-4) 0 var(--space-2); font-size: 1.1rem; }
+.ab-ag { padding: var(--space-3) var(--space-4); display: grid; gap: var(--space-2); border-left: 4px solid var(--amber-500); }
+.ab-ag-done { border-left-color: var(--navy-800); }
+.ab-ag-sup { opacity: .6; border-left: 4px dashed var(--navy-200); }
+.ab-ag p, .ab-ag ul { margin: 0; max-width: none; }
+.ab-ag ul { padding-left: 1.1rem; display: grid; gap: 2px; }
+.ab-ag-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ab-ag-days { font-size: .85rem; color: var(--ink-600); }
+.ab-ag-check { display: flex; align-items: center; gap: var(--space-2); min-height: 44px; font-weight: 500; }
+.ab-ag-late { color: var(--danger); font-weight: 500; }
+.ug-badge.ab-ag-bloquer { background: var(--amber-50); color: var(--amber-700); font-weight: 500; }
+.ug-badge.ab-ag-debloquer { background: var(--white); border: 1px solid var(--navy-800); color: var(--navy-800); }
+.ug-badge.ab-ug-done { background: #E3F1E6; color: #1F5E2E; }
+.ug-badge.ab-ug-todo { background: var(--white); border: 1px solid var(--navy-200); color: var(--ink-600); }

@@ -36,6 +36,8 @@ test('PostgreSQL : migrations, permissions et parcours complets',async(t)=>{
   await db.exec(securite); await db.exec(securite);
   const planning=await read('supabase/migrations/202611140001_absence_planning.sql');
   await db.exec(planning); await db.exec(planning);
+  const circuit1=await read('supabase/migrations/202611170001_circuit_absences.sql'); await db.exec(circuit1);
+  const circuit2=await read('supabase/migrations/202611180001_circuit_configurable.sql'); await db.exec(circuit2); await db.exec(circuit2);
   await t.test('migration de sécurité : search_path figé sur absence_lo et absence_hi',async()=>{
    for(const f of ['absence_lo','absence_hi'])
     assert.deepEqual(await scalar("select proconfig from pg_proc where proname=$1 and pronamespace='public'::regnamespace",[f]),['search_path=""'],f);
@@ -183,7 +185,10 @@ test('PostgreSQL : migrations, permissions et parcours complets',async(t)=>{
    assert.deepEqual(await rpc('member_clinics',[uid(10),'2026-11-11','2026-11-11']),[]);
   });
   await t.test('migration réexécutable sans perte de versions ni permissions internes',async()=>{
-   await superuser();const count=await scalar('select count(*)::int from absence_documents');await db.exec(await read(migration));
+   await superuser();const count=await scalar('select count(*)::int from absence_documents');
+   // les fonctions dont le type de retour a changé sont retirées avant de rejouer l'ancienne migration, puis la nouvelle est réappliquée
+   await db.exec('drop function if exists absence_to_validate(); drop function if exists absence_opinion_todo(); drop function if exists absence_export(date,date); drop function if exists absence_approvals_all(uuid); drop function if exists absence_rejected_to_manage();');
+   await db.exec(await read(migration));await db.exec(circuit2);
    assert.equal(await scalar('select count(*)::int from absence_documents'),count);
    assert.equal(await scalar("select has_function_privilege('authenticated','absence_document_data(bigint)','execute')"),false);
    assert.equal(await scalar("select has_function_privilege('anon','my_set_clinics(text[])','execute')"),false);

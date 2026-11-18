@@ -13,19 +13,22 @@
     to_validate_change: [fr ? "Demande de modification ou de suppression d'une absence validée" : "Request to change or delete an approved absence", ""],
     reminder: [fr ? "Rappels des demandes en attente" : "Reminders for pending requests", fr ? "S'ajoute aux types ci-dessus : sans le type de base, aucun rappel." : "Applies on top of the types above: if the base type is off, no reminder."],
     to_direction: [fr ? "Visa de la direction (2e ligne)" : "Direction sign-off (second line)", fr ? "Les messages de la direction partent vers la boîte commune dès qu'un·e destinataire les souhaite." : "Direction messages go to the shared mailbox as long as one recipient wants them."],
+    peer_rejected: [fr ? "Un autre validateur a refusé une demande que j'ai traitée" : "Another approver rejected a request I was asked about", ""],
     to_opinion: [fr ? "Pré-avis de la direction (facultatif)" : "Direction opinion (optional)", ""],
     approved: [fr ? "Mon absence est validée" : "My absence is approved", ""],
     rejected: [fr ? "Ma demande d'absence est refusée" : "My absence request is rejected", ""],
     change_approved: [fr ? "Ma demande de changement est acceptée" : "My change request is accepted", ""],
     change_rejected: [fr ? "Ma demande de changement est refusée" : "My change request is rejected", ""],
     direction_change: [fr ? "La direction a modifié ou annulé mon absence" : "The direction modified or cancelled my absence", ""],
+    on_behalf: [fr ? "Une secrétaire a saisi une absence en mon nom" : "A secretary entered an absence in my name", ""],
+    agenda_done: [fr ? "Mon absence est bloquée ou débloquée dans Ultragenda" : "My absence is blocked or unblocked in Ultragenda", ""],
     event_join: [fr ? "Un autre membre participe au même congrès que moi" : "Another member attends the same conference as me", ""],
   };
   const GROUPS = [
-    ["validate", fr ? "Demandes d'absence à traiter" : "Absence requests to handle", ["to_validate", "to_validate_change"]],
+    ["validate", fr ? "Demandes d'absence à traiter" : "Absence requests to handle", ["to_validate", "to_validate_change", "peer_rejected"]],
     ["direction", fr ? "Direction" : "Direction", ["to_direction", "to_opinion"]],
     ["reminders", fr ? "Rappels" : "Reminders", ["reminder"]],
-    ["mine", fr ? "Mes absences" : "My absences", ["approved", "rejected", "change_approved", "change_rejected", "direction_change"]],
+    ["mine", fr ? "Mes absences" : "My absences", ["approved", "rejected", "change_approved", "change_rejected", "direction_change", "on_behalf", "agenda_done"]],
     ["events", fr ? "Congrès" : "Conferences", ["event_join"]],
   ];
   const T = fr

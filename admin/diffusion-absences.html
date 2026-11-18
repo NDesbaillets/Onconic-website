@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Diffusion des absences · Administration · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <meta name="apple-mobile-web-app-title" content="Onconic">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261118c">
+  <script src="/assets/js/site.js?v=20261110b" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/admin-diffusion.js?v=20261118a" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug">
+      <div class="container">
+        <a class="btn btn-outline hive-back" href="/admin/absences.html">← Absences : valideurs</a>
+        <span class="eyebrow">Administration</span>
+        <h1>Diffusion des absences</h1>
+        <hr class="rule">
+        <p class="form-msg" id="ug-status" role="status">Chargement…</p>
+        <div id="df-tool" hidden>
+          <p class="muted">Quand l'absence d'un médecin est validée, modifiée ou annulée, le formulaire PDF part à la gestion des absences (inchangé), puis une copie part aux personnes ci-dessous avec les plages à bloquer ou débloquer dans Ultragenda. Les assistantes qui gèrent les agendas et les responsables de bloc voient la liste « Blocage Ultragenda » dans Absences. Un médecin cadre qui a une secrétaire n'a que sa secrétaire par défaut. Les fonctions des assistantes se règlent dans <a href="/admin/membres.html">Membres et accès</a>.</p>
+          <p class="form-msg" id="df-msg" role="status" aria-live="polite"></p>
+
+          <h2>Blocs</h2>
+          <p class="muted">Un bloc regroupe des cliniques (chaque clinique dans un seul bloc), avec une boîte commune facultative et des cadres administratifs responsables.</p>
+          <div id="df-blocs" class="aa-grid"></div>
+          <details class="card df-new" id="df-new"><summary>Nouveau bloc</summary><div id="df-new-body"></div></details>
+
+          <h2>Destinataires par médecin</h2>
+          <p class="muted">Calcul par défaut d'après les cliniques actuelles, puis personnalisation : « ajouter » complète les destinataires par défaut, « remplacer » les remplace.</p>
+          <label class="ab-for">Rechercher un médecin<input id="df-q" type="search" autocomplete="off"></label>
+          <div id="df-docs" class="aa-grid"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>

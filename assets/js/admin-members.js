@@ -11,7 +11,7 @@
     ["limitations", "Limitations LS"], ["duree", "Durée de traitement"], ["absences", "Absences"], ["medletters", "Lettres médicales"]];
   const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome", "GI tube", "GI solide", "ORL", "Sarcomes", "Rad-Inter", "ION", "UTOH"];
   const ABS_CLINICS = CLINICS.concat(["Plateforme"]); // cliniques de rattachement pour les absences (Key trials garde CLINICS)
-  const state = { rows: [], me: null, role: null, changes: new Map(), sel: null };
+  const state = { blocs: [], rows: [], me: null, role: null, changes: new Map(), sel: null };
   const desktop = () => window.matchMedia("(min-width: 1100px)").matches;
   const RESERVED = ["admin", "direction"]; // seul un administrateur donne ou retire ces rôles
 
@@ -29,7 +29,8 @@
   const nameOf = (r) => [r.first_name, r.last_name].filter(Boolean).join(" ") || r.full_name || "(sans nom)";
 
   async function load() {
-    const [{ data, error }, chRes, exRes] = await Promise.all([sb.rpc("admin_members"), sb.rpc("admin_clinic_changes"), sb.rpc("admin_members_extra")]);
+    const [{ data, error }, chRes, exRes, blRes] = await Promise.all([sb.rpc("admin_members"), sb.rpc("admin_clinic_changes"), sb.rpc("admin_members_extra"), sb.rpc("admin_blocs_list")]);
+    state.blocs = (blRes && blRes.data && blRes.data.blocs) || [];
     // Changements de cliniques programmés, par membre
     state.changes = new Map();
     for (const x of (chRes && chRes.data) || []) {
@@ -103,6 +104,8 @@
     if (Object.values(r.tools || {}).some((x) => x.custom)) meta.append(el("span", "ug-badge am-exc", "exception"));
     if (r.role === "cadre" && r.absence_validator) meta.append(el("span", "ug-badge", "validateur"));
     if (r.role === "assistant" && r.admin_lead) meta.append(el("span", "ug-badge", "cadre admin"));
+    if (r.role === "assistant" && r.agenda_manager) meta.append(el("span", "ug-badge", "agendas médecins"));
+    if (r.role === "assistant" && r.cadre_secretary) meta.append(el("span", "ug-badge", "secrétaire de cadre"));
     if (r.access_until) meta.append(el("span", "ug-badge" + (r.access_until < todayIso() ? " ug-warn" : ""), (r.access_until < todayIso() ? "terminé " : "jusqu'au ") + fmtD(r.access_until)));
     b.append(meta);
     const sub = [r.email, (r.clinics || []).length ? r.clinics.join(", ") : ""].filter(Boolean).join(" · ");
@@ -380,6 +383,96 @@
       lab.append(cb, el("span", null, "Cadre administratif (crée et gère les comptes temporaires)"));
       fs.append(lab);
       c.append(fs);
+    }
+    if (r.role === "assistant" && "agenda_manager" in r) {
+      // Gestion des agendas médecins : cliniques dont l'assistante bloque les agendas ; un bloc coche d'un coup toutes ses cliniques
+      const fs = el("fieldset", "am-tools am-validator");
+      fs.append(el("legend", null, "Gestion des agendas médecins"));
+      const lab = el("label", "cg-check am-tool");
+      const cb = el("input"); cb.type = "checkbox"; cb.checked = !!r.agenda_manager;
+      lab.append(cb, el("span", null, "Gère les agendas de consultation des médecins (reçoit les tâches de blocage Ultragenda)"));
+      fs.append(lab);
+      const box = el("div", "am-agenda-box"); box.hidden = !cb.checked;
+      const mine = new Set(r.agenda_clinics || []);
+      const grid = el("div", "am-tools am-clinics");
+      const boxes = [];
+      for (const cl of ABS_CLINICS) {
+        const l = el("label", "cg-check am-tool"); const c2 = el("input"); c2.type = "checkbox"; c2.value = cl; c2.checked = mine.has(cl);
+        l.append(c2, el("span", null, cl)); grid.append(l); boxes.push(c2);
+      }
+      box.append(grid);
+      if (state.blocs.length) {
+        const sh = el("p", "muted am-note", "Raccourci par bloc : ");
+        state.blocs.forEach((b) => {
+          const bt = el("button", "btn btn-outline ug-copy", b.name); bt.type = "button";
+          bt.addEventListener("click", () => boxes.forEach((x) => { if (b.clinics.includes(x.value)) x.checked = true; }));
+          sh.append(bt, document.createTextNode(" "));
+        });
+        box.append(sh);
+      }
+      const save = el("button", "btn btn-outline ug-copy", "Enregistrer les cliniques"); save.type = "button";
+      save.addEventListener("click", async () => {
+        const chosen = boxes.filter((x) => x.checked).map((x) => x.value);
+        if (!chosen.length) return say("Choisissez au moins une clinique.", "error");
+        save.disabled = true;
+        const { data, error } = await sb.rpc("admin_set_agenda_manager", { p_user: r.id, p_on: true, p_clinics: chosen });
+        save.disabled = false;
+        if (error) return say("Refusé : " + error.message, "error");
+        say(`${nameOf(r)} gère les agendas : ${chosen.join(", ")}.${data ? "" : " Attention : l'accès à Absences est fermé pour ce compte."}`, data ? "ok" : "error");
+        await refresh();
+      });
+      box.append(save);
+      fs.append(box);
+      cb.addEventListener("change", async () => {
+        box.hidden = !cb.checked;
+        if (cb.checked) return;
+        cb.disabled = true;
+        const { error } = await sb.rpc("admin_set_agenda_manager", { p_user: r.id, p_on: false, p_clinics: [] });
+        if (error) { cb.checked = true; box.hidden = false; cb.disabled = false; return say("Refusé : " + error.message, "error"); }
+        say(`${nameOf(r)} ne gère plus les agendas médecins.`, "ok");
+        await refresh();
+      });
+      c.append(fs);
+      // Secrétaire de médecin cadre : médecins cadres dont elle voit et demande les absences
+      const fs2 = el("fieldset", "am-tools am-validator");
+      fs2.append(el("legend", null, "Secrétaire de médecin cadre"));
+      const lab2 = el("label", "cg-check am-tool");
+      const cb2 = el("input"); cb2.type = "checkbox"; cb2.checked = !!r.cadre_secretary;
+      lab2.append(cb2, el("span", null, "Secrétaire d'un ou de plusieurs médecins cadres (voit et demande leurs absences, reçoit leurs PDF et tâches Ultragenda)"));
+      fs2.append(lab2);
+      const box2 = el("div", "am-agenda-box"); box2.hidden = !cb2.checked;
+      const sel = new Set(r.secretary_of || []);
+      const grid2 = el("div", "am-tools am-clinics"); const boxes2 = [];
+      state.rows.filter((x) => x.role === "cadre").forEach((x) => {
+        const l = el("label", "cg-check am-tool"); const c3 = el("input"); c3.type = "checkbox"; c3.value = x.id; c3.checked = sel.has(x.id);
+        l.append(c3, el("span", null, nameOf(x))); grid2.append(l); boxes2.push(c3);
+      });
+      if (!boxes2.length) grid2.append(el("p", "muted am-note", "Aucun médecin cadre dans la liste."));
+      box2.append(grid2);
+      const save2 = el("button", "btn btn-outline ug-copy", "Enregistrer les médecins cadres"); save2.type = "button";
+      save2.addEventListener("click", async () => {
+        const chosen = boxes2.filter((x) => x.checked).map((x) => x.value);
+        if (!chosen.length) return say("Choisissez au moins un médecin cadre.", "error");
+        save2.disabled = true;
+        const { data, error } = await sb.rpc("admin_set_cadre_secretary", { p_user: r.id, p_on: true, p_cadres: chosen });
+        save2.disabled = false;
+        if (error) return say("Refusé : " + error.message, "error");
+        say(`${nameOf(r)} est secrétaire de ${chosen.length} médecin${chosen.length > 1 ? "s" : ""} cadre${chosen.length > 1 ? "s" : ""}.${data ? "" : " Attention : l'accès à Absences est fermé pour ce compte."}`, data ? "ok" : "error");
+        await refresh();
+      });
+      box2.append(save2);
+      fs2.append(box2);
+      cb2.addEventListener("change", async () => {
+        box2.hidden = !cb2.checked;
+        if (cb2.checked) return;
+        cb2.disabled = true;
+        const { error } = await sb.rpc("admin_set_cadre_secretary", { p_user: r.id, p_on: false, p_cadres: [] });
+        if (error) { cb2.checked = true; box2.hidden = false; cb2.disabled = false; return say("Refusé : " + error.message, "error"); }
+        say(`${nameOf(r)} n'est plus secrétaire de médecin cadre.`, "ok");
+        await refresh();
+      });
+      c.append(fs2);
+      c.append(el("p", "muted am-note", "Ces deux fonctions ouvrent l'accès à Absences si besoin. Les blocs et la diffusion des PDF se règlent dans « Diffusion des absences »."));
     }
     if ("access_until" in r && !["admin", "direction"].includes(r.role) && r.id !== state.me) {
       // Fin d'accès : comptes temporaires (créés par un cadre administratif) ou tout compte à limiter dans le temps
