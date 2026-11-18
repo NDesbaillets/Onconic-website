@@ -127,6 +127,9 @@ create table if not exists public.absence_diffusion_log (
 alter table public.absence_diffusion_log enable row level security;
 revoke all on public.absence_diffusion_log from public, anon, authenticated;
 
+-- Une seule copie diffusée par document, même si la ligne « form » est reposée (renvoi)
+create unique index if not exists absence_outbox_form_copy_once on public.absence_outbox ((payload ->> 'document_id')) where kind = 'form_copy';
+
 -- Boîte d'envoi : types « on_behalf » (saisie par une secrétaire) et « form_copy » (diffusion du PDF), sans destinataire interne pour form_copy
 do $$
 declare n text; d text;
@@ -271,15 +274,46 @@ $$;
 
 create or replace function public.absence_history(p_id bigint) returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp as $$
-declare owner uuid;
+declare owner uuid; conf boolean;
 begin
  perform public.absence_guard();
  select user_id into owner from public.absence_audit where absence_id=p_id order by id limit 1;
  if owner is null then return '[]'; end if;
  -- L'historique détaillé reste réservé à la personne, à son ou sa secrétaire et à l'administration ; aucun contournement de confidentialité.
  if owner<>auth.uid() and not public.is_direction_admin() and not public.is_secretary_of(auth.uid(), owner) then raise exception 'Accès refusé.' using errcode='42501'; end if;
- return coalesce((select jsonb_agg(to_jsonb(a)||jsonb_build_object('actor_name',public.member_name(actor),'before_data',a.before_data - 'circuit','after_data',a.after_data - 'circuit') order by id) from public.absence_audit a where absence_id=p_id),'[]');
+ -- Pour la secrétaire (ni l'intéressé, ni la direction) : dès qu'une version de l'absence est confidentielle, aucun texte libre ne sort, quelle que soit la version
+ conf := owner<>auth.uid() and not public.is_direction_admin()
+   and exists (select 1 from public.absence_audit x where x.absence_id=p_id and x.entity='absences'
+               and (coalesce((x.before_data->>'confidential')::boolean,false) or coalesce((x.after_data->>'confidential')::boolean,false)));
+ return coalesce((select jsonb_agg(to_jsonb(a)||jsonb_build_object('actor_name',public.member_name(actor),
+   'before_data',a.before_data - 'circuit' - (case when conf then array['note','change_note','decision_comment','comment'] else '{}'::text[] end),
+   'after_data',a.after_data - 'circuit' - (case when conf then array['note','change_note','decision_comment','comment'] else '{}'::text[] end)) order by id) from public.absence_audit a where absence_id=p_id),'[]');
 end $$;
+
+create or replace function public.absence_direction_add(p_user uuid, p_kind text, p_note text, p_start date, p_end date, p_confidential boolean default false) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare uid uuid := auth.uid(); n text := nullif(trim(coalesce(p_note, '')), ''); new_id bigint; conf boolean := coalesce(p_confidential, false) and p_kind = 'autre';
+begin
+  perform public.absence_guard();
+  if not public.is_direction_admin() then raise exception 'Réservé à la direction.' using errcode = '42501'; end if;
+  if p_user is null or not exists (select 1 from public.profiles where id = p_user and role <> 'member') or not public.tool_allowed(p_user, 'absences') then
+    raise exception 'Membre introuvable ou sans accès à Absences.';
+  end if;
+  if public.current_role_name() = 'direction' and not public.absence_is_chuv(p_user) then raise exception 'Seuls les membres de l''institution CHUV se gèrent ici.' using errcode = '42501'; end if;
+  perform public.absence_check(p_user, null, p_kind, n, p_start, p_end);
+  -- Saisie directe de la direction : aucune validation, aucun formulaire PDF (visualisation et planification)
+  insert into public.absences (user_id, kind, note, start_date, end_date, status, submitted_at, decision, decided_by, decided_at, direction_by, direction_at, stage, circuit, circuit_id, circuit_name, preavis_active, confidential, form_queued_at)
+    values (p_user, p_kind, n, p_start, p_end, 'approved', now(), 'approved', uid, now(), uid, now(), 10, public.absence_circuit_build(p_kind, p_start, p_end, null, p_user),
+            (public.absence_circuit_resolve(p_user, p_start, p_end) ->> 'circuit_id')::bigint, public.absence_circuit_resolve(p_user, p_start, p_end) ->> 'name', false, conf, now()) returning id into new_id;
+  -- tâche Ultragenda : document figé sans ligne « form » dans la boîte d'envoi (aucun PDF envoyé ni copie) ; rôles médecins seulement
+  perform public.absence_document_create(array[new_id], 'approved_direct');
+  if p_user <> uid then
+    perform public.absence_enqueue('direction_change', p_user, array[new_id], jsonb_build_object('action', 'added', 'by', public.member_name(uid)));
+  end if;
+  return jsonb_build_object('id', new_id, 'conflicts', public.absence_conflicts_json(p_user, p_start, p_end),
+                            'balance', public.absence_balance_check(p_user, p_kind, p_start, p_end, new_id));
+end;
+$$;
 
 -- Téléchargement du PDF : l'intéressé, ses validateurs, l'administration, et la secrétaire du médecin cadre
 create or replace function public.absence_form_access(p_caller uuid,p_ids bigint[]) returns boolean language sql stable security definer set search_path = public, pg_temp as $$
@@ -664,7 +698,8 @@ begin
     if cur is not null then blk := blk || jsonb_build_array(cur); end if;
   end loop;
   if jsonb_array_length(blk) + jsonb_array_length(unb) = 0 then return null; end if;
-  insert into public.absence_agenda_tasks (document_id, owner_id, action, block, unblock) values (d.id, d.user_id, d.action, blk, unb) returning id into tid;
+  -- reprise : tâches silencieuses (le médecin ne reçoit jamais d'avis pour elles)
+  insert into public.absence_agenda_tasks (document_id, owner_id, action, block, unblock, notified_at) values (d.id, d.user_id, d.action, blk, unb, case when p_retro then now() end) returning id into tid;
   update public.absence_agenda_tasks set superseded_by = tid where id = any (touched) and status = 'superseded' and superseded_by is null;
   return tid;
 end;
@@ -673,7 +708,16 @@ $$;
 create or replace function public.absence_agenda_after_document() returns trigger
 language plpgsql security definer set search_path = public, pg_temp as $$
 begin
-  perform public.absence_agenda_task_make(new.id, false);
+  -- une erreur ici ne doit jamais annuler la décision de validation
+  begin
+    perform public.absence_agenda_task_make(new.id, false);
+  exception when others then
+    raise warning 'absence_agenda_after_document : %', sqlerrm;
+    begin
+      insert into public.absence_diffusion_log (action, target, detail) values ('agenda_task_error', new.id::text, jsonb_build_object('error', left(sqlerrm, 200)));
+    exception when others then null;
+    end;
+  end;
   return new;
 end;
 $$;
@@ -771,9 +815,19 @@ language plpgsql security definer set search_path = public, pg_temp as $$
 declare doc bigint := nullif(new.payload ->> 'document_id', '')::bigint; r jsonb;
 begin
   if new.kind <> 'form' or doc is null then return new; end if;
-  r := public.absence_form_recipients(doc);
-  if jsonb_array_length(coalesce(r -> 'emails', '[]'::jsonb)) = 0 then return new; end if;
-  insert into public.absence_outbox (kind, recipient, absence_ids, payload) values ('form_copy', null, new.absence_ids, jsonb_build_object('document_id', doc, 'action', new.payload ->> 'action'));
+  -- une erreur ici ne doit jamais annuler la décision de validation ; une seule copie par document
+  begin
+    r := public.absence_form_recipients(doc);
+    if jsonb_array_length(coalesce(r -> 'emails', '[]'::jsonb)) = 0 then return new; end if;
+    insert into public.absence_outbox (kind, recipient, absence_ids, payload) values ('form_copy', null, new.absence_ids, jsonb_build_object('document_id', doc, 'action', new.payload ->> 'action'))
+      on conflict ((payload ->> 'document_id')) where kind = 'form_copy' do nothing;
+  exception when others then
+    raise warning 'absence_form_copy_queue : %', sqlerrm;
+    begin
+      insert into public.absence_diffusion_log (action, target, detail) values ('form_copy_error', doc::text, jsonb_build_object('error', left(sqlerrm, 200)));
+    exception when others then null;
+    end;
+  end;
   return new;
 end;
 $$;
@@ -811,8 +865,13 @@ $$;
 
 create or replace function public.absence_agenda_audience(p_owner uuid, p_document bigint) returns uuid[]
 language plpgsql stable security definer set search_path = public, pg_temp as $$
-declare lo date; hi date; cl text[]; res uuid[];
+declare lo date; hi date; cl text[]; res uuid[]; rt public.absence_form_routing;
 begin
+  -- mode « remplacer » : seuls les membres choisis (comme pour la diffusion du PDF)
+  select * into rt from public.absence_form_routing where user_id = p_owner;
+  if found and rt.mode = 'replace' then
+    return coalesce(array(select distinct m from unnest(rt.member_ids) m where public.absence_member_active(m)), '{}'::uuid[]);
+  end if;
   select min(q.d), max(q.e) into lo, hi from (
     select (x ->> 'start_date')::date d, (x ->> 'end_date')::date e from public.absence_documents ad, jsonb_array_elements(coalesce(ad.data -> 'absences', '[]'::jsonb)) x where ad.id = p_document
     union all
@@ -1009,7 +1068,7 @@ create or replace function public.admin_set_role(p_user uuid, p_role text)
  returns void
  language plpgsql
  security definer
- set search_path to 'public'
+ set search_path = public, pg_temp
 as $function$
 declare cur text;
 begin
@@ -1053,7 +1112,7 @@ begin
 end $$;
 create or replace function public.admin_members_extra() returns table (id uuid, admin_lead boolean, access_until date, created_by_name text,
   agenda_manager boolean, agenda_clinics text[], cadre_secretary boolean, secretary_of uuid[])
-language plpgsql stable security definer set search_path to 'public' as $$
+language plpgsql stable security definer set search_path = public, pg_temp as $$
 begin
   if not public.is_direction_admin() then raise exception 'admin only' using errcode = '42501'; end if;
   return query select p.id, p.admin_lead, p.access_until, public.member_name(p.created_by), p.agenda_manager, p.agenda_clinics, p.cadre_secretary,

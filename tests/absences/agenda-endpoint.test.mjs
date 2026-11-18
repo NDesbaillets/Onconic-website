@@ -58,8 +58,8 @@ test('form_copy : un seul destinataire en To ; aucun destinataire ou tâche remp
 });
 test('form_copy : échec SMTP signalé pour la reprise', async () => {
   mail = { owner: 'Dr Fictif', action: 'approved', block: [], unblock: [] }; recipients = { emails: ['a@example.com'], members: [] };
-  globalThis.sendOutcome = 'SMTP indisponible'; outbox.length = 0;
+  globalThis.sendOutcome = 'SMTP indisponible : refus pour medecin.x@example.com'; outbox.length = 0;
   const r = await (await run()).json();
-  assert.equal(r.failed, 1); assert.match(outbox[0][1], /SMTP indisponible/);
+  assert.equal(r.failed, 1); assert.match(outbox[0][1], /SMTP indisponible/); assert.doesNotMatch(outbox[0][1], /@|example\.com/); assert.match(outbox[0][1], /\[adresse\]/);
   globalThis.sendOutcome = null;
 });

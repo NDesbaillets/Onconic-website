@@ -919,6 +919,11 @@
     return box;
   }
   const approvalCount = (rows) => rows.filter((r) => r.decision === "approved").length;
+  // Date et heure d'une case Ultragenda : toujours à l'heure de Zurich, JJ.MM.AAAA HH:MM
+  function zurich(ts) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("fr-CH", { timeZone: "Europe/Zurich", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(ts)).map((p) => [p.type, p.value]));
+    return { date: `${parts.day}.${parts.month}.${parts.year}`, time: `${parts.hour}:${parts.minute}` };
+  }
   const fmtDT = (ts) => new Date(ts).toLocaleString("fr-CH", { dateStyle: "short", timeStyle: "short" });
 
   // Renvoyer l'e-mail de validation (rappel) aux validateurs qui n'ont pas encore décidé
@@ -978,7 +983,7 @@
         const { data: docs, error } = await sb.rpc("absence_document_versions", { p_id: a.id });
         if (error) throw error;
         for (const doc of docs || []) {
-          const labels = { approved: "Formulaire", modified: "Rectificatif", modified_direct: "Rectificatif direction", cancelled: "Annulation", cancelled_direct: "Annulation direction", legacy_snapshot: "État repris à la mise en service" };
+          const labels = { approved: "Formulaire", modified: "Rectificatif", modified_direct: "Rectificatif direction", cancelled: "Annulation", cancelled_direct: "Annulation direction", approved_direct: "Saisie direction", legacy_snapshot: "État repris à la mise en service" };
           details.append(button(`${labels[doc.action] || "Document"} D${doc.id} · ${fmtDT(doc.at)}`, "btn btn-outline", () => downloadForm(a, doc.id)));
         }
         if (!docs?.length) details.append(el("p", "muted", "Aucun document disponible."));
@@ -995,7 +1000,7 @@
       el("span", `ug-badge ab-st ab-st-${a.status}`, STATUS[a.status]));
     if (a.confidential) head.append(el("span", "ug-badge", "Confidentiel"));
     const ug = a.status === "approved" ? state.agendaStatus[String(a.id)] : null;
-    if (ug) head.append(el("span", "ug-badge " + (ug.status === "done" ? "ab-ug-done" : "ab-ug-todo"), ug.status === "done" ? `Ultragenda : bloqué le ${fmtCH(String(ug.done_at).slice(0, 10))}` : "Ultragenda : à bloquer"));
+    if (ug) head.append(el("span", "ug-badge " + (ug.status === "done" ? "ab-ug-done" : "ab-ug-todo"), ug.status === "done" ? `Ultragenda : bloqué le ${zurich(ug.done_at).date}` : "Ultragenda : à bloquer"));
     card.append(head);
     card.append(el("p", "muted ab-item-meta", plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")
       + (a.note ? " · " + a.note : "")));
@@ -1887,7 +1892,7 @@
           });
           lab.append(cb, el("span", null, t.kind === "cancelled" ? "Débloqué dans Ultragenda" : "Bloqué dans Ultragenda"));
           card.append(lab);
-          if (t.status === "done") card.append(el("p", "muted ab-item-meta", `Fait par ${t.done_by_name || "—"} le ${fmtCH(String(t.done_at).slice(0, 10))} ${new Date(t.done_at).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" })}`));
+          if (t.status === "done") card.append(el("p", "muted ab-item-meta", `Fait par ${t.done_by_name || "—"} le ${zurich(t.done_at).date} ${zurich(t.done_at).time}`));
         }
         list.append(card);
       });

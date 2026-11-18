@@ -46,6 +46,9 @@ async function vapidKeys() {
 
 type Row = { id: number; kind: Kind | "form" | "form_copy"; recipient: string | null; absence_ids: number[]; payload: { secretary?: boolean; periods?: { start: string; end: string }[]; owner?: string; by?: string; step_label?: string; comment?: string; reminder?: boolean; action?: string; document_id?: number; absences?: (Abs & { user_id: string })[] } };
 
+// Message d'erreur enregistré dans la boîte d'envoi : jamais d'adresse e-mail (le serveur SMTP peut citer le destinataire)
+const safeError = (e: unknown) => String((e as Error)?.message ?? e).replace(/[^\s@<>"',;:()]+@[^\s@<>"',;:()]+/g, "[adresse]").slice(0, 250);
+
 const ROLE_LABEL: Record<string, string> = { clinician: "médecin assistant", cdc: "chef de clinique", cadre: "médecin cadre" };
 const slug = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "membre";
 
@@ -80,7 +83,7 @@ async function sendForm(row: Row, transport: ReturnType<typeof nodemailer.create
       attachments: [{ filename: r.file, content: Buffer.from(r.bytes), contentType: "application/pdf" }] });
     return null;
   } catch (e) {
-    return String((e as Error).message ?? e).slice(0, 250);
+    return safeError(e);
   }
 }
 
@@ -105,7 +108,7 @@ async function sendFormCopy(row: Row, transport: ReturnType<typeof nodemailer.cr
       attachments: [{ filename: r.file, content: Buffer.from(r.bytes), contentType: "application/pdf" }] });
     return null;
   } catch (e) {
-    return String((e as Error).message ?? e).slice(0, 250);
+    return safeError(e);
   }
 }
 
@@ -200,7 +203,7 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
     else await send();
     return null;
   } catch (e) {
-    return String((e as Error).message ?? e).slice(0, 250);
+    return safeError(e);
   }
 }
 
@@ -249,7 +252,7 @@ Deno.serve(async (req) => {
   const sentShared = new Set<string>();
   for (const row of rows as Row[]) {
     let err: string | null;
-    try { err = await sendOne(row, transport, sentShared); } catch (e) { err = String((e as Error).message ?? e).slice(0, 250); }
+    try { err = await sendOne(row, transport, sentShared); } catch (e) { err = safeError(e); }
     if (err === "__skip__") {
       await admin.rpc("absence_outbox_skip", { p_id: row.id }); skipped++;
     } else {

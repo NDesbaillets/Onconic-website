@@ -335,6 +335,17 @@ test('agenda : tâches de blocage, audience, remplacement, cases à cocher', asy
       await t.sup();
       assert.equal((await t.rows('select count(*)::int n from absence_agenda_tasks'))[0].n, before);
     });
+    await st.test('ajout direct par la direction pour un médecin : tâche Ultragenda, mais ni PDF ni copie', async () => {
+      await t.sup();
+      const forms = (await t.rows("select count(*)::int n from absence_outbox where kind in ('form','form_copy')"))[0].n;
+      await t.as(2);
+      const r = await t.rpc('absence_direction_add', [uid(4), 'vacances', null, '2027-11-01', '2027-11-03']);
+      const tasks = await t.taskOf(r.id);
+      assert.equal(tasks.length, 1); assert.equal(tasks[0].action, 'approved_direct'); assert.equal(tasks[0].status, 'todo');
+      assert.equal((await t.tasks(8)).filter((x) => x.id === tasks[0].id).length, 1);
+      await t.sup();
+      assert.equal((await t.rows("select count(*)::int n from absence_outbox where kind in ('form','form_copy')"))[0].n, forms);
+    });
     await st.test('modification directe par la direction : débloquer puis bloquer, une seule tâche', async () => {
       const a4 = await t.approve(4, ['2027-09-06', '2027-09-08']);
       const [t4] = await t.taskOf(a4);
@@ -390,8 +401,11 @@ test('agenda : secrétaire de médecin cadre', async (st) => {
     });
     await st.test('absence confidentielle du cadre : la secrétaire voit « Autre » sans précision', async () => {
       await t.as(2);
-      await t.rpc('absence_direction_add', [uid(6), 'autre', 'Précision médicale fictive', '2027-10-04', '2027-10-05', true]);
+      const confId = (await t.rpc('absence_direction_add', [uid(6), 'autre', 'Précision médicale fictive', '2027-10-04', '2027-10-05', true])).id;
+      await t.as(6); assert.match(JSON.stringify(await t.rpc('absence_history', [confId])), /Précision médicale fictive/);
       await t.as(11);
+      assert.doesNotMatch(JSON.stringify(await t.rpc('absence_history', [confId])), /Précision médicale fictive/);
+      assert.ok((await t.rpc('absence_history', [confId])).length > 0);
       const r = (await t.db.query('select kind, note, confidential from absence_list($1)', [uid(6)])).rows.find((x) => x.confidential);
       assert.equal(r.kind, 'autre'); assert.equal(r.note, null);
       // la secrétaire ne voit pas non plus ces précisions dans l'historique des tâches ni ailleurs
@@ -469,16 +483,16 @@ test('agenda : secrétaire de médecin cadre', async (st) => {
       assert.equal(tasks.length, 2);
       assert.equal(tasks[1].action, 'modified');
       // l'audience d'un cadre comprend sa secrétaire
-      assert.equal((await t.tasks(11, 'todo')).length, 2);
+      assert.equal((await t.tasks(11, 'todo')).length, 3, 'validation, modification et saisie directe');
       await t.as(10); assert.equal((await t.tasks(10)).length, 0);
       // cadre avec secrétaire : ni l'assistante des agendas Urologie, ni les responsables de bloc ; le cadre sans secrétaire suit les blocs
       assert.equal((await t.tasks(14)).filter((x) => x.owner_id === uid(6)).length, 0, 'assistante agendas Urologie');
       const c7 = await t.approve(7, ['2027-08-02', '2027-08-03']);
       assert.equal((await t.tasks(14)).filter((x) => x.owner_id === uid(7)).length, 2, 'cadre sans secrétaire : assistante agendas de la clinique');
-      assert.equal((await t.tasks(11)).length, 2, 'la secrétaire du cadre 6 ne voit pas le cadre 7');
+      assert.equal((await t.tasks(11)).length, 3, 'la secrétaire du cadre 6 ne voit pas le cadre 7');
       assert.ok(c7);
       // la secrétaire coche pour son cadre : le cadre reçoit l'avis, une seule fois
-      const first = (await t.tasks(11, 'todo')).find((x) => x.kind === 'approved');
+      const first = (await t.tasks(11, 'todo')).find((x) => x.kind === 'approved' && x.action === 'approved');
       await t.as(11); await t.rpc('absence_agenda_set', [first.id, true]);
       await t.sup();
       const nn = await t.rows("select recipient from absence_outbox where kind='agenda_done'");
@@ -535,6 +549,9 @@ test('agenda : diffusion du PDF, destinataires par défaut et personnalisation',
       // clinique sans bloc : rien
       const a5 = await t.approve(5, D1);
       const [d5] = await docOf(a5);
+      // renvoi : la ligne « form » est reposée, la copie reste unique
+      await t.db.query("insert into absence_outbox(kind, recipient, absence_ids, payload) values ('form', null, $1, $2::jsonb)", [[a1], JSON.stringify({ action: 'approved', document_id: d1 })]);
+      assert.equal((await t.rows("select count(*)::int n from absence_outbox where kind='form_copy' and payload->>'document_id' = $1", [String(d1)]))[0].n, 1);
       assert.deepEqual(await recipients(d5), { emails: [], members: [] });
       assert.equal((await t.rows("select count(*)::int n from absence_outbox where kind='form_copy'"))[0].n, 1, 'aucune ligne sans destinataire');
     });
@@ -582,6 +599,13 @@ test('agenda : diffusion du PDF, destinataires par défaut et personnalisation',
       const [d2] = await docOf(a2);
       r = await recipients(d2);
       assert.deepEqual(r.emails, ['seule@example.com']); assert.deepEqual(r.members, []);
+      // le mode « remplacer » vaut aussi pour l'audience des tâches : seuls les membres choisis (plus admin et direction)
+      await t.as(2); await t.rpc('admin_form_routing_set', [uid(4), 'replace', ['seule@example.com'], [uid(10)]]);
+      const b8 = (await t.tasks(8)).length, b12 = (await t.tasks(12)).length, b10 = (await t.tasks(10)).length, b1 = (await t.tasks(1)).length;
+      await t.approve(4, ['2027-07-05', '2027-07-06']);
+      assert.equal((await t.tasks(8)).length, b8, 'assistante des agendas exclue'); assert.equal((await t.tasks(12)).length, b12, 'responsable du bloc exclue');
+      assert.equal((await t.tasks(10)).length, b10 + 1); assert.equal((await t.tasks(1)).length, b1 + 1);
+      await t.as(2); await t.rpc('admin_form_routing_set', [uid(4), 'replace', ['seule@example.com'], []]);
       const got = await t.rpc('admin_form_routing_get', [uid(4)]);
       assert.equal(got.mode, 'replace'); assert.deepEqual(got.emails, ['seule@example.com']);
       assert.deepEqual(got.default.blocs.map((b) => b.email), ['bloc.thoracique@example.com']);
@@ -599,6 +623,22 @@ test('agenda : diffusion du PDF, destinataires par défaut et personnalisation',
       assert.deepEqual(await recipients(d3), { emails: [], members: [] });
       await t.as(2); await t.rpc('admin_form_routing_set', [uid(4), 'add', [], []]);
       assert.equal((await t.rpc('admin_form_routing_get', [uid(4)])).mode, null, 'ajouter sans rien équivaut à supprimer');
+    });
+    await st.test('une erreur dans un déclencheur n’annule jamais la validation', async () => {
+      await t.sup();
+      await t.db.exec('alter table absence_agenda_tasks add constraint test_boom check (false) not valid');
+      const a = await t.approve(4, ['2027-10-04', '2027-10-05']);
+      await t.sup();
+      assert.equal((await t.rows('select status from absences where id=$1', [a]))[0].status, 'approved');
+      assert.equal((await t.rows("select count(*)::int n from absence_diffusion_log where action='agenda_task_error'"))[0].n, 1);
+      await t.db.exec('alter table absence_agenda_tasks drop constraint test_boom');
+      await t.db.exec("alter table absence_outbox add constraint test_boom2 check (kind <> 'form_copy') not valid");
+      const b = await t.approve(4, ['2027-10-11', '2027-10-12']);
+      await t.sup();
+      assert.equal((await t.rows('select status from absences where id=$1', [b]))[0].status, 'approved');
+      assert.equal((await t.rows("select count(*)::int n from absence_outbox where kind='form' and $1 = any (absence_ids)", [b]))[0].n, 1);
+      assert.equal((await t.rows("select count(*)::int n from absence_diffusion_log where action='form_copy_error'"))[0].n, 1);
+      await t.db.exec('alter table absence_outbox drop constraint test_boom2');
     });
     await st.test('personnalisation : limites, validations et droits', async () => {
       await t.as(2);
@@ -640,10 +680,15 @@ test('agenda : reprise des documents existants et migration réexécutable', asy
     await t.migrate();
     assert.equal((await t.rows('select count(*)::int n from absence_agenda_tasks'))[0].n, 1);
     assert.equal((await t.rows("select count(*)::int n from onconic_migrations where version='202611180002'"))[0].n, 1);
-    // la tâche reprise se traite comme les autres
+    // la tâche reprise se traite comme les autres, mais en silence : aucun e-mail au médecin
+    assert.ok(tasks[0].notified_at);
     await t.sup();
-    await t.db.query('update profiles set admin_lead = true where id=$1', [uid(12)]);
-    assert.equal((await t.tasks(1)).length, 1);
+    const n0 = (await t.rows("select count(*)::int n from absence_outbox where kind='agenda_done'"))[0].n;
+    const list = await t.tasks(1);
+    assert.equal(list.length, 1);
+    await t.as(1); await t.rpc('absence_agenda_set', [list[0].id, true]);
+    await t.sup();
+    assert.equal((await t.rows("select count(*)::int n from absence_outbox where kind='agenda_done'"))[0].n, n0);
   } finally { await t.db.close(); }
 });
 
@@ -660,6 +705,9 @@ test('buildAgendaEmail : validation, modification, annulation ; périodes, jours
   assert.match(mod.subject, /Absence modifiée de Dr Fictif : débloquer .* puis bloquer/);
   assert.match(mod.text, /À débloquer/); assert.match(mod.text, /À bloquer/); assert.match(mod.text, /01\.02\.2027 – 02\.02\.2027/);
   assert.ok(mod.text.indexOf('À débloquer') < mod.text.indexOf('À bloquer'));
+  const mod0 = buildAgendaEmail({ ...base, action: 'modified', unblock: [] });
+  assert.match(mod0.subject, /Absence modifiée de Dr Fictif : nouvelle plage Ultragenda à bloquer/);
+  assert.doesNotMatch(mod0.subject + mod0.text + mod0.html, /débloquer|À débloquer/);
   const can = buildAgendaEmail({ ...base, action: 'cancelled_direct', block: [], unblock: [ENTRY] });
   assert.match(can.subject, /Absence annulée de Dr Fictif : plages Ultragenda à débloquer/);
   assert.doesNotMatch(can.text, /À bloquer/);

@@ -230,7 +230,8 @@ export function buildAgendaEmail(c: AgendaMail) {
   const ps = (l: AgendaEntry[]) => l.map((e) => period(e.start, e.end)).join(" ; ");
   const subject = kind === "approved" ? `Absence validée de ${c.owner} : plages Ultragenda à bloquer`
     : kind === "cancelled" ? `Absence annulée de ${c.owner} : plages Ultragenda à débloquer`
-    : `Absence modifiée de ${c.owner} : débloquer ${ps(c.unblock) || "l'ancienne période"} puis bloquer ${ps(c.block) || "la nouvelle période"}`;
+    : c.unblock.length ? `Absence modifiée de ${c.owner} : débloquer ${ps(c.unblock)} puis bloquer ${ps(c.block) || "la nouvelle période"}`
+    : `Absence modifiée de ${c.owner} : nouvelle plage Ultragenda à bloquer`;
   const url = `${SITE}/app/absences.html#agenda`;
   const sections: { title: string; items: string[] }[] = [];
   if (c.unblock.length) sections.push({ title: "À débloquer dans Ultragenda", items: c.unblock.map(entryLine) });
