@@ -34,6 +34,11 @@ const sb={
   if(name==='absence_history')data=[{entity:'absences',action:'UPDATE',actor_name:'Direction fictive',at:'2026-11-11T10:00:00Z',before_data:{start_date:'2027-01-01',end_date:'2027-01-02'},after_data:{id:42,start_date:'2027-02-01',end_date:'2027-02-02'}}];
   if(name==='absence_document_versions')data=[{id:99,action:'modified',at:'2026-11-11T10:00:00Z'}];
   if(name==='absence_notification_status')data={pending:1,failed:0,sent:2};
+  if(name==='absence_agenda_context')data={tab:true,pending:1,secretary_of:[{id:'cadre1',name:'Dr Cadre Fictif'}]};
+  if(name==='absence_agenda_pending_count')data=1;
+  if(name==='absence_agenda_status')data={'42':{status:'done',done_at:'2026-11-12T09:00:00Z'}};
+  if(name==='absence_agenda_tasks_list')data=[{id:7,document_id:3,owner_id:'doc1',owner_name:'Dr Fictif',clinics:['Thoracique'],action:'modified',kind:'modified',status:window.agendaDone?'done':'todo',block:[{absence_id:42,start:'2027-04-05',end:'2027-04-07',void:false,days:['2027-04-05','2027-04-06','2027-04-07']}],unblock:[{absence_id:42,start:'2027-03-01',end:'2027-03-03',void:false,days:['2027-03-01','2027-03-02','2027-03-03']}],done_by_name:window.agendaDone?'Assistante Fictive':null,done_at:window.agendaDone?'2026-11-18T10:30:00Z':null,past:false}];
+  if(name==='absence_agenda_set'){window.agendaDone=args.p_done;data={status:args.p_done?'done':'todo'};}
   if(name==='absence_balance')data={year:2027,vacation:{allowance:25,used:2,remaining:23},congress:{allowance:3,used:0,remaining:3}};
   return {data,error:null};
  },functions:{invoke:async(name,args)=>{window.calls.push({name,args});return {data:{file:'test.pdf',pdf:btoa('%PDF-test')},error:null};}}
@@ -81,6 +86,17 @@ try:
   expect(details).to_contain_text('Rectificatif D99')
   details.get_by_role('button',name='Rectificatif D99',exact=False).click()
   page.wait_for_function('window.calls.some(c=>c.name==="notify-absence" && c.args.body.document_id===99)')
+  expect(page.locator('#ab-t-agenda')).to_be_visible()
+  expect(page.locator('#ab-agenda-n')).to_have_text('1')
+  expect(page.locator('#ab-for-wrap')).to_be_visible()
+  expect(page.locator('.ab-item-head').first).to_contain_text('Ultragenda : bloqué le 12.11.2026')
+  page.locator('#ab-t-agenda').click()
+  expect(page.locator('#ab-agenda-list')).to_contain_text('Dr Fictif')
+  expect(page.locator('#ab-agenda-list')).to_contain_text('À débloquer')
+  expect(page.locator('#ab-agenda-list')).to_contain_text('lu 05.04, ma 06.04, me 07.04')
+  page.locator('#ab-agenda-list input[type=checkbox]').check()
+  page.wait_for_function('window.calls.some(c=>c.name==="absence_agenda_set" && c.args.p_done===true)')
+  expect(page.locator('#ab-agenda-list')).to_contain_text('Fait par Assistante Fictive le 18.11.2026')
   assert not errors,errors
   browser.close()
  print('Chromium : choix initial et modification du compte, première connexion, validation admin, historique et téléchargement de version OK')
