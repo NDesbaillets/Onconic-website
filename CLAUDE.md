@@ -26,11 +26,13 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Key trials** | App des études clés (fiches, schéma, traitements, courbes KM) |
 | **Lettres** | App des lettres types de garantie de prise en charge (assurances) |
 | **Congrès** | App « Qui d'autre butine au congrès ? » |
-| **Oncoodle** | App de sondages (date à choisir, participation), tous les membres validés, sans externes |
+| **Oncoodle** | En production (migration `202611130002`, fonction `notify-oncoodle`) ; voir memory/projects/oncoodle.md |
 | **LS** | Liste des spécialités de l'OFSP (limitations, codes d'indication) |
 | **médecin plus** | Drapeau caché `profiles.med_plus` donnant accès aux Lettres médicales |
 | **rôles** | Trois rôles de médecins : clinician (**médecin assistant**), cdc (CDC = chef de clinique : médecin + gestion des fiches Key trials de ses cliniques), cadre (**médecin cadre** : exactement les droits d'un CDC, plus la validation des absences, s'il est coché « validateur des absences » et désigné pour une clinique par l'admin). Puis admin, direction (« Admin de direction » : gère les membres, le calendrier commun et les deux annuaires, vise les absences en 2e ligne, voir memory/projects/absences.md), assistant (assistante médicale : sans Congrès, Absences ni Key trials par défaut depuis le 12.11.2026), nurse (infirmier·ère : Durée, Key trials, Formation et les deux annuaires seulement), pharmacist ; « member » = en attente de validation. Les codes de rôle en base ne changent pas, seuls les libellés |
 | **pharmacist** | Droits médecin + assistante réunis, et administration de Lettres d'assurance, Limitations LS et Durée (`is_app_admin()`) |
+| **fonctions d'assistante** | Cochées dans Membres et accès sur le rôle assistant : « Cadre administratif » (planning, comptes temporaires), « Gestion des agendas médecins » (cliniques gérées, blocage Ultragenda), « Secrétaire de médecin cadre » (cadres attribués : voit et demande leurs absences, gère leur blocage Ultragenda) |
+| **cliniques** | 11 cliniques de référence, dont **GI tube** (œsophage, estomac/JOG, colorectal, canal anal, GIST, TNE non pancréatiques) et **GI solide** (pancréas, voies biliaires, CHC), qui remplacent Lower GI et Upper GI depuis le 18.11.2026 ; plus ION, UTOH, Plateforme et Administration dans Absences |
 → Glossaire complet : memory/glossary.md
 
 ## Projets actifs
@@ -41,10 +43,10 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 | **Congrès** | En ligne ; veille mensuelle programmée sur 18 mois (connecteur Supabase à attacher) |
 | **Lettres médicales** | Accès « médecin plus » caché, Haiku via Edge Function ; mise en service à finaliser |
 | **Limitations LS** | Recherche des limitations et codes d'indication, ordonnances per os ; LS à importer, 48 textes à valider |
-| **Absences** | En ligne (PR #63, 06.11.2026) : demandes (vacances, congrès, autre), planning mensuel avec agenda commun (fériés vaudois, vacances scolaires, événements), validation par tous les validateurs concernés (cadres désignés par clinique), envoi par lot après confirmation, e-mails, agenda iCal, refus supprimables, avertissement de chevauchement, export Word, proposition depuis Congrès (voir memory/projects/absences.md) ; SQL et fonction `notify-absence` déjà déployés ; à régler dans l'admin : rôles Cadre, cliniques des médecins, valideurs, vacances scolaires à confirmer |
+| **Absences** | En ligne depuis le 06.11.2026 (voir memory/projects/absences.md). En production le 18.11.2026 : circuit de validation configurable (`/admin/circuit-absences.html`, éditeur visuel en colonnes, circuits alternatifs par membre, rôle ou clinique, étapes direction et groupe, cheffe de service prévue inactive ; migration `202611180001`) ; diffusion du PDF validé aux blocs et secrétaires, onglet « Blocage Ultragenda » avec case tracée et avis au médecin, secrétaires de médecin cadre (migration `202611180002`, `/admin/diffusion-absences.html`) ; décision depuis le planning et planning de la clinique dans « À valider ». À faire : créer les blocs (cliniques, boîtes communes, responsables), cocher les fonctions des assistantes, prévenir les assistantes que les absences futures déjà validées sont « à bloquer » une fois |
 | **Oncoodle** | Développé le 13.11.2026 (voir memory/projects/oncoodle.md) ; migration `202611130002` et fonction `notify-oncoodle` à appliquer sur le projet de test, puis production sur feu vert ; secret Vault `oncoodle_worker_url` à créer |
 | **Infrastructure** | Supabase Pro, sauvegarde nocturne chiffrée, projet de test et aperçus Cloudflare (13.11.2026) ; suite : migration de sécurité, audit avant l'annonce, démarches nLPD |
-| **Administration** | `/admin/membres.html` : membres, rôles, accès par outil (`has_tool`, exceptions `tool_access`), fin d'accès, case « Cadre administratif », « Renvoyer l'invitation » (fonction `resend-invite`) ; acceptation d'une demande d'adhésion avec rôle, cliniques, validation et outils d'emblée (`/admin/review.html`, 17.11.2026) |
+| **Administration** | `/admin/membres.html` : membres, rôles, accès par outil (`has_tool`, exceptions `tool_access`), fin d'accès, cases « Cadre administratif », « Gestion des agendas médecins » et « Secrétaire de médecin cadre », « Renvoyer l'invitation » (fonction `resend-invite`) ; acceptation d'une demande d'adhésion avec rôle, cliniques, validation et outils d'emblée (`/admin/review.html`, 17.11.2026) |
 | **Page d'accueil** | Ton médical, abeilles discrètes (PR #25-26) |
 | **PWA** | Manifeste, service worker, page hors ligne, astuce iPhone (branche en relecture) |
 | **Notifications congrès** | Web Push « un autre membre participe au même congrès » ; SQL et fonction à déployer avant fusion (voir memory/projects/notifications.md) |
@@ -65,7 +67,8 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 
 - `assets/js/config.js` choisit le projet selon l'adresse : seules `onconic.ch` et `www.onconic.ch` vont en production ; toute autre adresse va au test, avec un bandeau orange.
 - Sauvegardes : quotidiennes Supabase (7 jours) et nocturne chiffrée vers Infomaniak Swiss Backup (workflow `.github/workflows/sauvegarde-nocturne.yml`, procédure de restauration dans `docs/sauvegardes.md`). Restauration complète testée le 13.11.2026 ; prochain test en février 2027.
-- Aucun lien GitHub automatique entre le dépôt et Supabase : les migrations s'appliquent à la main, selon la règle ci-dessus.
+- Aucun lien GitHub automatique entre le dépôt et Supabase : les migrations s'appliquent à la main, selon la règle ci-dessus. Une migration de plus de 25 Ko s'applique par lots transactionnels d'environ 22 Ko (commentaires retirés, coupure entre deux instructions hors `$$`), vérifiés d'abord en PGlite, deux fois de suite.
+- Les fichiers `supabase/*.sql` sont des bases historiques à ne plus rejouer (ils contiennent par exemple les anciens noms Lower GI et Upper GI) ; seules les migrations de `supabase/migrations/` font foi. Dernière migration en production : `202611180003` (18.11.2026).
 
 ## Agents et sessions
 - Agents du dépôt : `developpeur` (Sonnet), `developpeur-rapide` (Haiku), `relecteur-code` et `relecteur-securite` (Sonnet) (ici, `.claude/agents/`), `redacteur-clinique` et `verificateur-references` (dans onconic-content).
