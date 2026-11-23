@@ -1002,8 +1002,9 @@
 
   // ----- Formulaire papier du département (PDF pré-rempli, signé électroniquement) -----
   // Un formulaire couvre toutes les absences validées du même envoi (même membre, même date d'envoi).
-  async function downloadForm(a, documentId) {
-    const msg = $("ab-mine-msg");
+  // PDF de l'état actuel d'une demande (demandée, validée ou refusée) ; msgNode : zone de message de l'onglet appelant
+  async function downloadForm(a, documentId, msgNode) {
+    const msg = msgNode || $("ab-mine-msg");
     const ids = [a.id];
     say(msg, "Préparation du formulaire…");
     const { data, error } = await sb.functions.invoke("notify-absence", { body: documentId ? { action: "form", document_id: documentId } : { action: "form", ids } });
@@ -1019,10 +1020,11 @@
     setTimeout(() => URL.revokeObjectURL(url), 10000);
     say(msg, "Formulaire téléchargé.", "ok");
   }
-  function formButton(a, own) {
-    if (a.status !== "approved" || !a.submitted_at) return null;
+  // Bouton « Imprimer le formulaire (PDF) » : demandée, validée (document figé) ou refusée ; ni brouillon ni annulée. Aucun e-mail n'est envoyé.
+  function formButton(a, own, msgNode) {
+    if (!["requested", "approved", "rejected"].includes(a.status) || !a.submitted_at) return null;
     if (own && !["clinician", "cdc", "cadre"].includes(state.ctx.role)) return null;
-    return button("Télécharger le formulaire (PDF)", "btn btn-outline", () => downloadForm(a));
+    return button("Imprimer le formulaire (PDF)", "btn btn-outline", () => downloadForm(a, null, msgNode));
   }
 
   function historyPanel(a, own) {
@@ -1422,7 +1424,31 @@
     const yes = button(isChange ? "Accepter le changement" : mineVisa ? "Viser (valider)" : "Valider", "btn", () => decide(true, yes, no));
     const no = button(isChange ? "Refuser le changement" : "Refuser", "btn btn-outline", () => decide(false, yes, no));
     actions.append(yes, no);
-    return [lab, out, actions];
+    const parts = [lab, out, actions];
+    // Visa de la direction avec envoi à l'étape « sur décision » (cheffe de service) : bouton inactif, avec la raison, si personne n'est désigné
+    if (a.escalation) {
+      const box = el("div", "ab-escalate");
+      const note = el("input"); note.type = "text"; note.maxLength = 500; note.placeholder = "Note pour l'étape suivante (facultatif)";
+      const nlab = el("label", "ab-comment", "Note pour l'étape suivante");
+      nlab.append(note);
+      const hint = el("p", "muted ab-item-meta", a.escalation.available
+        ? `Enregistre votre visa, puis envoie la demande à l'étape « ${a.escalation.label} » : elle n'est conclue qu'après sa décision.`
+        : a.escalation.reason);
+      const go = button("Envoyer à : " + a.escalation.label, "btn btn-outline", async () => {
+        go.disabled = true; yes.disabled = true; no.disabled = true;
+        const { error } = await sb.rpc("absence_visa_escalate", { p_id: a.id, p_note: note.value.trim() || null });
+        if (error) { go.disabled = !a.escalation.available; yes.disabled = no.disabled = false; return say(out, error.message, "error"); }
+        state.comments.delete(String(a.id));
+        mailer();
+        await onDone(`${a.name} : visa enregistré, la demande est envoyée à l'étape « ${a.escalation.label} ».`);
+      });
+      go.disabled = !a.escalation.available;
+      if (!a.escalation.available) go.title = a.escalation.reason || "";
+      box.append(nlab, el("div", "btn-row", null), hint);
+      box.querySelector(".btn-row").append(go);
+      parts.push(box);
+    }
+    return parts;
   }
 
   // ----- Mini-planning de la clinique (onglet À valider) : état propre, sans toucher au planning ni à ses préférences -----
@@ -1564,11 +1590,15 @@
       } else if (st.kind === "visa") {
         card.append(el("p", "muted ab-item-meta", "Aucun validateur de clinique : votre visa conclut la demande."));
       }
+      if (a.escalated) card.append(el("p", "muted ab-item-meta", `Envoyée à la cheffe de service par ${a.escalated.by || "la direction"} le ${fmtDT(a.escalated.at)}${a.escalated.note ? " · « " + a.escalated.note + " »" : ""}.`));
       const ops = opinionsBlock(a.opinions);
       if (ops) card.append(ops);
       const w = warnBox(a.conflicts, "Attention : trop d'absences en même temps si vous validez");
       if (w) card.append(w);
       card.append(...decisionControls(a, (msg) => { say($("ab-todo-msg"), msg, "ok"); return afterChange(); }));
+      const pdfRow = el("div", "btn-row ab-actions");
+      pdfRow.append(button("Imprimer le formulaire (PDF)", "btn btn-outline", () => downloadForm(a, null, $("ab-todo-msg"))));
+      card.append(pdfRow);
       cards.set(String(a.id), card);
       if (wide) {
         card.tabIndex = 0;
@@ -1976,6 +2006,120 @@
     });
   }
 
+  // ----- Suivi (direction et administration) : où en est chaque demande, parcours détaillé, PDF de l'état actuel -----
+  const TRK_STATUS = { requested: "En cours", approved: "Validée", rejected: "Refusée", cancelled: "Annulée" };
+  const TRK_ROLE = { clinician: "médecin assistant", cdc: "chef de clinique", cadre: "médecin cadre", assistant: "assistante", nurse: "infirmier·ère", pharmacist: "pharmacien·ne", direction: "direction", admin: "admin" };
+  const trk = { rows: [], tok: 0, open: new Set() };
+  const trkSlug = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z]+/gi, "-").toLowerCase();
+  const trkOpen = (r) => r.status === "requested" || (r.status === "approved" && !!r.change_type);
+  // Parcours d'une demande : pré-avis, colonnes d'étapes (personnes, état, horodatage, commentaire), envoi à l'étape sur décision, décision finale
+  function trailNode(r) {
+    const t = r.trail || {};
+    const box = el("div", "ab-trail");
+    if ((t.opinions || []).length) {
+      box.append(el("h4", "ab-trail-title", "Pré-avis de la direction (consultatif)"));
+      const ul = el("ul", "ab-trail-people");
+      t.opinions.forEach((o) => ul.append(el("li", "st-" + (o.opinion === "favorable" ? "ok" : "ko"), `${o.name} : ${o.opinion === "favorable" ? "favorable" : "défavorable"} le ${fmtDT(o.at)}${o.comment ? " · « " + o.comment + " »" : ""}`)));
+      box.append(ul);
+    }
+    const cols = new Map();
+    (t.steps || []).forEach((s) => { if (!cols.has(s.col)) cols.set(s.col, []); cols.get(s.col).push(s); });
+    if (cols.size) {
+      const row = el("div", "cc-builder sim ab-trail-cols");
+      [...cols.entries()].sort((a, b) => a[0] - b[0]).forEach(([, steps], i) => {
+        if (i) row.append(el("div", "cc-gap sim"));
+        const ce = el("div", "cc-col");
+        ce.append(el("div", "cc-col-head", "Étape " + (i + 1) + (steps.length > 1 ? " · simultanées" : "")));
+        const stack = el("div", "cc-stack");
+        steps.forEach((s) => {
+          const c = el("div", `cc-card sim k-${s.kind}${s.blocking ? "" : " soft"}${s.on_demand ? " od" : ""} ab-st-${trkSlug(s.state)}${s.current ? " current" : ""}`);
+          c.append(el("div", "cc-card-label", s.label));
+          const pills = el("div", "cc-pills");
+          pills.append(el("span", "cc-pill ab-trail-state", s.state));
+          if (s.on_demand) pills.append(el("span", "cc-pill dash", "sur décision de la direction"));
+          c.append(pills);
+          if ((s.people || []).length) {
+            const ul = el("ul", "ab-trail-people");
+            s.people.forEach((p) => ul.append(el("li", "st-" + trkSlug(p.state), `${p.name} : ${p.state}${p.at ? " le " + fmtDT(p.at) : ""}${p.comment ? " · « " + p.comment + " »" : ""}`)));
+            c.append(ul);
+          }
+          stack.append(c);
+        });
+        ce.append(stack);
+        row.append(ce);
+      });
+      box.append(row);
+    }
+    if (t.escalation) box.append(el("p", "ab-trail-line", `Envoyée à la cheffe de service par ${t.escalation.by || "la direction"} le ${fmtDT(t.escalation.at)}${t.escalation.note ? " · note : « " + t.escalation.note + " »" : ""}.`));
+    if (t.final) box.append(el("p", "ab-trail-line", `Décision : ${DECISION[t.final.decision] || t.final.decision || "sans précision"}${t.final.by ? " par " + t.final.by : ""} le ${fmtDT(t.final.at)}${t.final.comment ? " · « " + t.final.comment + " »" : ""}.`));
+    if ((t.history || []).length > 1) {
+      const d = el("details", "ab-progress");
+      d.append(el("summary", null, "Décisions enregistrées (" + t.history.length + ")"));
+      t.history.forEach((h) => d.append(el("p", "muted", `${fmtDT(h.at)} · ${DECISION[h.decision] || h.decision}${h.by ? " · " + h.by : ""}${h.comment ? " · « " + h.comment + " »" : ""}`)));
+      box.append(d);
+    }
+    if (!box.children.length) box.append(el("p", "muted", "Aucun détail enregistré pour cette demande."));
+    return box;
+  }
+  function renderTrack() {
+    const body = $("ab-trk-body");
+    body.replaceChildren();
+    const st = $("ab-trk-status").value, clinic = $("ab-trk-clinic").value, q = $("ab-trk-q").value.trim().toLowerCase();
+    const list = trk.rows.filter((r) => (st === "all" || (st === "open" ? trkOpen(r) : r.status === st))
+      && (!clinic || (r.clinics || []).includes(clinic)) && (!q || String(r.name || "").toLowerCase().includes(q)));
+    $("ab-trk-count").textContent = trk.rows.length ? `${plur(list.length, "demande affichée", "demandes affichées")} sur ${trk.rows.length} dans la période.` : "";
+    if (!list.length) { const tr = el("tr"); const td = el("td", "muted", trk.rows.length ? "Aucune demande ne correspond à ces filtres." : "Aucune demande dans cette période."); td.colSpan = 6; tr.append(td); body.append(tr); return; }
+    list.forEach((r) => {
+      const open = trk.open.has(r.id);
+      const tr = el("tr", "ab-trk-row" + (open ? " open" : ""));
+      const who = el("td"); who.append(el("strong", null, r.name), el("span", "muted", " · " + (TRK_ROLE[r.role] || r.role || "")));
+      const when = `${KINDS[r.kind] ? KINDS[r.kind][0] : r.kind} · ${period(r.start_date, r.end_date)}`;
+      const chg = r.change_type ? ` · ${r.change_type === "delete" ? "suppression demandée" : "modification demandée"}` : "";
+      const stateTxt = (TRK_STATUS[r.status] || r.status) + chg + (r.escalated ? " · envoyée à la cheffe de service" : "");
+      tr.append(who, el("td", null, (r.clinics || []).join(", ") || "Sans clinique"), el("td", null, when), el("td", null, stateTxt), el("td", null, r.step_label || "Aucune"));
+      const act = el("td", "ab-trk-act");
+      const toggle = button(open ? "Masquer" : "Parcours", "btn btn-outline", () => { open ? trk.open.delete(r.id) : trk.open.add(r.id); renderTrack(); });
+      toggle.setAttribute("aria-expanded", String(open));
+      act.append(toggle);
+      if (["requested", "approved", "rejected"].includes(r.status)) act.append(button("Imprimer le formulaire (PDF)", "btn btn-outline", () => downloadForm({ id: r.id }, null, $("ab-trk-msg"))));
+      tr.append(act);
+      body.append(tr);
+      if (open) {
+        const dr = el("tr", "ab-trk-detail"); const td = el("td"); td.colSpan = 6;
+        if (r.note) td.append(el("p", "muted", "Précision : " + r.note));
+        if (r.change_type === "modify") td.append(el("p", null, `Nouvelle période demandée : ${KINDS[r.change_kind] ? KINDS[r.change_kind][0] : r.change_kind} · ${period(r.change_start, r.change_end)}`));
+        td.append(trailNode(r)); dr.append(td); body.append(dr);
+      }
+    });
+  }
+  async function loadTrack() {
+    const from = $("ab-trk-from").value, to = $("ab-trk-to").value, msg = $("ab-trk-msg");
+    if (!from || !to || to < from) return say(msg, "Vérifiez les dates.", "error");
+    if ((pd(to) - pd(from)) / 864e5 > 800) return say(msg, "Fenêtre trop longue (800 jours au plus).", "error");
+    const tok = ++trk.tok;
+    say(msg, "Chargement…");
+    const { data, error } = await sb.rpc("absence_track", { p_from: from, p_to: to });
+    if (tok !== trk.tok) return;
+    if (error) return say(msg, error.message, "error");
+    say(msg, "");
+    trk.rows = data || [];
+    const sel = $("ab-trk-clinic"), cur = sel.value;
+    const clinics = [...new Set(trk.rows.flatMap((r) => r.clinics || []))].sort((a, b) => a.localeCompare(b, "fr"));
+    sel.replaceChildren(); const all = el("option", null, "Toutes"); all.value = ""; sel.append(all);
+    clinics.forEach((c) => { const o = el("option", null, c); o.value = c; sel.append(o); });
+    sel.value = clinics.includes(cur) ? cur : "";
+    renderTrack();
+  }
+  function initTrack() {
+    const t = new Date();
+    const defaults = () => { $("ab-trk-from").value = monthStart(t.getFullYear(), t.getMonth() - 1); $("ab-trk-to").value = monthEnd(t.getFullYear(), t.getMonth() + 12); };
+    defaults();
+    $("ab-trk-reset").addEventListener("click", () => { defaults(); loadTrack(); });
+    $("ab-trk-form").addEventListener("submit", (e) => { e.preventDefault(); loadTrack(); });
+    for (const id of ["ab-trk-status", "ab-trk-clinic"]) $(id).addEventListener("change", renderTrack);
+    $("ab-trk-q").addEventListener("input", renderTrack);
+  }
+
   // ----- Direction : absence saisie au nom d'un membre, validée d'office -----
   const MEDICAL = /maladie|accident|maternit|paternit|m[ée]dical|enceinte|hospital|sant[ée]/i;
   function initDirection() {
@@ -2104,7 +2248,7 @@
   }
 
   function setTab(name) {
-    for (const t of ["plan", "mine", "todo", "agenda", "dir", "exp"]) {
+    for (const t of ["plan", "mine", "todo", "agenda", "track", "dir", "exp"]) {
       const on = t === name;
       $("ab-t-" + t).setAttribute("aria-selected", String(on));
       $("ab-p-" + t).hidden = !on;
@@ -2114,6 +2258,7 @@
     if (name === "todo") loadTodo();
     if (name === "mine") loadMine();
     if (name === "agenda") { loadAgenda(); refreshAgendaCount(); }
+    if (name === "track") loadTrack();
   }
 
   // ----- Mon circuit de validation (bas des onglets Planning et Mes absences) -----
@@ -2299,6 +2444,9 @@
       initExport();
     }
     if (state.isDir) {
+      $("ab-t-track").hidden = false;
+      $("ab-t-track").addEventListener("click", () => setTab("track"));
+      initTrack();
       $("ab-t-dir").hidden = false;
       $("ab-t-dir").addEventListener("click", () => setTab("dir"));
       initDirection();

@@ -52,9 +52,11 @@ const safeError = (e: unknown) => String((e as Error)?.message ?? e).replace(/[^
 const ROLE_LABEL: Record<string, string> = { clinician: "médecin assistant", cdc: "chef de clinique", cadre: "médecin cadre" };
 const slug = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "membre";
 
-// Formulaire PDF d'un envoi d'absences validées (données lues en base, jamais dans la requête)
-async function renderForm(ids: number[], documentId?: number) {
-  const { data: d } = documentId ? await admin.rpc("absence_document_data", { p_document: documentId }) : await admin.rpc("absence_form_data", { p_ids: ids });
+// Formulaire PDF d'un envoi d'absences (données lues en base, jamais dans la requête). Avec `current`, état du moment (demandée, validée ou refusée) :
+// un document figé pour des absences validées, sinon signatures données, cases en attente vides, refus coché « Défavorable ». Aucune écriture, aucun e-mail.
+async function renderForm(ids: number[], documentId?: number, current = false) {
+  const { data: d } = documentId ? await admin.rpc("absence_document_data", { p_document: documentId })
+    : current ? await admin.rpc("absence_form_current", { p_ids: ids }) : await admin.rpc("absence_form_data", { p_ids: ids });
   if (!d) return { error: "not_found" as const };
   if (d.no_form) return { error: "no_form" as const };
   let logo: Uint8Array | null = null;
@@ -63,10 +65,11 @@ async function renderForm(ids: number[], documentId?: number) {
   const form: FormData = {
     role: d.role, owner: d.owner, clinics: d.clinics ?? [], requestedAt: d.requested_at ?? now, absences: d.absences.map((a: Abs) => externalAbsence(a)), signers: (d.signers ?? []).map((s: { name: string; at: string }) => ({ name: s.name, at: s.at })), direction: d.direction ?? null,
     extra: (d.extra ?? []).map((x: { label: string; name: string; at: string; slot: string | null }) => ({ label: x.label, name: x.name, at: x.at, slot: x.slot ?? null })),
-    generatedAt: now, ref: `OC-ABS-D${d.document_id}`, action: d.action,
+    refusal: d.refusal ? { kind: d.refusal.kind, label: d.refusal.label, name: d.refusal.name, at: d.refusal.at, comment: d.refusal.comment ?? null, slot: d.refusal.slot ?? null } : null,
+    generatedAt: now, ref: d.live ? `OC-ABS-A${ids[0]}` : `OC-ABS-D${d.document_id}`, action: d.action,
   };
   const bytes = await buildAbsenceForm(form, logo);
-  const file = `${d.action === "cancelled" || d.action === "cancelled_direct" ? "Annulation" : d.action === "modified" || d.action === "modified_direct" ? "Rectificatif" : "Demande"}_D${d.document_id}_absence_${FILE_LABEL[d.role as keyof typeof FILE_LABEL]}_${slug(d.owner)}_${now.slice(0, 10).replaceAll("-", "")}.pdf`;
+  const file = `${d.action === "cancelled" || d.action === "cancelled_direct" ? "Annulation" : d.action === "modified" || d.action === "modified_direct" ? "Rectificatif" : "Demande"}_${d.live ? "A" + ids[0] : "D" + d.document_id}_absence_${FILE_LABEL[d.role as keyof typeof FILE_LABEL]}_${slug(d.owner)}_${now.slice(0, 10).replaceAll("-", "")}.pdf`;
   return { bytes, file, form };
 }
 
@@ -220,7 +223,7 @@ Deno.serve(async (req) => {
   const auth = worker ? null : (await admin.auth.getUser(token)).data;
   if (!worker && !auth?.user) return json(req, 401, { error: "unauthorized" });
 
-  // Téléchargement d'un formulaire par un membre autorisé (l'intéressé, ses validateurs, un admin) : { action: "form", ids: [..] }
+  // Téléchargement d'un formulaire par un membre autorisé (voir absence_pdf_access) : { action: "form", ids: [..] } ; version figée d'un document : { action: "form", document_id }
   const body = await req.json().catch(() => ({}));
   if (body?.action === "form") {
     if (!auth?.user || worker) return json(req, 403, { error: "forbidden" });
@@ -234,9 +237,10 @@ Deno.serve(async (req) => {
     }
     const ids = Array.isArray(body.ids) ? body.ids.map(Number).filter((n: number) => Number.isInteger(n) && n > 0).slice(0, 50) : [];
     if (!ids.length) return json(req, 400, { error: "ids" });
-    const { data: ok } = await admin.rpc("absence_form_access", { p_caller: auth.user.id, p_ids: ids });
+    // PDF de l'état actuel : demandée, validée ou refusée ; l'intéressé, ses secrétaires, ses validateurs, les personnes sollicitées, la direction et l'administration
+    const { data: ok } = await admin.rpc("absence_pdf_access", { p_caller: auth.user.id, p_ids: ids });
     if (!ok) return json(req, 403, { error: "forbidden" });
-    const r = await renderForm(ids);
+    const r = await renderForm(ids, undefined, true);
     if ("error" in r) return json(req, r.error === "no_form" ? 422 : 404, { error: r.error });
     return json(req, 200, { file: r.file, pdf: b64(r.bytes) });
   }

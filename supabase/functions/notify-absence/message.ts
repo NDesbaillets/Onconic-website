@@ -1,6 +1,6 @@
 // Messages des absences (e-mail et push). Fonctions pures, testables hors Supabase.
 export type Lang = "fr" | "en";
-export type Kind = "to_validate" | "to_validate_change" | "approved" | "rejected" | "change_approved" | "change_rejected" | "to_direction" | "direction_change" | "to_opinion" | "peer_rejected" | "on_behalf" | "agenda_done";
+export type Kind = "to_validate" | "to_validate_change" | "approved" | "rejected" | "change_approved" | "change_rejected" | "to_direction" | "direction_change" | "to_opinion" | "peer_rejected" | "on_behalf" | "agenda_done" | "escalated";
 
 export type Abs = {
   id: number; kind: "vacances" | "congres" | "autre"; start_date: string; end_date: string; note: string | null;
@@ -49,6 +49,8 @@ const T = {
     agendaBlocked: (p: string[]) => p.length > 1 ? `Vos absences (${p.join(" ; ")}) sont bloquées dans Ultragenda` : `Votre absence du ${p[0]} est bloquée dans Ultragenda`,
     agendaUnblocked: (p: string[]) => p.length > 1 ? `Vos absences (${p.join(" ; ")}) sont débloquées dans Ultragenda` : `Votre absence du ${p[0]} est débloquée dans Ultragenda`,
     agendaBy: (by: string) => `Fait par ${by}.`,
+    escalated: (step: string) => `Votre demande d'absence a reçu le visa de la direction et a été envoyée à la cheffe de service pour signature${step ? ` (${step})` : ""}`,
+    escalatedNote: "Vous serez prévenu·e de la décision finale. L'avancement est consultable dans l'application.",
     dirNote: "La direction l'a enregistrée ou modifiée directement : elle est validée.",
     approved: "Votre absence est validée",
     approvedMany: "Votre demande d'absence est validée",
@@ -95,6 +97,8 @@ const T = {
     agendaBlocked: (p: string[]) => p.length > 1 ? `Your absences (${p.join("; ")}) are blocked in Ultragenda` : `Your absence from ${p[0]} is blocked in Ultragenda`,
     agendaUnblocked: (p: string[]) => p.length > 1 ? `Your absences (${p.join("; ")}) are unblocked in Ultragenda` : `Your absence from ${p[0]} is unblocked in Ultragenda`,
     agendaBy: (by: string) => `Done by ${by}.`,
+    escalated: (step: string) => `Your absence request received the management visa and was sent to the head of department for signature${step ? ` (${step})` : ""}`,
+    escalatedNote: "You will be notified of the final decision. Progress is available in the app.",
     dirNote: "Management entered or changed it directly: it is approved.",
     approved: "Your absence is approved",
     approvedMany: "Your absence request is approved",
@@ -157,6 +161,7 @@ export function buildEmail(c: Ctx) {
       if (c.action !== "cancelled") extra.push(t.dirNote);
       break;
     }
+    case "escalated": subject = t.escalated((c.stepLabel ?? "").trim()); extra.push(t.escalatedNote); break;
     case "on_behalf": subject = t.onBehalf(c.by ?? "—", c.action ?? "request"); extra.push(t.onBehalfNote); break;
     case "agenda_done": {
       const ps = (c.periods?.length ? c.periods : c.absences.map((a) => ({ start: a.start_date, end: a.end_date }))).map((p) => (lang === "fr" ? period(p.start, p.end) : period(p.start, p.end)));

@@ -8,8 +8,11 @@ export type FormRole = "clinician" | "cdc" | "cadre";
 export type FormAbsence = { kind: "vacances" | "congres" | "autre"; start_date: string; end_date: string; note: string | null };
 export type FormSigner = { name: string; at: string; comment?: string | null };
 export type FormExtra = { label: string; name: string; at: string; slot?: string | null };
+// Refus de l'état actuel (PDF à tout moment) : kind = clinique, visa ou une étape du circuit (slot « chef_service » pour la cheffe de service)
+export type FormRefusal = { kind: string; label: string; name: string; at: string; comment?: string | null; slot?: string | null };
 export type FormData = {
   extra?: FormExtra[];
+  refusal?: FormRefusal | null;
   role: FormRole; owner: string; clinics: string[]; requestedAt: string; absences: FormAbsence[]; signers: FormSigner[]; direction?: { name: string; at: string } | null;
   generatedAt: string; ref: string; action?: string;
 };
@@ -122,12 +125,13 @@ export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): P
   y -= 10;
 
   const signers = d.signers;
-  const optionRow = (label: string, who: FormSigner | null, favourable: boolean) => {
+  const refusal = d.refusal ?? null;
+  const optionRow = (label: string, who: FormSigner | null, favourable: boolean, unfavourable = false) => {
     need(40);
     text(label, ML, bold, 10);
     let x = ML + bold.widthOfTextAtSize(label, 10) + 8;
-    text("Favorable", x, reg, 10); x += reg.widthOfTextAtSize("Favorable", 10) + 6; box(x, y - 1, favourable && !!who); x += 28;
-    text("Défavorable", x, reg, 10); x += reg.widthOfTextAtSize("Défavorable", 10) + 6; box(x, y - 1, false); x += 30;
+    text("Favorable", x, reg, 10); x += reg.widthOfTextAtSize("Favorable", 10) + 6; box(x, y - 1, favourable && !!who && !unfavourable); x += 28;
+    text("Défavorable", x, reg, 10); x += reg.widthOfTextAtSize("Défavorable", 10) + 6; box(x, y - 1, unfavourable && !!who); x += 30;
     if (who) {
       const sig = `Signé électroniquement : ${who.name}`;
       page.drawText(safe(sig), { x: Math.max(x, ML + 270), y: y - 9, size: 8.5, font: bold, color: SIGN });
@@ -139,7 +143,10 @@ export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): P
   const directionRow = () => {
     need(30);
     text("VISA DE LA DIRECTION :", ML, bold, 10);
-    if (d.direction) {
+    if (refusal?.kind === "visa") {
+      page.drawText(safe(`Refus signé électroniquement : ${refusal.name}`), { x: ML + 200, y: y - 9, size: 8.5, font: bold, color: SIGN });
+      page.drawText(safe(stamp(refusal.at)), { x: ML + 200, y: y - 19, size: 8, font: reg, color: SIGN });
+    } else if (d.direction) {
       page.drawText(safe(`Signé électroniquement : ${d.direction.name}`), { x: ML + 200, y: y - 9, size: 8.5, font: bold, color: SIGN });
       page.drawText(safe(stamp(d.direction.at)), { x: ML + 200, y: y - 19, size: 8, font: reg, color: SIGN });
     } else page.drawText("Tampon - signature", { x: ML + 380, y: y - 9, size: 7.5, font: reg, color: GREY });
@@ -149,32 +156,43 @@ export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): P
   const extras = d.extra ?? [];
   const chef = extras.find((x) => x.slot === "chef_service") ?? null;
   const others = extras.filter((x) => x !== chef);
+  // refus par l'étape portant la case du chef de service : « non » coché et signature du refus ; refus d'une autre étape : ligne dans « Autres validations »
+  const chefRefusal = refusal && refusal.kind !== "clinique" && refusal.kind !== "visa" && refusal.slot === "chef_service" ? refusal : null;
   const chefSign = () => {
-    if (!chef) return;
+    const who = chef ?? chefRefusal;
+    if (!who) return;
     const x = ML + 300;
-    page.drawText(safe(`Signé électroniquement : ${chef.name}`), { x, y: y - 9, size: 8.5, font: bold, color: SIGN });
-    page.drawText(safe(stamp(chef.at)), { x, y: y - 19, size: 8, font: reg, color: SIGN });
+    page.drawText(safe(`${chefRefusal ? "Refus signé" : "Signé"} électroniquement : ${who.name}`), { x, y: y - 9, size: 8.5, font: bold, color: SIGN });
+    page.drawText(safe(stamp(who.at)), { x, y: y - 19, size: 8, font: reg, color: SIGN });
   };
   const comments = () => {
     text("Commentaires : ", ML, bold, 10);
     text(".".repeat(80), ML + bold.widthOfTextAtSize("Commentaires : ", 10), reg, 9, GREY); y -= 18;
   };
   const approvals = () => {
-    const rows = signers.length ? signers : [null, null, null] as (FormSigner | null)[];
+    const refused = refusal?.kind === "clinique" ? refusal : null;
+    const rows = signers.length || refused ? signers : [null, null, null] as (FormSigner | null)[];
     rows.forEach((s) => optionRow("Avis : ", s, true));
-    const withComments = signers.filter((s) => s.comment);
+    if (refused) optionRow("Avis : ", { name: refused.name, at: refused.at }, false, true);
+    const withComments = [...signers.filter((s) => s.comment), ...(refused?.comment ? [{ name: refused.name, at: refused.at, comment: refused.comment }] : [])];
     if (withComments.length) {
       text("Commentaires : ", ML, bold, 10); y -= 14;
       withComments.forEach((s) => para(`${s.name} : « ${s.comment} »`, ML + 12, CW - 14, ital, 9));
     } else comments();
   };
 
-  const chefRow = () => { text("AVIS DU CHEF DE SERVICE :", ML, bold, 10); if (!chef) text("Tampon et signature.", ML + 230, reg, 10); };
+  const chefRow = () => { text("AVIS DU CHEF DE SERVICE :", ML, bold, 10); if (!chef && !chefRefusal) text("Tampon et signature.", ML + 230, reg, 10); };
   // Lignes « Autres validations » après le visa : une ligne par étape supplémentaire approuvée
   const otherRows = () => {
-    if (!others.length) return;
-    y -= 6; need(18 + others.length * 14); text("Autres validations :", ML, bold, 10); y -= 16;
-    others.forEach((x) => para(`${x.label} : ${x.name}, signé électroniquement le ${stamp(x.at)}`, ML + 12, CW - 14, reg, 9, SIGN));
+    if (others.length) {
+      y -= 6; need(18 + others.length * 14); text("Autres validations :", ML, bold, 10); y -= 16;
+      others.forEach((x) => para(`${x.label} : ${x.name}, signé électroniquement le ${stamp(x.at)}`, ML + 12, CW - 14, reg, 9, SIGN));
+    }
+    // refus hors première ligne : qui, quand, motif
+    if (refusal && refusal.kind !== "clinique") {
+      y -= 6; need(30); text("Refus :", ML, bold, 10); y -= 16;
+      para(`${refusal.label} : défavorable, ${refusal.name}, signé électroniquement le ${stamp(refusal.at)}${refusal.comment ? ` · « ${refusal.comment} »` : ""}`, ML + 12, CW - 14, reg, 9, SIGN);
+    }
   };
   if (d.role === "clinician") {
     text("PRÉ-AVIS DES CHEFS DE CLINIQUE :", ML, bold, 10); y -= 20;
@@ -182,25 +200,26 @@ export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): P
     comments(); y -= 4; rule2();
     text("AVIS DU MÉDECIN CADRE RESPONSABLE DE LA CLINIQUE", ML, bold, 10); y -= 20;
     approvals(); y -= 4; directionRow();
-    if (chef) { y -= 4; chefRow(); chefSign(); y -= 22; }
+    if (chef || chefRefusal) { y -= 4; chefRow(); chefSign(); y -= 22; }
     otherRows();
   } else if (d.role === "cdc") {
     text("PRÉ-AVIS DU MÉDECIN CADRE RESPONSABLE DE LA CLINIQUE", ML, bold, 10); y -= 20;
     approvals(); y -= 4; directionRow(); rule2();
     chefRow(); y -= 22;
     need(24); text("Demande acceptée :", ML, reg, 10); let x = ML + reg.widthOfTextAtSize("Demande acceptée :", 10) + 14;
-    text("oui", x, reg, 10); box(x + 20, y - 1, !!chef); text("non", x + 55, reg, 10); box(x + 76, y - 1, false); chefSign(); y -= 24;
+    text("oui", x, reg, 10); box(x + 20, y - 1, !!chef); text("non", x + 55, reg, 10); box(x + 76, y - 1, !!chefRefusal); chefSign(); y -= 24;
     comments(); otherRows();
   } else {
-    if (signers.length) {
+    if (signers.length || refusal?.kind === "clinique") {
       text("VALIDATION EN LIGNE PRÉALABLE (Onconic)", ML, bold, 10); y -= 16;
+      if (refusal?.kind === "clinique") para(`${refusal.name} : défavorable, signé électroniquement le ${stamp(refusal.at)}${refusal.comment ? ` · « ${refusal.comment} »` : ""}`, ML + 12, CW - 14, reg, 9, SIGN);
       signers.forEach((s) => para(`${s.name} : favorable, signé électroniquement le ${stamp(s.at)}${s.comment ? ` · « ${s.comment} »` : ""}`, ML + 12, CW - 14, reg, 9, SIGN));
       y -= 8;
     }
     directionRow();
     chefRow(); y -= 22;
     need(24); text("Demande acceptée :", ML, reg, 10); const x = ML + reg.widthOfTextAtSize("Demande acceptée :", 10) + 14;
-    text("oui", x, reg, 10); box(x + 20, y - 1, !!chef); text("non", x + 55, reg, 10); box(x + 76, y - 1, false); chefSign(); y -= 24;
+    text("oui", x, reg, 10); box(x + 20, y - 1, !!chef); text("non", x + 55, reg, 10); box(x + 76, y - 1, !!chefRefusal); chefSign(); y -= 24;
     comments(); dots(); otherRows();
   }
 

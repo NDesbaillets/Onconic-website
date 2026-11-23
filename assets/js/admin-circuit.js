@@ -79,6 +79,7 @@
       persons: (s.persons || []).map((p) => (typeof p === "string" ? p : p.id)),
       roles: Array.isArray(s.roles) ? [...s.roles] : [], scope: s.scope === "all" ? "all" : "clinic",
       kinds: Array.isArray(s.kinds) && s.kinds.length ? [...s.kinds] : null, min_days: s.min_days || null, pdf_slot: s.pdf_slot || null,
+      on_demand: (kind === "personnes" || kind === "groupe") && !!s.on_demand,
     };
   }
   function newStep(kind) {
@@ -117,11 +118,18 @@
       if (s.kinds && !s.kinds.length) throw new Error("Étape « " + label + " » : cochez au moins un motif.");
       if (s.min_days != null && !(Number.isInteger(s.min_days) && s.min_days >= 1 && s.min_days <= 365)) throw new Error("Étape « " + label + " » : la durée minimale va de 1 à 365 jours ouvrables.");
       if (s.kind === "groupe" && s.active && !s.roles.length) throw new Error("Étape « " + label + " » : cochez au moins un rôle.");
+      if (s.on_demand) {
+        // étape sur décision de la direction : dans une colonne après celle du visa (le visa doit être actif)
+        const vi = state.cols.filter((c) => c.length).findIndex((c) => c.some((x) => x.kind === "visa" && x.active));
+        if (vi < 0 || !(col / 10 - 1 > vi)) throw new Error("Étape « " + label + " » : « sur décision de la direction » demande une colonne après celle du visa de la direction (visa actif).");
+      }
       const o = {
         pos, col, kind: s.kind, label, rule: s.kind === "visa" ? "any" : s.rule, blocking: s.kind === "preavis" ? false : s.kind === "visa" ? true : s.blocking, active: s.active,
         persons: s.kind === "personnes" ? s.persons : [], kinds: s.kinds && s.kinds.length < 3 ? s.kinds : null, min_days: s.min_days,
         pdf_slot: s.kind === "personnes" || s.kind === "direction" ? s.pdf_slot : null,
+        on_demand: !!s.on_demand && (s.kind === "personnes" || s.kind === "groupe"),
       };
+      if (o.on_demand) o.blocking = true;
       if (s.kind === "groupe") { o.roles = s.roles; o.scope = s.scope; }
       return o;
     };
@@ -154,7 +162,7 @@
   function whoLine(s) {
     if (s.kind === "clinique") return "Validateurs désignés par clinique";
     if (s.kind === "direction" || s.kind === "visa") return directionNames().length ? "Direction : " + shortList(directionNames()) : "Aucun membre de la direction";
-    if (s.kind === "personnes") return s.persons.length ? shortList(s.persons.map(memberName)) : "Aucune personne désignée";
+    if (s.kind === "personnes") return s.persons.length ? shortList(s.persons.map(memberName)) : s.on_demand ? "Aucune personne désignée : l'envoi restera impossible" : "Aucune personne désignée";
     if (s.kind === "groupe") return (s.roles.length ? shortList(s.roles.map((r) => ROLES[r] || r)) : "Aucun rôle") + " · " + (s.scope === "all" ? "tout le service" : "même clinique");
     return "";
   }
@@ -165,7 +173,7 @@
     return out;
   }
   function card(s) {
-    const c = el("div", "cc-card k-" + s.kind + (s.active ? "" : " inactive") + (s.blocking ? "" : " soft") + (state.selected === s ? " selected" : ""));
+    const c = el("div", "cc-card k-" + s.kind + (s.active ? "" : " inactive") + (s.blocking ? "" : " soft") + (s.on_demand ? " od" : "") + (state.selected === s ? " selected" : ""));
     c.tabIndex = 0; c.draggable = !state.ro; c.setAttribute("role", "button");
     c.setAttribute("aria-label", "Étape « " + s.label + " » (" + TYPE_TAG[s.kind] + (s.active ? "" : ", désactivée") + ") : " + (state.ro ? "voir les réglages" : "ouvrir les réglages"));
     const top = el("div", "cc-card-top");
@@ -174,6 +182,7 @@
     const pills = el("div", "cc-pills");
     if (s.kind !== "visa") pills.append(pill(s.rule === "any" ? "un seul" : "tous"));
     if (!s.blocking) pills.append(pill("consultatif", "dash"));
+    if (s.on_demand) pills.append(pill("sur décision de la direction", "dash"));
     for (const t of condPills(s)) pills.append(pill(t, "cond"));
     if (s.pdf_slot === "chef_service") pills.append(pill("PDF", "cond"));
     if (!s.active) pills.append(pill("désactivée", "off"));
@@ -396,6 +405,7 @@
       for (const [v, t] of [["1", "Bloquant"], ["0", "Consultatif"]]) { const o = el("option", null, t); o.value = v; bl.append(o); }
       bl.value = s.blocking ? "1" : "0";
       bl.addEventListener("change", () => { s.blocking = bl.value === "1"; changed(); });
+      if (s.on_demand) { bl.value = "1"; bl.disabled = true; }
       row.append(field("Règle", rule), field("Type d'avis", bl));
       kids.push(row);
     } else kids.push(el("p", "cc-hint", "Un seul visa suffit ; il est bloquant et signe le formulaire PDF."));
@@ -417,6 +427,10 @@
     cond.append(crow, field("À partir de (jours ouvrables)", md));
     kids.push(cond);
 
+    if (s.kind === "personnes" || s.kind === "groupe") {
+      kids.push(check("Sur décision de la direction", !!s.on_demand, (on) => { s.on_demand = on; if (on) s.blocking = true; changed(); buildPanel(s); }));
+      kids.push(el("p", "cc-hint", "Étape sautée par défaut : le visa conclut la demande. Elle n'est sollicitée que si la direction choisit « Envoyer à la cheffe de service » en donnant son visa. À placer dans une colonne après celle du visa."));
+    }
     if (s.kind === "personnes") kids.push(personsPicker(s));
     if (s.kind === "groupe") {
       const fs = el("fieldset", "cc-cond-box");

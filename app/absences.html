@@ -15,13 +15,13 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261118e">
-  <link rel="stylesheet" href="/assets/css/circuit.css?v=20261123a">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261123a">
+  <link rel="stylesheet" href="/assets/css/circuit.css?v=20261123b">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/circuit-view.js?v=20261123a"></script>
-  <script src="/assets/js/absences.js?v=20261123b" defer></script>
+  <script src="/assets/js/circuit-view.js?v=20261123b"></script>
+  <script src="/assets/js/absences.js?v=20261123c" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -86,6 +86,7 @@
             <button class="ab-tab" id="ab-t-mine" role="tab" aria-selected="false" aria-controls="ab-p-mine" type="button">Mes absences</button>
             <button class="ab-tab" id="ab-t-todo" role="tab" aria-selected="false" aria-controls="ab-p-todo" type="button" hidden>À valider <span class="ab-count" id="ab-todo-n"></span></button>
             <button class="ab-tab" id="ab-t-agenda" role="tab" aria-selected="false" aria-controls="ab-p-agenda" type="button" hidden>Blocage Ultragenda <span class="ab-count" id="ab-agenda-n"></span></button>
+            <button class="ab-tab" id="ab-t-track" role="tab" aria-selected="false" aria-controls="ab-p-track" type="button" hidden>Suivi</button>
             <button class="ab-tab" id="ab-t-dir" role="tab" aria-selected="false" aria-controls="ab-p-dir" type="button" hidden>Direction</button>
             <button class="ab-tab" id="ab-t-exp" role="tab" aria-selected="false" aria-controls="ab-p-exp" type="button" hidden>Export</button>
           </div>
@@ -229,6 +230,39 @@
             </div>
             <p class="form-msg" id="ab-agenda-msg" role="status" aria-live="polite"></p>
             <div id="ab-agenda-list" class="ab-list"></div>
+          </section>
+          <section id="ab-p-track" role="tabpanel" aria-labelledby="ab-t-track" hidden>
+            <h2>Suivi des demandes</h2>
+            <p class="muted">Où en est chaque demande : pré-avis, étapes du circuit, personnes sollicitées, décisions, envoi à la cheffe de service. Réservé à la direction et à l'administration. Cliquez sur une ligne pour voir le parcours détaillé.</p>
+            <form class="card ab-new" id="ab-trk-form" novalidate>
+              <div class="ab-fields">
+                <label>Du <input id="ab-trk-from" type="date" required></label>
+                <label>Au (inclus) <input id="ab-trk-to" type="date" required></label>
+                <label>Statut
+                  <select id="ab-trk-status">
+                    <option value="open">En cours</option>
+                    <option value="approved">Validées</option>
+                    <option value="rejected">Refusées</option>
+                    <option value="cancelled">Annulées</option>
+                    <option value="all">Toutes</option>
+                  </select>
+                </label>
+                <label>Clinique <select id="ab-trk-clinic"><option value="">Toutes</option></select></label>
+                <label>Nom <input id="ab-trk-q" type="search" autocomplete="off" placeholder="Nom du membre"></label>
+              </div>
+              <div class="btn-row">
+                <button class="btn" type="submit" id="ab-trk-go">Actualiser</button>
+                <button class="btn btn-outline" type="button" id="ab-trk-reset">Mois précédent et 12 mois à venir</button>
+              </div>
+            </form>
+            <p class="form-msg" id="ab-trk-msg" role="status" aria-live="polite"></p>
+            <p class="muted" id="ab-trk-count" aria-live="polite"></p>
+            <div class="ab-scroll" tabindex="0" role="region" aria-label="Suivi des demandes d'absence">
+              <table class="ab-trk-table" id="ab-trk-table">
+                <thead><tr><th scope="col">Membre</th><th scope="col">Cliniques</th><th scope="col">Absence</th><th scope="col">Statut</th><th scope="col">Étape en cours</th><th scope="col">Actions</th></tr></thead>
+                <tbody id="ab-trk-body"></tbody>
+              </table>
+            </div>
           </section>
           <section id="ab-p-exp" role="tabpanel" aria-labelledby="ab-t-exp" hidden>
             <h2>Exports Excel</h2>

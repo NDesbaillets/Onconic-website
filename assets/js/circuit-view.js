@@ -23,13 +23,14 @@
   }
 
   function card(s) {
-    const c = el("div", "cc-card sim k-" + s.kind + (s.blocking ? "" : " soft"));
+    const c = el("div", "cc-card sim k-" + s.kind + (s.blocking ? "" : " soft") + (s.on_demand ? " od" : ""));
     const top = el("div", "cc-card-top");
     top.append(el("span", "cc-tag", TYPE_TAG[s.kind] || s.kind), el("span", "cc-card-label", s.label));
     c.append(top);
     const pills = el("div", "cc-pills");
     if (s.kind !== "visa") pills.append(pill(s.rule_code === "any" ? "un seul" : "tous"));
     if (!s.blocking) pills.append(pill("consultative", "dash"));
+    if (s.on_demand) pills.append(pill("sur décision de la direction", "dash"));
     c.append(pills);
     c.append(el("div", "cc-card-who", (s.people || []).length || s.more ? names(s) : "Personne"));
     if (s.pdf_slot === "chef_service") c.append(el("div", "cc-card-note", "Remplit la case « avis du chef de service »."));

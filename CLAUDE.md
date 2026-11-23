@@ -37,7 +37,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 ## Projets actifs (détails : memory/projects/)
 | Nom | État et suite |
 |-----|------|
-| **Absences** | En production (circuit configurable, lecture pour les cadres, « Mon circuit », diffusion PDF, blocage Ultragenda). À faire : créer les blocs, cocher les fonctions des assistantes, prévenir les assistantes des absences « à bloquer » |
+| **Absences** | En production (circuit configurable, lecture pour les cadres, « Mon circuit », diffusion PDF, blocage Ultragenda, suivi de la direction, PDF à tout moment, cheffe de service sur décision). À faire : désigner la cheffe de service dans le circuit, créer les blocs, cocher les fonctions des assistantes, prévenir les assistantes des absences « à bloquer » |
 | **Key trials** | Brouillons à relire, rôle CDC par clinique, 10 fiches/jour |
 | **Lettres d'assurance** | 31 lettres (thoracique) ; 2 Word à corriger |
 | **Lettres médicales** | Accès « médecin plus », Haiku via `medical-letter` ; mise en service à finaliser |
@@ -60,7 +60,7 @@ Nicolas Desbaillets, médecin oncologue (chef de clinique, CHUV Lausanne). Porte
 - `assets/js/config.js` choisit le projet selon l'adresse : seules `onconic.ch` et `www.onconic.ch` vont en production ; toute autre adresse va au test, avec un bandeau orange.
 - Sauvegardes : quotidiennes Supabase (7 jours) et nocturne chiffrée vers Infomaniak Swiss Backup (workflow `.github/workflows/sauvegarde-nocturne.yml`, procédure de restauration dans `docs/sauvegardes.md`). Restauration complète testée le 13.11.2026 ; prochain test en février 2027.
 - Aucun lien GitHub automatique entre le dépôt et Supabase : les migrations s'appliquent à la main, selon la règle ci-dessus. Une migration de plus de 25 Ko s'applique par lots transactionnels d'environ 22 Ko (commentaires retirés, coupure entre deux instructions hors `$$`), vérifiés d'abord en PGlite, deux fois de suite.
-- Les fichiers `supabase/*.sql` sont des bases historiques à ne plus rejouer (ils contiennent par exemple les anciens noms Lower GI et Upper GI) ; seules les migrations de `supabase/migrations/` font foi. Dernière migration en production : `202611230001` (23.11.2026).
+- Les fichiers `supabase/*.sql` sont des bases historiques à ne plus rejouer (ils contiennent par exemple les anciens noms Lower GI et Upper GI) ; seules les migrations de `supabase/migrations/` font foi. Dernière migration en production : `202611230002` (23.11.2026).
 
 ## Agents et sessions
 - Agents du dépôt : `developpeur` (Sonnet), `developpeur-rapide` (Haiku), `relecteur-code` et `relecteur-securite` (Sonnet) (ici, `.claude/agents/`), `redacteur-clinique` et `verificateur-references` (dans onconic-content).
