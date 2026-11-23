@@ -1428,19 +1428,19 @@
     // Visa de la direction avec envoi à l'étape « sur décision » (cheffe de service) : bouton inactif, avec la raison, si personne n'est désigné
     if (a.escalation) {
       const box = el("div", "ab-escalate");
-      const note = el("input"); note.type = "text"; note.maxLength = 500; note.placeholder = "Note pour la cheffe de service (facultatif)";
-      const nlab = el("label", "ab-comment", "Note pour la cheffe de service");
+      const note = el("input"); note.type = "text"; note.maxLength = 500; note.placeholder = "Note pour l'étape suivante (facultatif)";
+      const nlab = el("label", "ab-comment", "Note pour l'étape suivante");
       nlab.append(note);
       const hint = el("p", "muted ab-item-meta", a.escalation.available
         ? `Enregistre votre visa, puis envoie la demande à l'étape « ${a.escalation.label} » : elle n'est conclue qu'après sa décision.`
         : a.escalation.reason);
-      const go = button("Envoyer à la cheffe de service", "btn btn-outline", async () => {
+      const go = button("Envoyer à : " + a.escalation.label, "btn btn-outline", async () => {
         go.disabled = true; yes.disabled = true; no.disabled = true;
         const { error } = await sb.rpc("absence_visa_escalate", { p_id: a.id, p_note: note.value.trim() || null });
         if (error) { go.disabled = !a.escalation.available; yes.disabled = no.disabled = false; return say(out, error.message, "error"); }
         state.comments.delete(String(a.id));
         mailer();
-        await onDone(`${a.name} : visa enregistré, la demande est envoyée à la cheffe de service pour signature.`);
+        await onDone(`${a.name} : visa enregistré, la demande est envoyée à l'étape « ${a.escalation.label} ».`);
       });
       go.disabled = !a.escalation.available;
       if (!a.escalation.available) go.title = a.escalation.reason || "";

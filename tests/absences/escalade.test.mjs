@@ -266,7 +266,7 @@ test('6. suivi : droits, fenêtre et contenu du parcours', async () => {
     // refusée : décision finale
     const r3 = rows.find((r) => r.id == id3);
     assert.equal(r3.status, 'rejected'); assert.equal(r3.trail.final.decision, 'rejected'); assert.equal(r3.trail.final.comment, 'trop tard'); assert.equal(r3.trail.final.by, 'Escalade 3');
-    assert.equal(r3.trail.steps.find((s) => s.kind === 'clinique').state, 'refusée'); assert.equal(r3.trail.steps.find((s) => s.kind === 'visa').state, 'non atteinte');
+    assert.equal(r3.trail.steps.find((s) => s.kind === 'clinique').state, 'refusée'); assert.equal(r3.trail.steps.find((s) => s.kind === 'visa').state, 'sautée');
     // validée : la décision et le journal figurent
     await t.decide(5, id);
     await t.as(2);
@@ -339,7 +339,7 @@ test('8. droits SQL : fonctions internes fermées, fonctions de page réservées
   try {
     await t.sup();
     const can = async (role, fn) => (await t.rows('select has_function_privilege($1, $2, \'execute\') as ok', [role, fn]))[0].ok;
-    for (const fn of ['absence_escalation_state(uuid, public.absences)', 'absence_solicited_people(public.absences)', 'absence_document_build(bigint[], text)', 'absence_track_trail(public.absences)', 'absence_document_create(bigint[], text)']) {
+    for (const fn of ['absence_escalation_state(uuid, public.absences)', 'absence_solicited_people(public.absences)', 'absence_document_build(bigint[], text, boolean)', 'absence_track_trail(public.absences)', 'absence_document_create(bigint[], text)']) {
       for (const r of ['anon', 'authenticated']) assert.equal(await can(r, 'public.' + fn), false, r + ' ' + fn);
     }
     for (const fn of ['absence_visa_escalate(bigint, text)', 'absence_track(date, date)', 'absence_to_validate()']) {
@@ -352,5 +352,56 @@ test('8. droits SQL : fonctions internes fermées, fonctions de page réservées
     await t.as(4);
     await assert.rejects(t.rpc('absence_visa_escalate', [1, null]), /Absence introuvable|ne peut pas/);
     await assert.rejects(t.rpc('absence_track', ['2027-01-01', '2027-02-01']), /Réservé/);
+  } finally { await t.db.close(); }
+});
+
+test('9. corrections : réacheminement, document figé, parcours d\u2019un visa refusé, fenêtre des changements, étape sur décision retrouvée', async () => {
+  const t = await mk();
+  try {
+    await t.designate([5]);
+    // demande sans validateur de clinique : le visa envoie à la cheffe ; un réacheminement ne la rouvre pas
+    const id = await t.request(6, D(3));
+    await t.as(2); await t.rpc('absence_visa_escalate', [id, null]);
+    await t.sup(); await t.db.exec(`select public.absence_reroute('${uid(6)}')`);
+    let a = await t.info(id);
+    assert.equal(a.stage, 30); assert.notEqual(a.escalated_at, null);
+
+    // document figé : identique à l'ancien comportement (visa d'un tour antérieur conservé, aucune clé refusal), lot mixte compris
+    const b = await t.request(4, D(4));
+    const c = await t.request(4, D(5));
+    await t.decide(3, b); await t.as(2); await t.rpc('absence_visa_escalate', [b, null]); await t.decide(5, b);
+    await t.sup();
+    await t.db.query("update absences set direction_by = $1, direction_at = '2020-01-01' where id = $2", [uid(2), c]);
+    const doc = async (ids) => { const k = (await t.rows('select public.absence_document_create($1) as k'.replace('($1)', '($1, \'test\')'), [ids]))[0].k; return (await t.rows('select data from absence_documents where id = $1', [k]))[0].data; };
+    const mixed = await doc([b, c]);
+    assert.ok(!('refusal' in mixed)); assert.equal(mixed.direction.name, 'Escalade 2'); assert.equal(mixed.absences.length, 2);
+    const stale = await doc([c]);
+    assert.ok(!('refusal' in stale)); assert.equal(stale.direction.name, 'Escalade 2');
+    // état actuel : la même demande n'a pas de visa valable
+    assert.equal((await t.rows('select public.absence_form_current($1) as d', [[c]]))[0].d.direction, null);
+
+    // refus au visa : étape « refusée » avec nom, heure et motif ; étapes suivantes « sautée »
+    const rv = await t.request(10, D(6));
+    await t.decide(3, rv); await t.decide(2, rv, false, 'Non');
+    await t.as(2);
+    const row = (await t.rows('select * from absence_track($1,$2)', ['2027-01-01', '2027-12-31'])).find((r) => r.id == rv);
+    const visa = row.trail.steps.find((s) => s.kind === 'visa');
+    assert.equal(visa.state, 'refusée'); assert.equal(visa.people[0].name, 'Escalade 2'); assert.equal(visa.people[0].comment, 'Non'); assert.ok(visa.people[0].at);
+    assert.equal(row.trail.steps.find((s) => s.kind === 'personnes').state, 'non demandée');
+
+    // fenêtre du suivi : tient compte des dates d'une demande de changement
+    const cm = await t.request(7, D(7)); await t.decide(3, cm); await t.decide(2, cm);
+    await t.as(7); await t.rpc('absence_request_change', [cm, 'modify', 'vacances', null, '2027-11-01', '2027-11-03']);
+    await t.as(2);
+    assert.equal((await t.rows('select * from absence_track($1,$2)', ['2027-11-01', '2027-11-30'])).filter((r) => r.id == cm).length, 1);
+    assert.equal((await t.rows('select * from absence_track($1,$2)', ['2027-10-01', '2027-10-31'])).filter((r) => r.id == cm).length, 0);
+
+    // étape sur décision retrouvée par type et circuit, sans lien de position : la désignation change après le dépôt
+    const late = await t.request(4, D(8)); await t.decide(3, late);
+    await t.designate([8]);
+    await t.as(2);
+    assert.equal((await t.rows('select * from absence_to_validate()')).find((r) => r.id == late).escalation.available, true);
+    await t.rpc('absence_visa_escalate', [late, null]);
+    assert.equal((await t.rows("select validator_id from absence_approvals where absence_id = $1 and decision = 'pending'", [late]))[0].validator_id, uid(8));
   } finally { await t.db.close(); }
 });

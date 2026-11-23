@@ -10,12 +10,25 @@
 --    * L'instantané absences.circuit porte on_demand ; absence_circuit_public masque l'étape tant que la demande n'a pas été envoyée.
 --    * Nouveau message de la boîte d'envoi : escalated (information au demandeur).
 -- 2. Suivi de la direction : absence_track(du, au) (direction et administration), avec le parcours détaillé de chaque demande.
+-- 4. Types de notification (notification_kinds_for) : `escalated` pour les personnes qui reçoivent des décisions, et les personnes désignées dans une étape
+--    « personnes » active reçoivent aussi les types to_validate et to_validate_change (préférences de Mon compte).
 -- 3. PDF à tout moment : absence_pdf_access / absence_form_current (appelées par notify-absence), absence_document_build.
 begin;
 
 -- 1. Colonnes ------------------------------------------------------------------------------------------------------------------
 
-alter table public.absence_circuit_steps add column if not exists on_demand boolean not null default false;
+-- Étape par défaut « Validation de la cheffe de service » (inactive, sans personne) : devient une étape sur décision de la direction, active, au seul premier
+-- passage (ajout effectif de la colonne). Personne n'est désigné ici : l'administration la désigne dans la page du circuit.
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'absence_circuit_steps' and column_name = 'on_demand') then
+    alter table public.absence_circuit_steps add column on_demand boolean not null default false;
+    update public.absence_circuit_steps s set on_demand = true, active = true
+     where s.circuit_id = (select id from public.absence_circuits where is_default) and s.kind = 'personnes' and s.pdf_slot = 'chef_service' and s.pos = 30
+       and not s.active and cardinality(s.persons) = 0
+       and exists (select 1 from public.absence_circuit_steps v where v.circuit_id = s.circuit_id and v.kind = 'visa' and v.col < s.col);
+  end if;
+end $$;
 do $$
 begin
   if not exists (select 1 from pg_constraint where conrelid = 'public.absence_circuit_steps'::regclass and conname = 'absence_circuit_steps_on_demand_kind') then
@@ -44,13 +57,6 @@ begin
       ('to_validate', 'to_validate_change', 'approved', 'rejected', 'change_approved', 'change_rejected', 'form', 'to_direction', 'direction_change', 'to_opinion', 'peer_rejected', 'on_behalf', 'form_copy', 'agenda_done', 'escalated'));
   end if;
 end $$;
-
--- Étape par défaut « Validation de la cheffe de service » (inactive, sans personne) : devient une étape sur décision de la direction, active.
--- Personne n'est désigné ici : l'administration la désigne dans la page du circuit. Une étape déjà configurée (active ou avec des personnes) n'est pas touchée.
-update public.absence_circuit_steps s set on_demand = true, active = true
- where s.circuit_id = (select id from public.absence_circuits where is_default) and s.kind = 'personnes' and s.pdf_slot = 'chef_service' and s.pos = 30
-   and not s.on_demand and not s.active and cardinality(s.persons) = 0
-   and exists (select 1 from public.absence_circuit_steps v where v.circuit_id = s.circuit_id and v.kind = 'visa' and v.col < s.col);
 
 -- 2. Étapes d'un circuit : on_demand dans les lectures, l'instantané et l'enregistrement -------------------------------------------
 
@@ -165,7 +171,7 @@ begin
   if n_cl > 1 then raise exception 'Une seule étape « Validateurs de clinique » est permise.'; end if;
   if n_vi > 1 then raise exception 'Une seule étape « Visa de la direction » est permise.'; end if;
   -- une étape sur décision de la direction vient après le visa de la direction (colonne postérieure) ; le visa doit être actif
-  if exists (select 1 from jsonb_array_elements(res) v where (v ->> 'on_demand')::boolean
+  if exists (select 1 from jsonb_array_elements(res) v where (v ->> 'on_demand')::boolean and (v ->> 'active')::boolean
               and not exists (select 1 from jsonb_array_elements(res) w
                                where w ->> 'kind' = 'visa' and (w ->> 'active')::boolean and (w ->> 'col')::int < (v ->> 'col')::int)) then
     raise exception 'Une étape « sur décision de la direction » doit se trouver dans une colonne après celle du visa de la direction (le visa doit être actif).';
@@ -381,6 +387,18 @@ begin
   insert into public.absence_circuit_log (changed_by, before, after, circuit_id, action)
     values (auth.uid(), null, jsonb_build_object('name', nm, 'copy_from', src), nid, 'create');
   return nid;
+end;
+$$;
+
+create or replace function public.absence_reroute(p_user uuid) returns void
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare r record;
+begin
+  for r in select a.id from public.absences a
+           where a.user_id = p_user and (a.status = 'requested' or (a.status = 'approved' and a.change_type is not null)) and a.escalated_at is null
+             and not exists (select 1 from public.absence_approvals p where p.absence_id = a.id and p.decision <> 'pending') loop
+    perform public.absence_open_round_core(r.id, false);
+  end loop;
 end;
 $$;
 
@@ -600,7 +618,12 @@ language sql stable security definer set search_path = public, pg_temp as $$
   select coalesce(jsonb_agg(case when coalesce((t.e ->> 'on_demand')::boolean, false) and s.id is not null
                                  then t.e || jsonb_build_object('persons', to_jsonb(s.persons), 'roles', to_jsonb(s.roles), 'scope', s.scope) else t.e end order by t.ord), '[]'::jsonb)
     from jsonb_array_elements(coalesce(a.circuit, '[]'::jsonb)) with ordinality t(e, ord)
-    left join public.absence_circuit_steps s on s.circuit_id = a.circuit_id and s.pos = (t.e ->> 'pos')::int and s.on_demand and s.active;
+    left join lateral (
+      -- étape sur décision du circuit courant de la demande, de même type ; plusieurs : la première colonne après le visa
+      select x.* from public.absence_circuit_steps x
+       where x.circuit_id = a.circuit_id and x.on_demand and x.active and x.kind = t.e ->> 'kind'
+         and x.col > coalesce((select min(v.col) from public.absence_circuit_steps v where v.circuit_id = a.circuit_id and v.kind = 'visa' and v.active), 0)
+       order by x.col, x.pos limit 1) s on true;
 $$;
 
 -- Cette demande peut-elle être envoyée à l'étape « sur décision » par cette personne ? null : non concernée ; sinon { available, label, reason }.
@@ -835,7 +858,7 @@ $$;
 -- les personnes sollicitées sur la demande, la direction et l'administration. Appelée par notify-absence (rôle service).
 create or replace function public.absence_pdf_access(p_caller uuid, p_ids bigint[]) returns boolean
 language sql stable security definer set search_path = public, pg_temp as $$
-  select p_caller is not null and cardinality(p_ids) between 1 and 50
+  select coalesce(p_caller is not null and cardinality(p_ids) between 1 and 50
     and (select count(*) from public.absences where id = any (p_ids)) = cardinality(p_ids)
     and (select count(distinct user_id) from public.absences where id = any (p_ids)) = 1
     and not exists (select 1 from public.absences a where a.id = any (p_ids) and not (
@@ -845,12 +868,12 @@ language sql stable security definer set search_path = public, pg_temp as $$
         or public.can_validate_absence(p_caller, a.user_id, public.absence_lo(a), public.absence_hi(a))
         or public.is_secretary_of(p_caller, a.user_id)
         or p_caller = any (public.absence_solicited_people(a)))))
-    and public.tool_allowed(p_caller, 'absences');
+    and public.tool_allowed(p_caller, 'absences'), false);
 $$;
 
--- Données du document : même contenu que le document figé (absence_document_create), plus l'éventuel refus (qui, quand, commentaire).
--- Le commentaire du refus est omis pour une absence confidentielle. Aucune écriture.
-create or replace function public.absence_document_build(p_ids bigint[], p_action text) returns jsonb
+-- Données du document. Figé (p_live faux) : contenu strictement identique à l'ancien absence_document_create. État actuel (p_live vrai) : le visa ne vaut que
+-- s'il date du tour en cours, et l'éventuel refus (qui, quand, commentaire) est ajouté ; le commentaire est omis pour une absence confidentielle. Aucune écriture.
+create or replace function public.absence_document_build(p_ids bigint[], p_action text, p_live boolean default false) returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 declare owner uuid; r text; d jsonb;
 begin
@@ -861,16 +884,19 @@ begin
  d:=jsonb_build_object('owner_id',owner,'owner',public.member_name(owner),'role',r,'action',p_action,
  'clinics',public.member_clinics(owner),'requested_at',(select min(coalesce(submitted_at,created_at)) from public.absences where id=any(p_ids)),
  'absences',(select jsonb_agg(jsonb_build_object('id',id,'kind',kind,'start_date',start_date,'end_date',end_date,'note',null,'status',status) order by start_date,id) from public.absences where id=any(p_ids)),
- 'direction',(select jsonb_build_object('name',public.member_name(direction_by),'at',direction_at) from public.absences
-               where id=any(p_ids) and direction_by is not null and direction_at >= coalesce(change_requested_at, submitted_at, created_at) order by direction_at desc limit 1),
+ 'direction',(select jsonb_build_object('name',public.member_name(direction_by),'at',direction_at) from public.absences where id=any(p_ids) and direction_by is not null order by direction_at desc limit 1),
  'signers',coalesce((select jsonb_agg(jsonb_build_object('name',public.member_name(p.validator_id),'at',p.decided_at,'comment',null) order by p.decided_at)
                      from public.absence_approvals p join public.absences a on a.id=p.absence_id
                      where p.absence_id=any(p_ids) and p.decision='approved' and public.absence_step_kind(a,p.step)='clinique'),'[]'),
  'extra',coalesce((select jsonb_agg(jsonb_build_object('label',st.e->>'label','name',public.member_name(p.validator_id),'at',p.decided_at,'slot',st.e->>'pdf_slot') order by p.decided_at)
                    from public.absence_approvals p join public.absences a on a.id=p.absence_id
                    cross join lateral (select e from jsonb_array_elements(coalesce(a.circuit,'[]'::jsonb)) e where (e->>'pos')::int=p.step and e->>'kind' in ('personnes','direction') and (e->>'blocking')::boolean limit 1) st(e)
-                   where p.absence_id=any(p_ids) and p.decision='approved'),'[]'),
- 'refusal',(select jsonb_build_object('name',public.member_name(a.decided_by),'at',a.decided_at,
+                   where p.absence_id=any(p_ids) and p.decision='approved'),'[]'));
+ if p_live then
+  d:=d||jsonb_build_object(
+   'direction',(select jsonb_build_object('name',public.member_name(direction_by),'at',direction_at) from public.absences
+                 where id=any(p_ids) and direction_by is not null and direction_at >= coalesce(change_requested_at, submitted_at, created_at) order by direction_at desc limit 1),
+   'refusal',(select jsonb_build_object('name',public.member_name(a.decided_by),'at',a.decided_at,
                 'comment',case when exists(select 1 from public.absences c where c.id=any(p_ids) and c.confidential) then null else a.decision_comment end,
                 'kind',coalesce(rs.e->>'kind','visa'),'label',coalesce(rs.e->>'label','Visa de la direction'),'slot',rs.e->>'pdf_slot')
             from public.absences a
@@ -878,15 +904,16 @@ begin
                                 where p.absence_id=a.id and p.validator_id=a.decided_by and p.decision='rejected' and (e->>'pos')::int=p.step
                                 order by p.decided_at desc limit 1) rs(e) on true
             where a.id=any(p_ids) and a.status='rejected' and a.decision='rejected' and a.decided_by is not null order by a.decided_at desc limit 1));
+ end if;
  return d;
 end $$;
 
--- Document figé : même contenu qu'avant (le calcul est dans absence_document_build)
+-- Document figé : calcul de absence_document_build sans l'état actuel
 create or replace function public.absence_document_create(p_ids bigint[], p_action text) returns bigint
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare doc bigint; d jsonb; owner uuid;
 begin
- d := public.absence_document_build(p_ids, p_action);
+ d := public.absence_document_build(p_ids, p_action, false);
  if d is null then return null; end if;
  owner := (d ->> 'owner_id')::uuid;
  insert into public.absence_documents(user_id,absence_ids,action,data) values(owner,p_ids,p_action,d) returning id into doc;
@@ -906,7 +933,7 @@ begin
     d := public.absence_form_data(p_ids);
     if d is not null then return d || jsonb_build_object('live', false); end if;
   end if;
-  d := public.absence_document_build(p_ids, 'current');
+  d := public.absence_document_build(p_ids, 'current', true);
   if d is null then return jsonb_build_object('no_form', true); end if;
   return d || jsonb_build_object('document_id', 0, 'generated_at', now(), 'live', true);
 end;
@@ -938,6 +965,10 @@ begin
     elsif k = 'visa' then
       if a.direction_by is not null and a.direction_at >= rs then
         ppl := jsonb_build_array(jsonb_build_object('name', public.member_name(a.direction_by), 'state', 'validé', 'at', a.direction_at, 'comment', null));
+      elsif a.decision in ('rejected', 'change_rejected') and a.decided_by is not null and a.decided_at >= rs
+            and not exists (select 1 from public.absence_approvals p where p.absence_id = a.id and p.decision = 'rejected') then
+        -- refus au visa : pas de ligne d'approbation, nom, heure et motif viennent de la décision
+        ppl := jsonb_build_array(jsonb_build_object('name', public.member_name(a.decided_by), 'state', 'refusé', 'at', a.decided_at, 'comment', a.decision_comment));
       elsif is_open and c = a.stage then
         ppl := coalesce((select jsonb_agg(jsonb_build_object('name', public.member_name(x), 'state', 'en attente', 'at', null, 'comment', null) order by public.member_name(x))
                            from unnest(public.absence_step_people(a, e)) x), '[]'::jsonb);
@@ -958,7 +989,7 @@ begin
       when n_ok > 0 and (k = 'visa' or e ->> 'rule' = 'any' or n_wait = 0) then 'validée'
       when is_open and c = a.stage then 'en cours'
       when is_open and c > a.stage then 'à venir'
-      when is_open or a.status = 'approved' then 'sautée'
+      when is_open or a.status in ('approved', 'rejected') then 'sautée'
       else 'non atteinte' end;
     steps := steps || jsonb_build_array(jsonb_build_object('pos', (e ->> 'pos')::int, 'col', c, 'label', e ->> 'label', 'kind', k, 'rule', e ->> 'rule', 'blocking', blk,
       'on_demand', od, 'escalated', od, 'state', stt, 'current', is_open and blk and c = a.stage, 'people', ppl));
@@ -992,7 +1023,8 @@ begin
            a.change_type, a.change_kind, a.change_note, a.change_start, a.change_end, a.submitted_at,
            case when public.absence_is_open(a) then public.absence_col_label(a) end, a.escalated_at is not null, public.absence_track_trail(a)
     from public.absences a
-    where a.status <> 'draft' and a.start_date <= p_to and a.end_date >= p_from
+    where a.status <> 'draft'
+      and ((a.start_date <= p_to and a.end_date >= p_from) or (a.change_start is not null and a.change_start <= p_to and a.change_end >= p_from))
       and not (a.status = 'rejected' and a.decided_at < now() - interval '14 days')
     order by a.start_date, public.member_name(a.user_id), a.id;
 end;
@@ -1002,7 +1034,7 @@ $$;
 
 -- Fonctions internes : fermées à tous les rôles de l'API
 revoke execute on function
-  public.absence_escalation_state(uuid, public.absences), public.absence_circuit_refresh_od(public.absences), public.absence_solicited_people(public.absences), public.absence_document_build(bigint[], text),
+  public.absence_escalation_state(uuid, public.absences), public.absence_circuit_refresh_od(public.absences), public.absence_solicited_people(public.absences), public.absence_document_build(bigint[], text, boolean),
   public.absence_track_trail(public.absences), public.absence_document_create(bigint[], text), public.absence_enqueue(text, uuid, bigint[], jsonb),
   public.absence_circuit_steps_json(bigint), public.absence_circuit_steps_named(bigint), public.absence_circuit_normalize(jsonb),
   public.absence_circuit_build(text, date, date, jsonb, uuid), public.absence_first_stop(uuid, date, date, jsonb),
