@@ -26,3 +26,16 @@ test('PDF avec étapes supplémentaires : case du chef de service signée et lig
   assert.ok(more.length>chef.length);
  }
 });
+test('PDF de l\u2019état actuel : refus coché « Défavorable », signatures données, cases en attente vides',async()=>{
+ const base={action:'current',owner:'Personne fictive',clinics:['Thoracique'],requestedAt:'2026-11-11T10:00:00Z',absences:[{kind:'vacances',start_date:'2027-02-01',end_date:'2027-02-02',note:null}],signers:[],direction:null,generatedAt:'2026-11-11T11:00:00Z',ref:'OC-ABS-A1'};
+ for(const role of ['clinician','cdc','cadre']) {
+  const empty=await buildAbsenceForm({...base,role});
+  const kinds=[{kind:'clinique',label:'Validateurs de clinique'},{kind:'visa',label:'Visa de la direction'},{kind:'personnes',label:'Validation de la cheffe de service',slot:'chef_service'},{kind:'personnes',label:'Finances',slot:null}];
+  const sizes=new Set();
+  for(const k of kinds) {
+   const bytes=await buildAbsenceForm({...base,role,signers:k.kind==='clinique'?[]:[{name:'Cadre fictif',at:'2026-11-11T10:00:00Z'}],direction:k.kind==='clinique'?null:{name:'Direction fictive',at:'2026-11-11T11:00:00Z'},refusal:{...k,name:'Refuseur fictif',at:'2026-11-11T12:00:00Z',comment:'Motif fictif'}});
+   assert.ok((await PDFDocument.load(bytes)).getPageCount()>=1); assert.notEqual(bytes.length,empty.length); sizes.add(bytes.length);
+  }
+  assert.ok(sizes.size>=3);
+ }
+});

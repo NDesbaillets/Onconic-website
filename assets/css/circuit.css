@@ -83,6 +83,7 @@
 .cc-card.k-personnes { --k: var(--success); }
 .cc-card.k-groupe { --k: var(--ink-400); }
 .cc-card.soft { border-style: dashed; border-left-style: solid; }
+.cc-card.od { border-style: dashed; border-left-style: solid; }
 .cc-card.inactive { opacity: .55; background: var(--mist); }
 .cc-card.selected { outline: 2px solid var(--amber-500); outline-offset: 1px; }
 .cc-card.dragging { opacity: .4; }

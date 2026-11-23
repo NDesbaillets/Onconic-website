@@ -65,3 +65,10 @@ test('à valider : au plus 10 noms, puis « et n autres »',()=>{
  const few=buildEmail({lang:'fr',kind:'to_validate',owner:'Test',absences:[{...absence,change_type:null}],validators:noms.slice(0,2),approvers:[]});
  assert.match(few.text,/Validateur 1, Validateur 2\./);
 });
+test('envoi à la cheffe de service : message au demandeur, deux langues, aucun texte libre',()=>{
+ for(const lang of ['fr','en']) {
+  const m=buildEmail({lang,kind:'escalated',owner:'Test',stepLabel:'Validation de la cheffe de service',absences:[absence],validators:[],approvers:[],comment:'SECRET_COMMENTAIRE'});
+  assert.match(m.subject,lang==='fr'?/cheffe de service/:/head of department/);
+  assert.match(m.text,/#mine/); assert.doesNotMatch(m.text+m.html+JSON.stringify(m.push),/SECRET/);
+ }
+});

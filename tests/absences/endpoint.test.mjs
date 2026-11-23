@@ -6,12 +6,15 @@ import ts from 'typescript';
 const calls=[];
 const secret='fictif-'.repeat(8);
 let documentAllowed=false;
+let pdfAllowed=false;
 globalThis.absenceAdmin={
  auth:{getUser:async(token)=>{calls.push('auth');return {data:{user:token==='valid-user'?{id:'owner'}:null}};}},
  rpc:async(name,args)=>{
   calls.push(name);
   if(name==='absence_outbox_claim')return {data:[]};
   if(name==='absence_document_access')return {data:documentAllowed};
+  if(name==='absence_pdf_access')return {data:pdfAllowed};
+  if(name==='absence_form_current')return {data:{live:true,document_id:0,generated_at:'2026-11-11T11:00:00Z',role:'clinician',owner:'Test',absences:[],signers:[],refusal:{kind:'clinique',label:'Validateurs de clinique',name:'Cadre',at:'2026-11-11T11:00:00Z',comment:'Non'}}};
   if(name==='absence_document_data')return {data:{document_id:12,generated_at:'2026-11-11T11:00:00Z',role:'clinician',owner:'Test',absences:[],signers:[]}};
   return {data:null};
  },storage:{from:()=>({download:async()=>({data:null})})}
@@ -46,4 +49,15 @@ test('endpoint : télécharger une version exige la permission SQL',async()=>{
  documentAllowed=true;
  const response=await request({authorization:'Bearer valid-user'},{action:'form',document_id:12});assert.equal(response.status,200);
  const result=await response.json();assert.match(result.file,/D12/);assert.ok(result.pdf);
+});
+test('endpoint : PDF de l\u2019état actuel (ids) : droit SQL dédié, aucune écriture ni e-mail',async()=>{
+ pdfAllowed=false; calls.length=0;
+ assert.equal((await request({authorization:'Bearer valid-user'},{action:'form',ids:[7]})).status,403);
+ assert.ok(calls.includes('absence_pdf_access')); assert.ok(!calls.includes('absence_form_current'));
+ pdfAllowed=true; calls.length=0;
+ const response=await request({authorization:'Bearer valid-user'},{action:'form',ids:[7]});assert.equal(response.status,200);
+ const result=await response.json();assert.match(result.file,/_A7_/);assert.ok(result.pdf);
+ assert.ok(calls.includes('absence_form_current')); assert.ok(!calls.includes('absence_outbox_claim')); assert.ok(!calls.includes('absence_enqueue'));
+ // le worker n'obtient jamais de PDF
+ assert.equal((await request({'x-absence-worker':secret},{action:'form',ids:[7]})).status,403);
 });
