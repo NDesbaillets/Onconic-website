@@ -2159,6 +2159,7 @@
     days.addEventListener("change", () => {
       const n = Number(days.value);
       if (!Number.isInteger(n) || n < 1 || n > 60) { say(msg, "La durée va de 1 à 60 jours ouvrables.", "error"); return; }
+      say(msg, ""); // valeur valide : on efface l'erreur précédente, même si circuitLoad rend la main tôt
       circ.days = n; circuitLoad();
     });
     circ.box = d;
