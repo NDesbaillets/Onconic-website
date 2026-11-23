@@ -402,6 +402,7 @@ test('9. corrections : réacheminement, document figé, parcours d\u2019un visa 
     await t.as(2);
     assert.equal((await t.rows('select * from absence_to_validate()')).find((r) => r.id == late).escalation.available, true);
     await t.rpc('absence_visa_escalate', [late, null]);
+    await t.sup();
     assert.equal((await t.rows("select validator_id from absence_approvals where absence_id = $1 and decision = 'pending'", [late]))[0].validator_id, uid(8));
   } finally { await t.db.close(); }
 });
