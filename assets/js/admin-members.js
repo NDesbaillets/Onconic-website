@@ -9,7 +9,7 @@
   const ROLE_LABEL = Object.fromEntries(ROLES);
   const TOOLS = [["congres", "Congrès"], ["trials", "Key trials"], ["lettres", "Lettres d'assurance"],
     ["limitations", "Limitations LS"], ["duree", "Durée de traitement"], ["absences", "Absences"], ["medletters", "Lettres médicales"]];
-  const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome", "GI tube", "GI solide", "ORL", "Sarcomes", "Rad-Inter", "ION", "UTOH"];
+  const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome", "GI tube", "GI solide", "ORL", "Sarcomes", "Rad-Inter", "ION", "UTOH", "Hématologie", "Tournus / Autre"];
   const ABS_CLINICS = CLINICS.concat(["Plateforme"]); // cliniques de rattachement pour les absences (Key trials garde CLINICS)
   const state = { blocs: [], rows: [], me: null, role: null, changes: new Map(), sel: null };
   const desktop = () => window.matchMedia("(min-width: 1100px)").matches;

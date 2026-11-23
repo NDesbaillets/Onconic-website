@@ -188,3 +188,32 @@
   .cc-sim select, .cc-sim input { width: 100%; }
   .cc-row2 { grid-template-columns: 1fr; }
 }
+
+/* Lecture seule : médecins cadres */
+.cc-readonly { margin: 0 0 var(--space-2); padding: 6px 10px; border-left: 3px solid var(--amber-500); background: var(--amber-50); font-size: .85rem; color: var(--ink-900); }
+.cc-ro .cc-card { cursor: pointer; }
+.cc-ro .cc-panel input:disabled, .cc-ro .cc-panel select:disabled { opacity: .75; cursor: not-allowed; }
+
+/* « Mon circuit de validation » (outil Absences) : bloc repliable sous le planning et sous Mes absences */
+.ab-circuit { margin: var(--space-4) 0 0; border: 1px solid var(--navy-100); border-radius: 8px; background: var(--white); min-width: 0; max-width: 100%; }
+.ab-circuit > summary { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 var(--space-3); cursor: pointer; font-size: .75rem; letter-spacing: .16em; text-transform: uppercase; color: var(--amber-700); list-style: none; }
+.ab-circuit > summary::-webkit-details-marker { display: none; }
+.ab-circuit > summary::before { content: "▸"; font-size: .8rem; }
+.ab-circuit[open] > summary::before { content: "▾"; }
+.ab-circuit-body { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; padding: 0 var(--space-3) var(--space-3); font-size: .9rem; }
+.ab-circuit-body p { max-width: none; margin: 0; }
+.ab-circuit-ctl { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); }
+.ab-circuit-ctl label { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: .78rem; color: var(--ink-600); }
+.ab-circuit-ctl select, .ab-circuit-ctl input { height: 34px; padding: 0 var(--space-2); border: 1px solid var(--navy-200); border-radius: 6px; background: var(--white); color: var(--ink-900); font: inherit; font-size: .875rem; box-sizing: border-box; max-width: 100%; min-width: 0; }
+.ab-circuit-ctl input[type="number"] { width: 6em; }
+.ab-circuit-flow { min-width: 0; max-width: 100%; }
+.ab-circuit-flow .cc-pre.sim { margin-bottom: var(--space-2); }
+.ab-circuit-flow .cc-builder { max-width: 100%; }
+.ab-circuit .cc-hint { margin: 0; }
+@media (max-width: 700px) {
+  .ab-circuit > summary { min-height: 44px; }
+  .ab-circuit-ctl select, .ab-circuit-ctl input { height: 40px; }
+  .ab-circuit-ctl label { flex: 1 1 140px; }
+  .ab-circuit-ctl input[type="number"] { width: 100%; }
+}
+.ab-circuit-link { margin: var(--space-2) 0 0; font-size: .82rem; }
