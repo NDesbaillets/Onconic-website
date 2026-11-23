@@ -10,7 +10,9 @@
     ["Bloc 2", ["Thoracique", "Neuro-oncologie", "Mélanome"]],
     ["Bloc 3", ["GI tube", "GI solide", "ORL", "Sarcomes", "Rad-Inter"]],
     ["ION", ["ION"]],
-    ["UTOH", ["UTOH"]]
+    ["UTOH", ["UTOH"]],
+    ["Hématologie", ["Hématologie"]],
+    ["Tournus / Autre", ["Tournus / Autre"]]
   ];
   const LINES = [["neoadj", "Néoadjuvant"], ["adj", "Adjuvant"], ["1L", "1re ligne"], ["2L", "2e ligne"], ["3L", "3e ligne et plus"]];
   const LINE_LABEL = Object.fromEntries(LINES);

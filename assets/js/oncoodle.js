@@ -5,7 +5,7 @@
   const cfg = window.ONCONIC_CONFIG || {};
   const sb = window.supabase && cfg.supabaseUrl ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
 
-  const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome", "GI tube", "GI solide", "ORL", "Sarcomes", "Rad-Inter", "ION", "UTOH"];
+  const CLINICS = ["Sénologie", "Gynécologie", "Urologie", "Thoracique", "Neuro-oncologie", "Mélanome", "GI tube", "GI solide", "ORL", "Sarcomes", "Rad-Inter", "ION", "UTOH", "Hématologie", "Tournus / Autre"];
   const ANSWERS = [["yes", "Oui"], ["maybe", "Peut-être"], ["no", "Non"]];
   const ANSWER_TEXT = { yes: "Oui", maybe: "Peut-être", no: "Non" };
   const SYMBOL = { yes: "✓", maybe: "?", no: "✗" };

@@ -865,6 +865,7 @@
 
   // ----- Mes absences -----
   async function loadMine() {
+    circuitRefresh();
     const { data, error } = await sb.rpc("absence_list", { p_user: state.who || null });
     if (error) return say($("ab-mine-msg"), "Chargement impossible : " + error.message, "error");
     state.mine = (data || []).map((a) => Object.assign(a, {
@@ -2108,10 +2109,86 @@
       $("ab-t-" + t).setAttribute("aria-selected", String(on));
       $("ab-p-" + t).hidden = !on;
     }
+    circuitPlace(name);
     if (name === "plan") renderGrid();
     if (name === "todo") loadTodo();
     if (name === "mine") loadMine();
     if (name === "agenda") { loadAgenda(); refreshAgendaCount(); }
+  }
+
+  // ----- Mon circuit de validation (bas des onglets Planning et Mes absences) -----
+  // Schéma du circuit qui s'appliquerait à une demande type (absence_circuit_mine) ; lecture seule, mêmes colonnes que le simulateur de l'administration.
+  const CIRCUIT_KEY = "onconic.absences.circuit.v1";
+  const circ = { box: null, key: "", tok: 0, kind: "vacances", days: 5 };
+  function circuitStored() { try { const v = localStorage.getItem(CIRCUIT_KEY); return v === "open" ? true : v === "closed" ? false : null; } catch (e) { return null; } }
+  function circuitRemember(open) { try { localStorage.setItem(CIRCUIT_KEY, open ? "open" : "closed"); } catch (e) { /* stockage indisponible : l'état n'est pas mémorisé */ } }
+  // Membre dont on affiche le circuit : « Résumé de » ou « Demande pour » (secrétaire de médecin cadre), sinon soi
+  function circuitTarget() {
+    const w = state.who || sd.target || "";
+    if (!w) return "";
+    return state.isDir || state.ctx.role === "cadre" || state.secOf.some((c) => c.id === w) ? w : "";
+  }
+  function circuitTargetName(id) {
+    const c = state.secOf.find((x) => x.id === id) || state.people.find((x) => x.id === id);
+    return c ? c.name : "";
+  }
+  function buildCircuit() {
+    const d = el("details", "ab-circuit");
+    d.id = "ab-circuit";
+    const stored = circuitStored();
+    d.open = stored == null ? !!(window.matchMedia && window.matchMedia("(min-width: 900px)").matches) : stored;
+    const sum = el("summary", null, "Mon circuit de validation");
+    // l'état est mémorisé seulement sur un geste de l'utilisateur (le réglage par défaut dépend de la taille d'écran)
+    sum.addEventListener("click", () => circuitRemember(!d.open));
+    d.append(sum);
+    const body = el("div", "ab-circuit-body");
+    const ctl = el("div", "ab-circuit-ctl");
+    const kind = el("select"); kind.id = "ab-circuit-kind";
+    for (const k of ["vacances", "congres", "autre"]) { const o = el("option", null, KINDS[k][0]); o.value = k; kind.append(o); }
+    const days = el("input"); days.id = "ab-circuit-days"; days.type = "number"; days.min = "1"; days.max = "60"; days.step = "1"; days.inputMode = "numeric"; days.value = String(circ.days);
+    const l1 = el("label", null, "Motif"); l1.append(kind);
+    const l2 = el("label", null, "Durée (jours ouvrables)"); l2.append(days);
+    ctl.append(l1, l2);
+    const info = el("p", "muted ab-circuit-info"); info.id = "ab-circuit-info";
+    const msg = el("p", "form-msg"); msg.id = "ab-circuit-msg"; msg.setAttribute("role", "status"); msg.setAttribute("aria-live", "polite");
+    const out = el("div", "ab-circuit-flow"); out.id = "ab-circuit-flow";
+    body.append(ctl, info, msg, out);
+    d.append(body);
+    d.addEventListener("toggle", () => { if (d.open) circuitLoad(); });
+    kind.addEventListener("change", () => { circ.kind = kind.value; circuitLoad(); });
+    days.addEventListener("change", () => {
+      const n = Number(days.value);
+      if (!Number.isInteger(n) || n < 1 || n > 60) { say(msg, "La durée va de 1 à 60 jours ouvrables.", "error"); return; }
+      circ.days = n; circuitLoad();
+    });
+    circ.box = d;
+  }
+  // Le bloc suit l'onglet affiché : Planning ou Mes absences
+  function circuitPlace(tab) {
+    if (!circ.box) return;
+    if (tab !== "plan" && tab !== "mine") { circ.box.remove(); return; }
+    const sec = $("ab-p-" + tab);
+    if (tab === "plan") sec.insertBefore(circ.box, $("ab-circuit-link")); else sec.append(circ.box);
+    circuitLoad();
+  }
+  function circuitRefresh() { if (circ.box && circ.box.isConnected) circuitLoad(); }
+  async function circuitLoad() {
+    const d = circ.box;
+    if (!d || !d.open || !d.isConnected) return;
+    const user = circuitTarget();
+    const key = [user, circ.kind, circ.days].join("|");
+    if (key === circ.key) return;
+    const tok = ++circ.tok;
+    circ.key = key;
+    const msg = $("ab-circuit-msg"), out = $("ab-circuit-flow"), info = $("ab-circuit-info");
+    d.querySelector("summary").textContent = user ? "Circuit de validation de " + (circuitTargetName(user) || "ce membre") : "Mon circuit de validation";
+    say(msg, "Chargement…");
+    const { data, error } = await sb.rpc("absence_circuit_mine", { p_user: user || null, p_kind: circ.kind, p_days: circ.days });
+    if (tok !== circ.tok) return; // réponse d'un choix plus ancien : ignorée
+    if (error || !data) { circ.key = ""; info.textContent = ""; out.replaceChildren(); return say(msg, "Circuit indisponible : " + (error ? error.message : "réponse vide"), "error"); }
+    say(msg, "");
+    info.textContent = `Circuit qui s'appliquerait à une demande de ${data.days} jours ouvrables à partir du ${fmtCH(data.from)} ; les étapes conditionnelles peuvent varier selon le motif et la durée.`;
+    out.replaceChildren(window.CircuitView.applied(data), ...window.CircuitView.flow(data), ...window.CircuitView.notes(data));
   }
 
   // ----- Démarrage -----
@@ -2243,7 +2320,7 @@
       const forSel = $("ab-for");
       const meOpt = el("option", null, "Moi"); meOpt.value = ""; forSel.append(meOpt);
       state.secOf.forEach((c) => { const o = el("option", null, c.name); o.value = c.id; forSel.append(o); });
-      forSel.addEventListener("change", () => { sd.target = forSel.value; sd.pending = []; loadDrafts(); });
+      forSel.addEventListener("change", () => { sd.target = forSel.value; sd.pending = []; loadDrafts(); circuitRefresh(); });
       $("ab-for-wrap").hidden = false;
       const who = $("ab-who");
       if (!who.options.length) { const me = el("option", null, "Moi"); me.value = ""; who.append(me); }
@@ -2251,6 +2328,9 @@
       if (!who.dataset.bound && !(ctx.validates.length || state.isDir)) { who.dataset.bound = "1"; who.addEventListener("change", () => { state.who = who.value; loadMine(); }); }
       $("ab-who-wrap").hidden = false;
     }
+    // Mon circuit de validation : pour tout membre qui a l'outil Absences (cette page n'est ouverte qu'à eux) ; lien en lecture du circuit pour un médecin cadre
+    if (window.CircuitView) { buildCircuit(); circuitPlace("plan"); }
+    $("ab-circuit-link").hidden = ctx.role !== "cadre";
     await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending()]);
     if (location.hash === "#agenda" && state.agendaCtx && state.agendaCtx.tab) setTab("agenda");
     else if (location.hash === "#todo" && (ctx.validates.length || state.isDir)) setTab("todo");

@@ -1,9 +1,11 @@
 // Circuits de validation des absences : constructeur visuel (colonnes d'étapes simultanées), circuits alternatifs, simulateur et journal.
-// Réservé à l'administration (contrôlé aussi en base). Les validateurs restent désignés par clinique dans /admin/absences.html ; cette page règle les étapes, leur ordre et leurs conditions.
+// Modification réservée à l'administration et à la direction (contrôlé aussi en base) ; les médecins cadres consultent le circuit en lecture seule
+// (les fonctions d'écriture refusent leurs appels). Les validateurs restent désignés par clinique dans /admin/absences.html ; cette page règle les étapes, leur ordre et leurs conditions.
 (function () {
   const cfg = window.ONCONIC_CONFIG || {};
   const sb = window.supabase && cfg.supabaseUrl ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
   const $ = (id) => document.getElementById(id);
+  const CV = window.CircuitView;
   const ROLES = { clinician: "médecin assistant", cdc: "CDC", cadre: "médecin cadre", direction: "direction", admin: "admin", assistant: "assistante", nurse: "infirmier·ère", pharmacist: "pharmacien·ne" };
   const KINDS = [["vacances", "vacances"], ["congres", "congrès"], ["autre", "autre"]];
   const KIND_NAME = { vacances: "vacances", congres: "congrès", autre: "autre" };
@@ -25,10 +27,9 @@
     return e;
   }
   const pill = (txt, cls) => el("span", "cc-pill" + (cls ? " " + cls : ""), txt);
-  const names = (list) => (list || []).map((x) => x.name).join(", ");
-  const REASONS = { member: "nommé", role: "rôle", clinic: "clinique", default: "défaut", draft: "brouillon du circuit sélectionné" };
+  const REASONS = CV.REASONS;
   const ROLE_CODES = ["clinician", "cdc", "cadre", "assistant", "pharmacist", "admin", "direction", "nurse"];
-  const state = { overview: null, pre: null, cols: [], orig: "", circuits: [], sel: null, detail: null, assign: { member: new Set(), role: new Set(), clinic: new Set() }, assignOrig: "", who: [], req: 0, selected: null, drag: null };
+  const state = { overview: null, pre: null, cols: [], orig: "", circuits: [], sel: null, detail: null, assign: { member: new Set(), role: new Set(), clinic: new Set() }, assignOrig: "", who: [], req: 0, selected: null, drag: null, ro: false };
   const current = () => state.circuits.find((c) => c.id === state.sel) || state.circuits[0] || { id: null, name: "", is_default: true };
   const plural = (n, one, many) => n + " " + (n > 1 ? many : one);
 
@@ -165,8 +166,8 @@
   }
   function card(s) {
     const c = el("div", "cc-card k-" + s.kind + (s.active ? "" : " inactive") + (s.blocking ? "" : " soft") + (state.selected === s ? " selected" : ""));
-    c.tabIndex = 0; c.draggable = true; c.setAttribute("role", "button");
-    c.setAttribute("aria-label", "Étape « " + s.label + " » (" + TYPE_TAG[s.kind] + (s.active ? "" : ", désactivée") + ") : ouvrir les réglages");
+    c.tabIndex = 0; c.draggable = !state.ro; c.setAttribute("role", "button");
+    c.setAttribute("aria-label", "Étape « " + s.label + " » (" + TYPE_TAG[s.kind] + (s.active ? "" : ", désactivée") + ") : " + (state.ro ? "voir les réglages" : "ouvrir les réglages"));
     const top = el("div", "cc-card-top");
     top.append(el("span", "cc-tag", TYPE_TAG[s.kind]), el("span", "cc-card-label", s.label));
     c.append(top);
@@ -181,6 +182,7 @@
     if (who) c.append(el("div", "cc-card-who", who));
     c.addEventListener("click", () => openPanel(s));
     c.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openPanel(s); } });
+    if (state.ro) return c;
     c.addEventListener("dragstart", (ev) => {
       state.drag = s;
       try { ev.dataTransfer.setData("text/plain", "etape"); ev.dataTransfer.effectAllowed = "move"; } catch (e) { /* navigateurs restrictifs */ }
@@ -214,6 +216,7 @@
     const stack = el("div", "cc-stack");
     for (const s of col) stack.append(card(s));
     c.append(stack);
+    if (state.ro) return c;
     const add = el("button", "cc-add", "+"); add.type = "button";
     add.setAttribute("aria-label", "Ajouter une étape simultanée dans la colonne " + (i + 1)); add.title = "Ajouter une étape simultanée";
     add.addEventListener("click", (ev) => { ev.stopPropagation(); openPalette(add, { col }); });
@@ -225,7 +228,9 @@
     const box = $("cc-pre");
     const lab = el("label", "cc-switch");
     const cb = el("input"); cb.type = "checkbox"; cb.setAttribute("role", "switch"); cb.checked = !!(state.pre && state.pre.active);
+    cb.disabled = state.ro;
     cb.addEventListener("change", () => {
+      if (state.ro) return;
       if (!state.pre) state.pre = newStep("preavis");
       state.pre.active = cb.checked;
       renderPre(); dirty();
@@ -239,7 +244,12 @@
   function renderBuilder() {
     cleanCols();
     const box = $("cc-builder");
-    if (!state.cols.length) {
+    if (state.ro) {
+      // lecture seule : colonnes reliées par des flèches fixes, aucun point d'insertion
+      const kids = [];
+      state.cols.forEach((col, i) => { if (i) kids.push(el("div", "cc-gap sim")); kids.push(colEl(col, i)); });
+      box.replaceChildren(...(kids.length ? kids : [el("p", "cc-hint", "Aucune étape dans ce circuit.")]));
+    } else if (!state.cols.length) {
       const g = gap(0);
       box.replaceChildren(el("p", "cc-hint", "Aucune étape : ajoutez une première colonne."), g);
     } else {
@@ -333,6 +343,7 @@
     const known = new Map();
     for (const m of state.overview.members || []) known.set(m.id, memberLabel(m));
     for (const st of (state.detail && state.detail.steps) || []) for (const p of st.persons || []) if (!known.has(p.id)) known.set(p.id, p.name || p.id);
+    if (state.ro) for (const id of [...known.keys()]) if (!s.persons.includes(id)) known.delete(id);
     const filter = el("input"); filter.type = "search"; filter.placeholder = "Filtrer par nom"; filter.setAttribute("aria-label", "Filtrer les personnes");
     const list = el("div", "cc-person-list");
     const rows = [];
@@ -430,6 +441,13 @@
     }
     if (s.kind === "clinique") kids.push(el("p", "cc-hint", "Les validateurs sont désignés par clinique dans « Absences : valideurs »."));
 
+    if (state.ro) {
+      // lecture seule : aucun déplacement ni suppression, tous les champs verrouillés (sauf le filtre de recherche)
+      for (const k of kids) for (const c of [k, ...k.querySelectorAll("input, select, button")]) if (c.matches && c.matches("input:not([type=search]), select, button")) c.disabled = true;
+      kids.unshift(el("p", "cc-hint", "Réglages en lecture seule."));
+      body.replaceChildren(...kids);
+      return;
+    }
     const pos = el("fieldset", "cc-cond-box");
     pos.append(el("legend", null, "Position"));
     const mv = el("div", "cc-moves");
@@ -456,6 +474,7 @@
 
   // ----- Enregistrement -----
   async function save() {
+    if (state.ro) return;
     say("cc-ed-msg", "");
     let payload;
     try { payload = serialize(); } catch (e) { return say("cc-ed-msg", e.message, "error"); }
@@ -508,6 +527,7 @@
   const fr = (s) => s.split("-").reverse().join(".");
 
   async function simulate(draft) {
+    if (state.ro) draft = false; // un cadre simule seulement les circuits enregistrés
     const sel = $("cc-member");
     const msg = $("cc-msg"); msg.className = "form-msg"; msg.textContent = "";
     $("cc-result").replaceChildren();
@@ -541,56 +561,12 @@
     $("cc-sim-draft").addEventListener("click", () => simulate(true));
   }
 
-  function simCard(s) {
-    const c = el("div", "cc-card sim k-" + s.kind + (s.blocking ? "" : " soft"));
-    const top = el("div", "cc-card-top");
-    top.append(el("span", "cc-tag", TYPE_TAG[s.kind] || s.kind), el("span", "cc-card-label", s.label));
-    c.append(top);
-    const pills = el("div", "cc-pills");
-    if (s.kind !== "visa") pills.append(pill(s.rule_code === "any" ? "un seul" : "tous"));
-    if (!s.blocking) pills.append(pill("consultative", "dash"));
-    c.append(pills);
-    c.append(el("div", "cc-card-who", (s.people || []).length ? names(s.people) : "Personne"));
-    if (s.pdf_slot === "chef_service") c.append(el("div", "cc-card-note", "Remplit la case « avis du chef de service »."));
-    if (s.note) c.append(el("div", "cc-card-note", s.note));
-    return c;
-  }
   function result(r, from, to, draft) {
     const box = $("cc-result");
     const head = el("p", "cc-res-head", (draft ? "Circuit en cours de modification (non enregistré) · " : "Circuit enregistré · ") + r.member.name + " (" + (ROLES[r.member.role] || r.member.role) + ") · " + ((r.clinics || []).length ? r.clinics.join(", ") : "aucune clinique à ces dates") + " · " + (KIND_NAME[r.kind] || r.kind) + " · du " + fr(from) + " au " + fr(to));
-    const applied = el("p", "cc-applied");
-    if (r.circuit) {
-      applied.append(el("strong", null, "Circuit appliqué : " + r.circuit.name), " (" + (REASONS[r.circuit.reason] || r.circuit.reason) + (r.circuit.reason === "role" && r.circuit.detail ? " : " + (ROLES[r.circuit.detail] || r.circuit.detail) : r.circuit.detail && r.circuit.reason !== "member" ? " : " + r.circuit.detail : "") + ")");
-    }
-    const kids = [head, applied];
-    const pre = (r.steps || []).find((s) => s.kind === "preavis");
-    if (pre) {
-      const p = el("div", "cc-pre sim" + ((pre.people || []).length ? "" : " off"));
-      p.append(el("span", "cc-switch-text", pre.label + " (consultatif)"), el("span", "cc-pre-who", (pre.people || []).length ? names(pre.people) : pre.note || "Personne"));
-      kids.push(p);
-    }
-    let cols = r.columns;
-    if (!Array.isArray(cols)) {
-      const m = new Map();
-      for (const s of (r.steps || []).filter((x) => x.kind !== "preavis")) { const c = s.col != null ? s.col : s.pos; if (!m.has(c)) m.set(c, []); m.get(c).push(s); }
-      cols = [...m.entries()].sort((a, b) => a[0] - b[0]).map(([col, steps]) => ({ col, steps, note: null }));
-    }
-    const row = el("div", "cc-builder sim");
-    cols.forEach((c, i) => {
-      if (i) row.append(el("div", "cc-gap sim"));
-      const ce = el("div", "cc-col");
-      ce.append(el("div", "cc-col-head", "Colonne " + (i + 1) + ((c.steps || []).length > 1 ? " · simultanées" : "")));
-      const stack = el("div", "cc-stack");
-      for (const s of c.steps || []) stack.append(simCard(s));
-      ce.append(stack);
-      if (c.note) ce.append(el("div", "cc-card-note", c.note));
-      row.append(ce);
-    });
-    kids.push(row);
+    const kids = [head, CV.applied(r), ...CV.flow(r)];
     if (draft && r.resolved && r.circuit && r.resolved.id !== r.circuit.id) kids.push(el("p", "cc-hint", "Ce membre suit en réalité le circuit « " + r.resolved.name + " » (" + (REASONS[r.resolved.reason] || r.resolved.reason) + ")."));
-    if ((r.excluded || []).length) kids.push(el("p", "cc-hint", "Étapes non appliquées à cette demande : " + r.excluded.map((x) => x.label + " (" + x.reason + ")").join(", ") + "."));
-    if (r.self_excluded) kids.push(el("p", "cc-hint", "Ce membre est lui-même désigné validateur d'une de ses cliniques : il est exclu de sa propre validation."));
-    kids.push(el("p", "cc-hint", r.admin_override));
+    kids.push(...CV.notes(r));
     box.replaceChildren(...kids);
   }
 
@@ -641,6 +617,7 @@
 
   let boxMode = null;
   function openBox(mode) {
+    if (state.ro) return;
     boxMode = mode;
     const c = current();
     $("cc-box").hidden = false;
@@ -656,6 +633,7 @@
   function closeBox() { boxMode = null; $("cc-box").hidden = true; say("cc-box-msg", ""); }
   async function submitBox(ev) {
     ev.preventDefault();
+    if (state.ro) return;
     const name = $("cc-box-name").value.trim();
     if (!name) return say("cc-box-msg", "Indiquez un nom (60 caractères au plus).", "error");
     if (boxMode === "create") {
@@ -672,6 +650,7 @@
     }
   }
   async function deleteCircuit() {
+    if (state.ro) return;
     const c = current();
     if (c.is_default) return;
     if (!confirm("Supprimer le circuit « " + c.name + " » ? Ses membres suivront le circuit général pour leurs nouvelles demandes ; les demandes en cours gardent leur circuit.")) return;
@@ -681,6 +660,7 @@
     state.sel = null; await refreshOverview(); state.sel = (state.circuits.find((x) => x.is_default) || state.circuits[0]).id; await loadCircuit();
   }
   async function moveCircuit(d) {
+    if (state.ro) return;
     const alt = state.circuits.filter((x) => !x.is_default).map((x) => x.id), i = alt.indexOf(state.sel);
     if (i < 0 || i + d < 0 || i + d >= alt.length) return;
     [alt[i], alt[i + d]] = [alt[i + d], alt[i]];
@@ -708,13 +688,16 @@
     const filter = el("input"); filter.type = "search"; filter.placeholder = "Filtrer"; filter.setAttribute("aria-label", "Filtrer : " + title);
     const list = el("div", "cc-person-list"), rows = [];
     const count = el("span", "cc-hint");
-    const upd = () => { const n = state.assign[type].size; count.textContent = n + " coché" + (n > 1 ? "s" : ""); $("cc-as-save").disabled = assignSnapshot() === state.assignOrig; $("cc-as-dirty").hidden = assignSnapshot() === state.assignOrig; };
+    const upd = () => { const n = state.assign[type].size; count.textContent = state.ro ? n + (n > 1 ? " attribuées" : " attribuée") : n + " coché" + (n > 1 ? "s" : ""); $("cc-as-save").disabled = assignSnapshot() === state.assignOrig; $("cc-as-dirty").hidden = assignSnapshot() === state.assignOrig; };
     for (const it of items) {
+      if (state.ro && !state.assign[type].has(it.id)) continue;
       const other = takenBy(type, it.id);
       const row = check(it.label + (other ? " · déjà dans « " + other + " »" : ""), state.assign[type].has(it.id), (on) => {
+        if (state.ro) return;
         if (on) state.assign[type].add(it.id); else state.assign[type].delete(it.id);
         upd();
       });
+      if (state.ro) row.querySelector("input").disabled = true;
       row.dataset.name = it.label.toLowerCase();
       rows.push(row); list.append(row);
     }
@@ -731,6 +714,7 @@
     $("cc-as-lists").replaceChildren(pickList("member", "Membres", members), pickList("role", "Rôles", roles), pickList("clinic", "Cliniques", clinics));
   }
   async function saveAssign() {
+    if (state.ro) return;
     say("cc-as-msg", "");
     const c = current();
     if (c.is_default) return;
@@ -771,13 +755,29 @@
     $("cc-who-msg").textContent = rows.length ? rows.length + " membre" + (rows.length > 1 ? "s" : "") : "Aucun membre ne correspond.";
   }
 
+  // Médecin cadre : lecture seule. Les boutons d'écriture disparaissent ; la base refuse de toute façon les appels d'écriture.
+  function readOnly() {
+    $("cc-tool").classList.add("cc-ro");
+    $("cc-ro-note").hidden = false;
+    for (const id of ["cc-tools", "cc-box", "cc-bar", "cc-as-actions", "cc-palette"]) $(id).hidden = true;
+    $("cc-hint-flow").textContent = "Les étapes d'une même colonne sont simultanées ; les colonnes se suivent de gauche à droite. Cliquez une étape pour voir ses réglages.";
+    $("cc-note").textContent = "Le circuit général s'applique à tous, sauf aux membres, rôles et cliniques attribués à un circuit alternatif (priorité : membre, rôle, clinique, puis général). Un administrateur peut valider à toute étape.";
+    $("cc-eyebrow").textContent = "Absences";
+    $("cc-back").textContent = "← Absences";
+    $("cc-back").href = "/app/absences.html";
+    $("cc-assign-hint").textContent = "Membres, rôles et cliniques qui suivent ce circuit.";
+    $("cc-form").querySelector("button[type=submit]").textContent = "Simuler";
+    document.title = "Circuit de validation des absences · Onconic";
+  }
+
   (async () => {
     if (!sb) return ($("ug-status").textContent = "Service indisponible.");
     const { data } = await sb.auth.getSession();
     if (!data.session) return (location.href = "/fr/the-hive.html");
     $("logout").addEventListener("click", async () => { await sb.auth.signOut(); location.href = "/fr/"; });
     const { data: role } = await sb.rpc("current_role_name");
-    if (role !== "admin" && role !== "direction") return ($("ug-status").textContent = "Page réservée à l'administration.");
+    if (role !== "admin" && role !== "direction" && role !== "cadre") return ($("ug-status").textContent = "Page réservée à l'administration et aux médecins cadres.");
+    state.ro = role === "cadre";
     const { data: o, error } = await sb.rpc("absence_circuit_overview");
     if (error) return ($("ug-status").textContent = "Chargement impossible : " + error.message);
     state.overview = o; state.circuits = o.circuits || [];
@@ -785,6 +785,7 @@
     $("ug-status").hidden = true;
     $("cc-tool").hidden = false;
     warnings(o); table(o); form(o);
+    if (state.ro) readOnly();
     $("cc-save").addEventListener("click", save);
     $("cc-cancel").addEventListener("click", cancel);
     $("cc-new").addEventListener("click", () => openBox("create"));

@@ -16,10 +16,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="/assets/css/onconic.css?v=20261118e">
+  <link rel="stylesheet" href="/assets/css/circuit.css?v=20261123a">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/absences.js?v=20261118i" defer></script>
+  <script src="/assets/js/circuit-view.js?v=20261123a"></script>
+  <script src="/assets/js/absences.js?v=20261123a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -172,6 +174,7 @@
 
             <div class="card ab-detail" id="ab-detail" hidden aria-live="polite"></div>
             <p class="muted ab-note-line">Week-ends et jours fériés en gris. Le décompte des jours ouvrables exclut les week-ends et les fériés vaudois. La première ligne reprend les fériés, les vacances scolaires vaudoises et les événements importants saisis par l'administrateur.</p>
+            <p class="muted ab-circuit-link" id="ab-circuit-link" hidden><a href="/admin/circuit-absences.html">Voir le circuit de validation</a></p>
           </section>
 
           <section id="ab-p-mine" role="tabpanel" aria-labelledby="ab-t-mine" hidden>

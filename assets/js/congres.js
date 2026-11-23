@@ -9,7 +9,9 @@
     ["Bloc 2", ["Thoracique", "Neuro-oncologie", "Mélanome"]],
     ["Bloc 3", ["GI tube", "GI solide", "ORL", "Sarcomes", "Rad-Inter"]],
     ["ION", ["ION"]],
-    ["UTOH", ["UTOH"]]
+    ["UTOH", ["UTOH"]],
+    ["Hématologie", ["Hématologie"]],
+    ["Tournus / Autre", ["Tournus / Autre"]]
   ];
   const ALL = "Transversal"; // concerne toutes les cliniques
   const KINDS = [["congrès", "Congrès"], ["formation", "Formations"], ["symposium", "Symposiums"], ["webinaire", "Webinaires"]];
