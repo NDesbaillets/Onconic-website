@@ -14,7 +14,7 @@ const admin = createClient(URL_, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { a
 
 // Liste blanche côté fonction aussi (la base refuse « admin » et les rôles inconnus)
 const ROLES = ["clinician", "cdc", "cadre", "assistant", "nurse", "pharmacist", "direction"];
-const FRESH_MS = 2 * 60 * 1000; // seuil « compte créé à l'instant »
+const CLOCK_MARGIN_MS = 5000; // marge entre les horloges d'Auth et de la fonction
 const INSTITUTIONS = ["CHUV", "Hors CHUV"];
 
 function allowedOrigin(origin: string) {
@@ -88,7 +88,13 @@ Deno.serve(async (req) => {
     return json(req, 403, { error: "forbidden" });
   }
 
+  // Adresse déjà prise : aucun appel à Auth, aucun e-mail (inviteUserByEmail renverrait sinon un compte existant sans erreur)
+  const { data: taken, error: takenError } = await admin.rpc("member_email_taken", { p_email: email });
+  if (takenError) { console.error("member_email_taken failed", takenError.code); return json(req, 502, { error: "create_failed" }); }
+  if (taken === true) return json(req, 409, { error: "user_exists" });
+
   const fullName = first + " " + last;
+  const t0 = Date.now(); // avant toute création : preuve qu'un compte a été créé par cette requête
   let userId: string | undefined, password: string | undefined, createdAt: string | undefined;
   if (mode === "invite") {
     const origin = req.headers.get("origin") ?? "";
@@ -114,9 +120,10 @@ Deno.serve(async (req) => {
     userId = data.user.id; createdAt = data.user.created_at;
   }
 
-  // inviteUserByEmail peut renvoyer sans erreur un compte déjà invité : un compte qui n'est pas né à l'instant n'est ni modifié ni supprimé
+  // Un compte plus ancien que cette requête (renvoyé par l'invitation lors d'une course) n'est ni modifié ni supprimé
   const ts = Date.parse(String(createdAt ?? ""));
-  if (!Number.isFinite(ts) || Date.now() - ts > FRESH_MS) return json(req, 409, { error: "user_exists" });
+  const mine = Number.isFinite(ts) && ts >= t0 - CLOCK_MARGIN_MS;
+  if (!mine) return json(req, 409, { error: "user_exists" });
 
   // Le profil est créé par le déclencheur d'inscription ; la base le complète (rôle, cliniques, accès par défaut, journal).
   // En cas d'échec, le compte d'authentification qui vient d'être créé est supprimé.
@@ -126,6 +133,8 @@ Deno.serve(async (req) => {
   });
   if (applyError) {
     console.error("member_create_apply failed", applyError.code);
+    // « Déjà un rôle » : une autre requête a doté ce compte, il ne doit jamais être supprimé
+    if (applyError.code === "OC003") return json(req, 409, { error: "user_exists" });
     const { error: delError } = await admin.auth.admin.deleteUser(userId);
     if (delError) console.error("cleanup deleteUser failed", delError.code ?? delError.status);
     return json(req, 500, { error: "profile_failed" });

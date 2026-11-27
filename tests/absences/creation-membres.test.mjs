@@ -134,7 +134,7 @@ test('création de membres : droits, profil posé, refus d\'écrasement, journal
 
     await t.test('refus d\'écraser un membre existant, de se créer soi-même et de créer un compte absent', async () => {
       await as(null, 'service_role');
-      await assert.rejects(apply(2, 4, 'nurse'), /déjà un rôle/);
+      await assert.rejects(apply(2, 4, 'nurse'), (e) => e.code === 'OC003' && /déjà un rôle/.test(e.message));
       await assert.rejects(apply(2, 11, 'nurse'), /déjà un rôle/, 'compte créé plus tôt');
       await assert.rejects(apply(2, 2, 'nurse'), /refusée/);
       await assert.rejects(apply(2, 777, 'nurse'), /introuvable/);
@@ -198,6 +198,17 @@ test('création de membres : droits, profil posé, refus d\'écrasement, journal
       assert.equal(await one("select count(*)::int from absence_approvals where absence_id=$1 and decision='pending'", [after[0].id]) > 0, true, 'le validateur Thoracique reste sollicité');
       // la création d'un cadre validateur potentiel de la même clinique ne retire pas le validateur actuel
       assert.equal(await one("select count(*)::int from absence_approvals where absence_id=$1 and validator_id=$2", [after[0].id, uid(7)]) , 1);
+    });
+
+    await t.test('member_email_taken : casse, absent, présent, droits', async () => {
+      await as(null, 'service_role');
+      assert.equal(await one("select member_email_taken('CM4@Example.com')"), true);
+      assert.equal(await one("select member_email_taken(' cm4@example.com ')"), true);
+      assert.equal(await one("select member_email_taken('absent@example.com')"), false);
+      for (const [n, role] of [[1, 'authenticated'], [2, 'authenticated'], [null, 'anon']]) {
+        await as(n, role);
+        await assert.rejects(db.query("select member_email_taken('cm4@example.com')"), /permission denied/, role);
+      }
     });
 
     await t.test('member_create_check : matrice d\'autorisation, cliniques et institution invalides', async () => {

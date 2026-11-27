@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
-const calls = { rights: [], check: [], create: [], invite: [], apply: [], del: [] };
-let checkError = null, createdAt = null;
+const calls = { rights: [], check: [], taken: [], create: [], invite: [], apply: [], del: [] };
+let checkError = null, createdAt = null, taken = false, applyHook = null;
 const logs = [];
 let delError = null, allowed = true, rightsError = null, applyError = null, authError = null, user = { id: 'caller-1' };
 globalThis.cmAdmin = {
@@ -17,7 +17,9 @@ globalThis.cmAdmin = {
       deleteUser: async (id) => { calls.del.push(id); return { error: delError }; },
     },
   },
-  rpc: async (name, args) => { assert.equal(name, 'member_create_apply'); calls.apply.push(args); return { error: applyError }; },
+  rpc: async (name, args) => {
+    if (name === 'member_email_taken') { calls.taken.push(args); return { data: taken, error: null }; }
+    assert.equal(name, 'member_create_apply'); calls.apply.push(args); if (applyHook) return applyHook(); return { error: applyError }; },
 };
 globalThis.cmCaller = { rpc: async (name, args) => {
   if (name === 'member_create_check') { calls.check.push(args); return { error: checkError }; }
@@ -35,7 +37,7 @@ const post = (body, headers = {}) => globalThis.cmHandler(new Request('https://e
   method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer jwt', origin: 'https://onconic.ch', ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body) }));
 const reset = () => {
   for (const k of Object.keys(calls)) calls[k].length = 0;
-  logs.length = 0; checkError = null; createdAt = null; delError = null; allowed = true; rightsError = null; applyError = null; authError = null; user = { id: 'caller-1' };
+  logs.length = 0; checkError = null; createdAt = null; taken = false; applyHook = null; delError = null; allowed = true; rightsError = null; applyError = null; authError = null; user = { id: 'caller-1' };
 };
 
 test('appelant sans session valide : 401, aucun compte créé', async () => {
@@ -188,7 +190,43 @@ test('compte préexistant renvoyé par l\'invitation : 409, ni apply ni suppress
   reset(); createdAt = new Date(Date.now() - 3 * 60 * 1000).toISOString(); applyError = { code: 'P0001' };
   r = await post({ ...base, mode: 'invite' });
   assert.equal(r.status, 409); assert.equal(calls.del.length, 0, 'jamais de suppression d\'un ancien compte');
-  reset(); createdAt = new Date(Date.now() - 30 * 1000).toISOString(); applyError = { code: 'P0001' };
+  reset(); createdAt = new Date(Date.now() - 1000).toISOString(); applyError = { code: 'P0001' };
   r = await post({ ...base, mode: 'invite' });
   assert.equal(r.status, 500); assert.deepEqual(calls.del, ['new-2']);
+});
+
+test('adresse déjà prise : 409 sans appel à Auth (ni invitation, ni création, ni suppression), adresse normalisée', async () => {
+  for (const mode of ['invite', 'password']) {
+    reset(); taken = true;
+    const r = await post({ ...base, mode });
+    assert.equal(r.status, 409); assert.equal((await r.json()).error, 'user_exists');
+    assert.equal(calls.create.length + calls.invite.length + calls.del.length + calls.apply.length, 0);
+    assert.deepEqual(calls.taken, [{ p_email: 'alice.martin@example.com' }]);
+  }
+});
+
+test('deux requêtes concurrentes sur le même compte frais : la seconde échoue en OC003, aucune suppression', async () => {
+  reset();
+  let n = 0;
+  applyHook = async () => (++n === 1 ? { error: null } : { error: { code: 'OC003', message: 'Ce compte a déjà un rôle.' } });
+  const [r1, r2] = await Promise.all([post({ ...base, mode: 'invite' }), post({ ...base, mode: 'invite' })]);
+  const statuses = [r1.status, r2.status].sort();
+  assert.deepEqual(statuses, [200, 409]);
+  assert.equal(calls.del.length, 0, 'le compte doté d\'un rôle par l\'autre requête n\'est jamais supprimé');
+  assert.ok(!logs.join('\n').match(/alice|example\.com/i));
+});
+
+test('échec d\'apply (autre erreur) sur un compte créé par cette requête : supprimé ; compte plus ancien que t0 - 5 s : jamais', async () => {
+  reset(); applyError = { code: '42501' };
+  let r = await post({ ...base, mode: 'invite' });
+  assert.equal(r.status, 500); assert.deepEqual(calls.del, ['new-2']);
+  reset(); createdAt = new Date(Date.now() - 6000).toISOString(); applyError = { code: '42501' };
+  r = await post({ ...base, mode: 'invite' });
+  assert.equal(r.status, 409); assert.equal(calls.del.length, 0); assert.equal(calls.apply.length, 0);
+  reset(); createdAt = new Date(Date.now() - 2000).toISOString(); applyError = { code: '42501' };
+  r = await post({ ...base, mode: 'password' });
+  assert.equal(r.status, 500); assert.deepEqual(calls.del, ['new-1'], 'dans la marge de 5 s');
+  reset(); applyError = { code: 'OC003' };
+  r = await post({ ...base, mode: 'password' });
+  assert.equal(r.status, 409); assert.equal(calls.del.length, 0);
 });

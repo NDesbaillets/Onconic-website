@@ -85,6 +85,14 @@ $$;
 revoke execute on function public.member_create_check(text, text[], text[], text) from public, anon;
 grant execute on function public.member_create_check(text, text[], text[], text) to authenticated;
 
+-- Adresse déjà utilisée par un compte d'authentification (Edge Function seulement, sans aucun effet de bord)
+create or replace function public.member_email_taken(p_email text) returns boolean
+language sql stable security definer set search_path = public, pg_temp as $$
+  select exists (select 1 from auth.users u where lower(u.email) = lower(btrim(p_email)));
+$$;
+revoke execute on function public.member_email_taken(text) from public, anon, authenticated;
+grant execute on function public.member_email_taken(text) to service_role;
+
 -- 4. Application du profil (Edge Function seulement) ------------------------------------------------------------------------------
 create or replace function public.member_create_apply(p_actor uuid, p_user uuid, p_role text, p_first text, p_last text, p_institution text,
   p_clinics text[], p_cdc_clinics text[], p_mode text) returns void
@@ -105,7 +113,7 @@ begin
   if not exists (select 1 from auth.users u where u.id = p_user) then raise exception 'Compte introuvable.'; end if;
   select role into v_cur from public.profiles where id = p_user for update;
   if not found then raise exception 'Profil introuvable.'; end if;
-  if v_cur <> 'member' then raise exception 'Ce compte a déjà un rôle.'; end if;
+  if v_cur <> 'member' then raise exception 'Ce compte a déjà un rôle.' using errcode = 'OC003'; end if;
   select v.institution, v.clinics, v.cdc_clinics into v_inst, v_clinics, v_cdc from public.member_create_validate(p_role, p_institution, p_clinics, p_cdc_clinics) v;
 
   update public.profiles set role = p_role, first_name = v_first, last_name = v_last, full_name = v_first || ' ' || v_last,
