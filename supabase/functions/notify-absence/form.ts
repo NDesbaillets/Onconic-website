@@ -5,7 +5,7 @@
 import { PDFDocument, PDFFont, PDFPage, rgb, StandardFonts } from "npm:pdf-lib@1.17.1";
 
 export type FormRole = "clinician" | "cdc" | "cadre";
-export type FormAbsence = { kind: "vacances" | "congres" | "autre"; start_date: string; end_date: string; note: string | null };
+export type FormAbsence = { kind: "vacances" | "congres" | "autre"; start_date: string; end_date: string; note: string | null; request_no?: string | null };
 export type FormSigner = { name: string; at: string; comment?: string | null };
 export type FormExtra = { label: string; name: string; at: string; slot?: string | null };
 // Refus de l'état actuel (PDF à tout moment) : kind = clinique, visa ou une étape du circuit (slot « chef_service » pour la cheffe de service)
@@ -95,6 +95,12 @@ export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): P
   }
   const hdr = ["Département d’oncologie", "Bâtiment hospitalier", "Rue du Bugnon 46", "CH-1011 Lausanne"];
   hdr.forEach((l, i) => page.drawText(safe(l), { x: hdrX, y: y - 9 - i * 9.5, size: i ? 7.5 : 8.5, font: i ? reg : bold, color: NAVY }));
+  // Numéro de demande (AAAA-NNNN) en haut à droite ; l'identifiant du document (Réf. OC-ABS-…) reste au pied de page
+  const nos = [...new Set(d.absences.map((a) => a.request_no).filter((n): n is string => !!n))];
+  if (nos.length) {
+    const lab = nos.length === 1 ? `Demande n° ${nos[0]}` : `Demandes n° ${nos.slice(0, 3).join(", ")}${nos.length > 3 ? ", …" : ""}`;
+    page.drawText(safe(lab), { x: W - MR - bold.widthOfTextAtSize(safe(lab), 9.5), y: y - 9, size: 9.5, font: bold, color: NAVY });
+  }
   y -= 52;
 
   // Titre dans un cadre à double filet
@@ -118,7 +124,7 @@ export async function buildAbsenceForm(d: FormData, logo?: Uint8Array | null): P
   const abs = [...d.absences].sort((a, b) => a.start_date.localeCompare(b.start_date));
   abs.forEach((a, i) => {
     const lead = d.role === "cadre" ? `${i + 1}.` : "•";
-    const body = `${period(a.start_date, a.end_date)} : ${KIND_FR[a.kind]}${a.note ? ` (${a.note})` : ""}`;
+    const body = `${period(a.start_date, a.end_date)} : ${KIND_FR[a.kind]}${a.note ? ` (${a.note})` : ""}${a.request_no ? ` · Demande n° ${a.request_no}` : ""}`;
     need(14); text(lead, ML + 12, reg, 10); para(body, ML + 28, CW - 34);
   });
   if (d.role === "cdc") { y -= 6; text("Congés à annuler :", ML, bold, 10); y -= 16; text("•", ML + 12, reg, 10); y -= 20; }

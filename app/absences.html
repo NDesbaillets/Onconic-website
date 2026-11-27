@@ -15,13 +15,13 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261123a">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261127a">
   <link rel="stylesheet" href="/assets/css/circuit.css?v=20261123b">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
   <script src="/assets/js/circuit-view.js?v=20261123b"></script>
-  <script src="/assets/js/absences.js?v=20261123c" defer></script>
+  <script src="/assets/js/absences.js?v=20261127b" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -87,6 +87,7 @@
             <button class="ab-tab" id="ab-t-todo" role="tab" aria-selected="false" aria-controls="ab-p-todo" type="button" hidden>À valider <span class="ab-count" id="ab-todo-n"></span></button>
             <button class="ab-tab" id="ab-t-agenda" role="tab" aria-selected="false" aria-controls="ab-p-agenda" type="button" hidden>Blocage Ultragenda <span class="ab-count" id="ab-agenda-n"></span></button>
             <button class="ab-tab" id="ab-t-track" role="tab" aria-selected="false" aria-controls="ab-p-track" type="button" hidden>Suivi</button>
+            <button class="ab-tab" id="ab-t-hist" role="tab" aria-selected="false" aria-controls="ab-p-hist" type="button" hidden>Historique</button>
             <button class="ab-tab" id="ab-t-dir" role="tab" aria-selected="false" aria-controls="ab-p-dir" type="button" hidden>Direction</button>
             <button class="ab-tab" id="ab-t-exp" role="tab" aria-selected="false" aria-controls="ab-p-exp" type="button" hidden>Export</button>
           </div>
@@ -216,7 +217,7 @@
             </div>
             <div id="ab-rej-wrap" hidden>
               <h3 class="ab-sub-title">Demandes refusées</h3>
-              <p class="muted">Vous pouvez les supprimer ; elles disparaissent d'elles-mêmes 14 jours après le refus.</p>
+              <p class="muted">Vous pouvez les archiver : elles quittent cette liste mais restent consultables dans l'historique. Elles ne s'affichent plus ici 14 jours après le refus.</p>
               <div id="ab-rej-list" class="ab-list"></div>
             </div>
           </section>
@@ -264,6 +265,34 @@
               </table>
             </div>
           </section>
+          <section id="ab-p-hist" role="tabpanel" aria-labelledby="ab-t-hist" hidden>
+            <h2>Historique des demandes</h2>
+            <p class="muted">Toutes les demandes envoyées dont vous avez le droit de consulter le dossier : demandées, validées, refusées et annulées, sans limite de durée. Chaque demande porte un numéro unique (AAAA-NNNN) qui ne change jamais.</p>
+            <form class="card ab-new" id="ab-hist-form" novalidate role="search">
+              <div class="ab-fields">
+                <label>Retrouver une demande par son numéro <input id="ab-hist-q" type="search" autocomplete="off" placeholder="2026-0012, 0012 ou 12 (ou un nom, un motif)"></label>
+                <label>Année de dépôt <select id="ab-hist-year"></select></label>
+                <label>Statut
+                  <select id="ab-hist-status">
+                    <option value="">Tous</option>
+                    <option value="requested">Demandée</option>
+                    <option value="approved">Validée</option>
+                    <option value="rejected">Refusée</option>
+                    <option value="cancelled">Annulée</option>
+                  </select>
+                </label>
+                <label id="ab-hist-who-wrap" hidden>Personne <select id="ab-hist-who"></select></label>
+              </div>
+              <div class="btn-row">
+                <button class="btn" type="submit" id="ab-hist-go">Rechercher</button>
+              </div>
+            </form>
+            <p class="form-msg" id="ab-hist-msg" role="status" aria-live="polite"></p>
+            <p class="muted" id="ab-hist-note" hidden>La recherche par numéro ignore les filtres année, statut et personne.</p>
+            <p class="muted" id="ab-hist-count" aria-live="polite"></p>
+            <div id="ab-hist-list" class="ab-list"></div>
+            <div class="btn-row"><button class="btn btn-outline" type="button" id="ab-hist-more" hidden>Charger la suite</button></div>
+          </section>
           <section id="ab-p-exp" role="tabpanel" aria-labelledby="ab-t-exp" hidden>
             <h2>Exports Excel</h2>
             <p class="muted" id="ab-exp-scope"></p>
@@ -278,7 +307,7 @@
               </div>
               <p class="form-msg" id="ab-exp-msg" role="status" aria-live="polite"></p>
             </form>
-            <p class="muted">Un seul fichier Excel, en cinq onglets. <strong>Planning</strong> : grille calendaire au format du tableur des cliniques, un bloc par mois, une section par clinique avec tout l'effectif (même sans absence), une colonne par jour ; absences validées en couleur franche, demandes en cours de validation en teinte claire avec « ? » ; week-ends et fériés vaudois grisés. <strong>Absences</strong> : une ligne par absence avec son état, les validateurs et leurs horodatages. <strong>Synthèse</strong> : par personne, demandes acceptées (jours ouvrables), en attente, refusées et annulées. <strong>Décisions</strong> : le journal des décisions. <strong>Légende</strong> : couleurs, périmètre et fenêtre. Les demandes refusées sont retirées de la liste 14 jours après le refus, mais leur décision reste dans le journal.</p>
+            <p class="muted">Un seul fichier Excel, en cinq onglets. <strong>Planning</strong> : grille calendaire au format du tableur des cliniques, un bloc par mois, une section par clinique avec tout l'effectif (même sans absence), une colonne par jour ; absences validées en couleur franche, demandes en cours de validation en teinte claire avec « ? » ; week-ends et fériés vaudois grisés. <strong>Absences</strong> : une ligne par absence avec son état, les validateurs et leurs horodatages. <strong>Synthèse</strong> : par personne, demandes acceptées (jours ouvrables), en attente, refusées et annulées. <strong>Décisions</strong> : le journal des décisions. <strong>Légende</strong> : couleurs, périmètre et fenêtre. Les demandes refusées ne figurent plus dans les listes actives 14 jours après le refus, mais restent dans l'export et dans l'historique, et leur décision reste dans le journal. La première colonne de l'onglet Absences est le numéro de la demande.</p>
           </section>
 
           <section id="ab-p-dir" role="tabpanel" aria-labelledby="ab-t-dir" hidden>

@@ -39,3 +39,15 @@ test('PDF de l\u2019état actuel : refus coché « Défavorable », signatures d
   assert.ok(sizes.size>=3);
  }
 });
+test('PDF : numéro de demande dans l’en-tête et près de chaque absence, identifiant du document conservé',async()=>{
+ const base={action:'approved',owner:'Personne fictive',clinics:['Thoracique'],requestedAt:'2026-11-11T10:00:00Z',signers:[{name:'Cadre fictif',at:'2026-11-11T10:00:00Z'}],direction:{name:'Direction fictive',at:'2026-11-11T11:00:00Z'},generatedAt:'2026-11-11T11:00:00Z',ref:'OC-ABS-D7'};
+ const abs=(no)=>({kind:'vacances',start_date:'2027-02-01',end_date:'2027-02-02',note:null,request_no:no});
+ for(const role of ['clinician','cdc','cadre']) {
+  const without=await buildAbsenceForm({...base,role,absences:[abs(null)]});
+  const one=await buildAbsenceForm({...base,role,absences:[abs('2026-0012')]});
+  const two=await buildAbsenceForm({...base,role,absences:[abs('2026-0012'),{...abs('2026-0013'),start_date:'2027-03-01',end_date:'2027-03-02'}]});
+  for(const b of [one,two]) assert.ok((await PDFDocument.load(b)).getPageCount()>=1);
+  assert.notEqual(one.length,without.length);
+  assert.ok(two.length>one.length);
+ }
+});

@@ -6,6 +6,8 @@ export type Abs = {
   id: number; kind: "vacances" | "congres" | "autre"; start_date: string; end_date: string; note: string | null;
   change_type: "modify" | "delete" | null; change_kind: string | null; change_note: string | null;
   change_start: string | null; change_end: string | null;
+  // Numéro de demande AAAA-NNNN, lu en base à l'envoi (jamais copié dans le payload)
+  request_no?: string | null;
 };
 export type Ctx = {
   lang: Lang; kind: Kind; owner: string; by?: string | null; comment?: string | null; reminder?: boolean; action?: string | null; stepLabel?: string | null; secretary?: boolean; periods?: { start: string; end: string }[];
@@ -63,7 +65,7 @@ const T = {
     stays: "L'absence reste validée aux dates actuelles.",
     comment: (c: string) => `Commentaire : « ${c} »`,
     open: "Ouvrir Absences",
-    delHint: "Vous pouvez supprimer cette demande ou la modifier puis la renvoyer ; elle disparaît d'elle-même 14 jours après le refus.",
+    delHint: "Vous pouvez modifier cette demande puis la renvoyer, ou l'archiver ; elle reste consultable dans l'historique.",
     sent: "Message automatique de The Hive Onconic.",
     remind: "Rappel",
     remindText: "Ce message est un rappel : votre décision est toujours attendue.",
@@ -111,7 +113,7 @@ const T = {
     stays: "The absence stays approved on its current dates.",
     comment: (c: string) => `Comment: “${c}”`,
     open: "Open Absences",
-    delHint: "You can delete this request, or change it and send it again; it disappears by itself 14 days after the refusal.",
+    delHint: "You can change this request and send it again, or archive it; it stays available in the history.",
     sent: "Automatic message from The Hive Onconic.",
     remind: "Reminder",
     remindText: "This is a reminder: your decision is still pending.",
@@ -121,9 +123,12 @@ const T = {
   },
 };
 
-function line(l: Lang, a: Abs, withChange: boolean): string {
+function line(l: Lang, a: Abs, withChange: boolean, numbered = false): string {
   const t = T[l];
-  let s = `${period(a.start_date, a.end_date)} · ${KIND[l][a.kind]}`;
+  // Plusieurs demandes dans le même message : « N° 2026-0012 : vacances du … au … » ; sinon le numéro figure dans l'objet
+  let s = numbered && a.request_no
+    ? (l === "fr" ? `N° ${a.request_no} : ${KIND.fr[a.kind]} du ${eu(a.start_date)} au ${eu(a.end_date)}` : `No. ${a.request_no}: ${KIND.en[a.kind]} from ${eu(a.start_date)} to ${eu(a.end_date)}`)
+    : `${period(a.start_date, a.end_date)} · ${KIND[l][a.kind]}`;
   // Les précisions et commentaires se consultent uniquement dans l’application authentifiée.
   if (withChange && a.change_type === "delete") s += ` · ${t.deletion}`;
   if (withChange && a.change_type === "modify" && a.change_start && a.change_end) {
@@ -132,13 +137,16 @@ function line(l: Lang, a: Abs, withChange: boolean): string {
   return s;
 }
 
+// « [2026-0012] » dans l'objet quand le message concerne une seule demande numérotée
+const numberTag = (list: { request_no?: string | null }[]) => (list.length === 1 && list[0].request_no ? `[${list[0].request_no}] ` : "");
+
 export function buildEmail(c: Ctx) {
   const t = T[c.lang] ?? T.fr;
   const lang = c.lang === "en" ? "en" : "fr";
   const toValidator = c.kind === "to_validate" || c.kind === "to_validate_change" || c.kind === "to_direction" || c.kind === "to_opinion" || c.kind === "peer_rejected";
   const url = `${SITE}/app/absences.html#${toValidator ? "todo" : "mine"}`;
   const withChange = toValidator && c.absences.some((a) => !!a.change_type);
-  const lines = c.absences.map((a) => line(lang, a, withChange));
+  const lines = c.absences.map((a) => line(lang, a, withChange, c.absences.length > 1));
   const del = c.absences[0]?.change_type === "delete";
 
   let subject = "", intro = "";
@@ -192,13 +200,13 @@ ${extra.map((e) => `<p style="margin:0 0 8px">${esc(e)}</p>`).join("")}
     url: `/app/absences.html#${toValidator ? "todo" : "mine"}`,
     tag: `absence-${c.kind}-${first?.id ?? 0}`,
   };
-  return { subject: `Onconic · ${subject}`, text, html, push };
+  return { subject: `Onconic · ${numberTag(c.absences)}${subject}`, text, html, push };
 }
 
 // E-mail à la gestion des absences : le formulaire PDF (déjà signé électroniquement) est en pièce jointe. Français seulement.
-export type FormMail = { owner: string; roleLabel: string; absences: { kind: Abs["kind"]; start_date: string; end_date: string; note: string | null }[]; signers: { name: string; at: string }[]; direction?: { name: string; at: string } | null; file: string; action?: string };
+export type FormMail = { owner: string; roleLabel: string; absences: { kind: Abs["kind"]; start_date: string; end_date: string; note: string | null; request_no?: string | null }[]; signers: { name: string; at: string }[]; direction?: { name: string; at: string } | null; file: string; action?: string };
 export function buildFormEmail(c: FormMail, stamp: (iso: string) => string) {
-  const lines = c.absences.map((a) => `${period(a.start_date, a.end_date)} · ${KIND.fr[a.kind]}`);
+  const lines = c.absences.map((a) => (c.absences.length > 1 && a.request_no ? `N° ${a.request_no} : ${KIND.fr[a.kind]} du ${eu(a.start_date)} au ${eu(a.end_date)}` : `${period(a.start_date, a.end_date)} · ${KIND.fr[a.kind]}`));
   const who = c.signers.map((s) => `${s.name} (${stamp(s.at)})`);
   const visa = c.direction ? ` Visa de la direction : ${c.direction.name} (${stamp(c.direction.at)}).` : "";
   const congres = c.absences.some((a) => a.kind === "congres");
@@ -216,7 +224,7 @@ export function buildFormEmail(c: FormMail, stamp: (iso: string) => string) {
 <ul style="padding-left:18px;margin:0 0 12px">${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
 ${extra.map((e) => `<p style="margin:0 0 8px">${esc(e)}</p>`).join("")}
 <p style="font-size:12px;color:#5A6478">Message automatique de The Hive Onconic.</p></div>`;
-  return { subject: `Onconic · ${subject}`, text, html };
+  return { subject: `Onconic · ${numberTag(c.absences)}${subject}`, text, html };
 }
 
 // E-mail de diffusion du PDF validé : plages à bloquer ou débloquer dans Ultragenda. Aucun texte libre ; français seulement.

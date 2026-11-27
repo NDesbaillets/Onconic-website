@@ -72,3 +72,38 @@ test('envoi à la cheffe de service : message au demandeur, deux langues, aucun 
   assert.match(m.text,/#mine/); assert.doesNotMatch(m.text+m.html+JSON.stringify(m.push),/SECRET/);
  }
 });
+test('numéro de demande : dans l\'objet pour une seule demande, en liste « N° … » pour plusieurs, jamais sans numéro',()=>{
+ const one={...absence,change_type:null,request_no:'2026-0012'};
+ const two={...one,id:2,request_no:'2026-0013',start_date:'2026-12-14',end_date:'2026-12-15'};
+ for(const lang of ['fr','en']) {
+  const m=buildEmail({lang,kind:'to_validate',owner:'Alice Fictive',absences:[one],validators:[],approvers:[]});
+  assert.match(m.subject,/^Onconic · \[2026-0012\] /);
+  assert.doesNotMatch(m.text,/N° 2026-0012 :/);
+  const many=buildEmail({lang,kind:'to_validate',owner:'Alice Fictive',absences:[one,two],validators:[],approvers:[]});
+  assert.doesNotMatch(many.subject,/\[2026-/);
+  assert.match(many.text,lang==='fr'?/N° 2026-0012 : autre du 01\.12\.2026 au 02\.12\.2026/:/No\. 2026-0012: other from 01\.12\.2026 to 02\.12\.2026/);
+  assert.match(many.text,/2026-0013/); assert.match(many.html,/2026-0013/);
+ }
+ // sans numéro (anciens messages) : objet et lignes inchangés
+ const plain=buildEmail({lang:'fr',kind:'to_validate',owner:'Alice Fictive',absences:[{...absence,change_type:null}],validators:[],approvers:[]});
+ assert.match(plain.subject,/^Onconic · Alice Fictive demande une absence à valider$/);
+ assert.doesNotMatch(plain.text,/N° /);
+ // rappel : le numéro reste dans l'objet
+ assert.match(buildEmail({lang:'fr',kind:'to_validate',owner:'A',absences:[one],validators:[],approvers:[],reminder:true}).subject,/\[2026-0012\] Rappel/);
+ // aucun texte libre ajouté par le numéro
+ assert.doesNotMatch(buildEmail({lang:'fr',kind:'to_validate',owner:'A',absences:[one,two],validators:[],approvers:[]}).text,/SECRET/);
+ // l'e-mail du formulaire aussi
+ const f1=buildFormEmail({owner:'Test',roleLabel:'Médecin',absences:[{...one,note:null}],signers:[],file:'test.pdf'},x=>x);
+ assert.match(f1.subject,/\[2026-0012\]/);
+ const f2=buildFormEmail({owner:'Test',roleLabel:'Médecin',absences:[{...one,note:null},{...two,note:null}],signers:[],file:'test.pdf'},x=>x);
+ assert.doesNotMatch(f2.subject,/\[2026-/); assert.match(f2.text,/N° 2026-0013 : autre du 14\.12\.2026 au 15\.12\.2026/);
+ // le numéro traverse la rédaction des textes libres
+ assert.equal(externalAbsence(one).request_no,'2026-0012');
+});
+test('refus : l\'e-mail ne promet plus de suppression automatique',()=>{
+ for(const lang of ['fr','en']) {
+  const m=buildEmail({lang,kind:'rejected',owner:'Test',by:'Bob Fictif',absences:[{...absence,change_type:null}],validators:[],approvers:[]});
+  assert.doesNotMatch(m.text,/14 jours|14 days|disparaît|disappears/);
+  assert.match(m.text,lang==='fr'?/historique/:/history/);
+ }
+});

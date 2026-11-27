@@ -36,6 +36,8 @@
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const plur = (n, one, many) => `${n} ${n > 1 ? many : one}`;
   function say(node, text, kind) { node.className = "form-msg" + (kind ? " " + kind : ""); node.textContent = text; }
+  // Pastille discrète du numéro de demande (AAAA-NNNN), seulement si la demande en a un
+  function addNo(head, no) { if (no) head.append(el("span", "ab-no", "N° " + no)); }
 
   // Dates en chaînes AAAA-MM-JJ, sans fuseau horaire
   const pd = (s) => { const [y, m, d] = String(s).slice(0, 10).split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); };
@@ -655,6 +657,7 @@
     box.replaceChildren();
     const head = el("div", "ab-detail-head");
     head.append(el("strong", null, p ? p.name : "Collaborateur"), el("span", `ug-badge ab-st ab-st-${a.status}`, STATUS[a.status]), el("span", "ug-badge", KINDS[a.kind][0]));
+    addNo(head, a.request_no);
     box.append(head);
     box.append(el("p", null, `${period(a.start_date, a.end_date)} · ${plur(workdays(a.start_date, a.end_date), "jour ouvrable", "jours ouvrables")}`));
     if (a.note) box.append(el("p", "muted", "Précision : " + a.note));
@@ -763,6 +766,7 @@
   }
   async function afterChange() {
     state.cache.clear();
+    hist.stale = true; // l'historique se recharge à sa prochaine ouverture
     await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending(), (state.ctx.validates.length || state.isDir) ? Promise.all([loadTodo(), loadRejected()]) : state.todoLoaded ? loadTodo() : null]);
   }
 
@@ -1064,6 +1068,7 @@
     head.append(el("strong", null, period(a.start_date, a.end_date)), el("span", "ug-badge", KINDS[a.kind][0]),
       el("span", `ug-badge ab-st ab-st-${a.status}`, STATUS[a.status]));
     if (a.confidential) head.append(el("span", "ug-badge", "Confidentiel"));
+    addNo(head, a.request_no);
     const ug = a.status === "approved" ? state.agendaStatus[String(a.id)] : null;
     if (ug) head.append(el("span", "ug-badge " + (ug.status === "done" ? "ab-ug-done" : "ab-ug-todo"), ug.status === "done" ? `Ultragenda : bloqué le ${zurich(ug.done_at).date}` : "Ultragenda : à bloquer"));
     card.append(head);
@@ -1092,7 +1097,7 @@
     }
     if (a.status === "rejected" && a.decided_at) {
       const gone = new Date(new Date(a.decided_at).getTime() + 14 * 864e5);
-      card.append(el("p", "muted ab-item-meta", `Cette demande refusée disparaîtra d'elle-même le ${fmtCH(iso(gone))}. Vous pouvez la supprimer dès maintenant.`));
+      card.append(el("p", "muted ab-item-meta", `Cette demande refusée ne s'affichera plus ici à partir du ${fmtCH(iso(gone))} ; elle reste consultable dans l'historique. Vous pouvez l'archiver dès maintenant.`));
     }
     if (own && (a.status === "requested" || (a.status === "approved" && a.change_type)) && (a.submitted_at || a.resent_at)) {
       card.append(el("p", "muted ab-item-meta", `${a.submitted_at ? "Envoyée aux validateurs le " + fmtDT(a.change_requested_at && a.status === "approved" ? a.change_requested_at : a.submitted_at) : ""}${a.resent_at ? (a.submitted_at ? " · " : "") + "dernier rappel le " + fmtDT(a.resent_at) : ""}`));
@@ -1101,10 +1106,10 @@
     if (a.status === "draft") card.append(el("p", "muted ab-item-meta", "Brouillon : les validateurs ne sont pas encore prévenus. Envoyez-le pour lancer la validation."));
     if (!own && a.status === "rejected" && state.who) {
       const del = el("div", "btn-row ab-actions");
-      del.append(button("Supprimer cette demande refusée", "btn btn-outline lt-danger", async () => {
+      del.append(button("Archiver cette demande refusée", "btn btn-outline lt-danger", async () => {
         const { error } = await sb.rpc("absence_delete_rejected", { p_id: a.id });
         if (error) return say($("ab-mine-msg"), error.message, "error");
-        say($("ab-mine-msg"), "Demande refusée supprimée.", "ok");
+        say($("ab-mine-msg"), "Demande refusée archivée. Elle reste consultable dans l'historique.", "ok");
         await afterChange();
       }));
       card.append(del);
@@ -1192,11 +1197,11 @@
     } else if (a.status === "rejected") {
       actions.append(
         button("Modifier et renvoyer", "btn btn-outline", () => swap(editForm(a, "update"))),
-        button("Supprimer", "btn btn-outline lt-danger", async () => {
-          if (!confirm(`Supprimer cette demande refusée (${period(a.start_date, a.end_date)}) ?`)) return;
+        button("Archiver", "btn btn-outline lt-danger", async () => {
+          if (!confirm(`Archiver cette demande refusée (${period(a.start_date, a.end_date)}) ? La demande reste consultable dans l'historique.`)) return;
           const { error } = await sb.rpc("absence_delete_rejected", { p_id: a.id });
           if (error) return say($("ab-mine-msg"), error.message, "error");
-          say($("ab-mine-msg"), "Demande refusée supprimée.", "ok");
+          say($("ab-mine-msg"), "Demande refusée archivée. Elle reste consultable dans l'historique.", "ok");
           await afterChange();
         }));
     } else if (a.status === "approved" && !a.change_type && state.isDir) {
@@ -1375,21 +1380,23 @@
       const card = el("article", "card ab-item ab-item-rejected");
       const head = el("div", "ab-item-head");
       head.append(el("strong", null, a.name), el("span", "ug-badge", KINDS[a.kind][0]), el("strong", null, period(a.start_date, a.end_date)));
+      addNo(head, a.request_no);
       card.append(head);
       const gone = new Date(new Date(a.decided_at).getTime() + 14 * 864e5);
-      card.append(el("p", "ab-decision", `Refusée${a.decided_by_name ? " par " + a.decided_by_name : ""} le ${fmtCH(a.decided_at)}${a.decision_comment ? " : « " + a.decision_comment + " »" : ""}. Disparaît d'elle-même le ${fmtCH(iso(gone))}.`));
-      const hist = (a.approvals || []).map((x) => ({ validator_name: x.name, decision: x.decision, comment: x.comment, decided_at: x.at, step: x.step, step_label: x.step_label }));
-      if (hist.length) {
+      card.append(el("p", "ab-decision", `Refusée${a.decided_by_name ? " par " + a.decided_by_name : ""} le ${fmtCH(a.decided_at)}${a.decision_comment ? " : « " + a.decision_comment + " »" : ""}. N'apparaîtra plus ici à partir du ${fmtCH(iso(gone))} ; reste consultable dans l'historique.`));
+      const decHist = (a.approvals || []).map((x) => ({ validator_name: x.name, decision: x.decision, comment: x.comment, decided_at: x.at, step: x.step, step_label: x.step_label }));
+      if (decHist.length) {
         const d = el("details", "ab-progress");
-        d.append(el("summary", null, "Historique des décisions"), approvalsBlock(hist));
+        d.append(el("summary", null, "Historique des décisions"), approvalsBlock(decHist));
         card.append(d);
       }
       const act = el("div", "btn-row ab-actions");
-      act.append(button("Supprimer", "btn btn-outline lt-danger", async () => {
-        if (!confirm(`Supprimer la demande refusée de ${a.name} (${period(a.start_date, a.end_date)}) ?`)) return;
+      act.append(button("Archiver", "btn btn-outline lt-danger", async () => {
+        if (!confirm(`Archiver la demande refusée de ${a.name} (${period(a.start_date, a.end_date)}) ? La demande reste consultable dans l'historique.`)) return;
         const { error: e2 } = await sb.rpc("absence_delete_rejected", { p_id: a.id });
         if (e2) return say($("ab-todo-msg"), e2.message, "error");
-        say($("ab-todo-msg"), "Demande refusée supprimée.", "ok");
+        say($("ab-todo-msg"), "Demande refusée archivée. Elle reste consultable dans l'historique.", "ok");
+        hist.stale = true;
         await loadRejected();
       }));
       card.append(act);
@@ -1556,6 +1563,7 @@
         el("span", "ug-badge ug-warn", isChange ? (a.change_type === "delete" ? "Suppression demandée" : "Modification demandée") : "Nouvelle demande"));
       const st = curStep(a);
       if (st.kind !== "clinique") head.append(el("span", "ug-badge", st.label));
+      addNo(head, a.request_no);
       card.append(head);
       // étapes de la colonne en cours (simultanées), celles qui attendent l'appelant en tête de liste
       const colSteps = Array.isArray(a.steps) ? a.steps : [];
@@ -1925,15 +1933,15 @@
   }
   function addAbsencesSheet(wb, rows) {
     const ws = wb.addWorksheet("Absences");
-    ws.columns = ["Nom", "Rôle", "Cliniques", "Motif", "Précision", "Début", "Fin", "Jours ouvrables", "État", "Changement demandé", "Envoyée le", "Validée par (1re ligne)", "Visa de la direction", "Décision par", "Décision le", "Commentaire"].map((header) => ({ header }));
+    ws.columns = ["N°", "Nom", "Rôle", "Cliniques", "Motif", "Précision", "Début", "Fin", "Jours ouvrables", "État", "Changement demandé", "Envoyée le", "Validée par (1re ligne)", "Visa de la direction", "Décision par", "Décision le", "Commentaire"].map((header) => ({ header }));
     for (const r of rows) {
       const chg = r.change_type === "delete" ? "Suppression" : r.change_type === "modify" ? `Modification : ${KINDS[r.change_kind] ? KINDS[r.change_kind][0] : r.change_kind}, ${period(String(r.change_start).slice(0, 10), String(r.change_end).slice(0, 10))}${r.change_note ? " (" + r.change_note + ")" : ""}` : "";
-      const row = ws.addRow([r.name, ROLE_NAME[r.role] || r.role, (r.clinics || []).join(", "), KINDS[r.kind][0], r.note || "", xDate(r.start_date), xDate(r.end_date), workdays(r.start_date, r.end_date),
+      const row = ws.addRow([r.request_no || "", r.name, ROLE_NAME[r.role] || r.role, (r.clinics || []).join(", "), KINDS[r.kind][0], r.note || "", xDate(r.start_date), xDate(r.end_date), workdays(r.start_date, r.end_date),
         statusLabel(r), chg, xDT(r.submitted_at), r.approvers || "", r.direction_name ? `${r.direction_name} (${xDT(r.direction_at)})` : "", r.decided_by_name || "", xDT(r.decided_at), r.decision_comment || ""]);
-      row.getCell(6).numFmt = DATE_FMT; row.getCell(7).numFmt = DATE_FMT;
+      row.getCell(7).numFmt = DATE_FMT; row.getCell(8).numFmt = DATE_FMT;
       row.eachCell((c) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: statusFill(r) } }; });
     }
-    styleSheet(ws, [26, 18, 24, 12, 28, 12, 12, 10, 32, 36, 18, 44, 36, 24, 18, 36]);
+    styleSheet(ws, [12, 26, 18, 24, 12, 28, 12, 12, 10, 32, 36, 18, 44, 36, 24, 18, 36]);
   }
   function addSynthesisSheets(wb, rows, decisions, w) {
     const people = new Map();
@@ -1955,7 +1963,7 @@
     });
     styleSheet(ws, [26, 18, 24, 12, 14, 10, 10, 10, 10, 16, 10, 10, 14, 14]);
     ws.addRow([]);
-    ws.addRow([`Jours ouvrables comptés dans la fenêtre (week-ends et fériés vaudois exclus). Les refus sont tirés du journal des décisions : ceux d'avant la mise en service de l'export ne sont pas conservés au-delà des 14 jours de visibilité.`]);
+    ws.addRow([`Jours ouvrables comptés dans la fenêtre (week-ends et fériés vaudois exclus). Les refus sont tirés du journal des décisions : ceux purgés avant le 27.11.2026 (ancienne règle des 14 jours) ne sont pas récupérables.`]);
     const wd = wb.addWorksheet("Décisions");
     wd.columns = ["Nom", "Décision", "Motif", "Précision", "Début", "Fin", "Décidée le", "Par", "Commentaire"].map((header) => ({ header }));
     for (const d of decisions) {
@@ -2066,13 +2074,14 @@
     body.replaceChildren();
     const st = $("ab-trk-status").value, clinic = $("ab-trk-clinic").value, q = $("ab-trk-q").value.trim().toLowerCase();
     const list = trk.rows.filter((r) => (st === "all" || (st === "open" ? trkOpen(r) : r.status === st))
-      && (!clinic || (r.clinics || []).includes(clinic)) && (!q || String(r.name || "").toLowerCase().includes(q)));
+      && (!clinic || (r.clinics || []).includes(clinic)) && (!q || String(r.name || "").toLowerCase().includes(q) || String(r.request_no || "").includes(q)));
     $("ab-trk-count").textContent = trk.rows.length ? `${plur(list.length, "demande affichée", "demandes affichées")} sur ${trk.rows.length} dans la période.` : "";
     if (!list.length) { const tr = el("tr"); const td = el("td", "muted", trk.rows.length ? "Aucune demande ne correspond à ces filtres." : "Aucune demande dans cette période."); td.colSpan = 6; tr.append(td); body.append(tr); return; }
     list.forEach((r) => {
       const open = trk.open.has(r.id);
       const tr = el("tr", "ab-trk-row" + (open ? " open" : ""));
       const who = el("td"); who.append(el("strong", null, r.name), el("span", "muted", " · " + (TRK_ROLE[r.role] || r.role || "")));
+      addNo(who, r.request_no);
       const when = `${KINDS[r.kind] ? KINDS[r.kind][0] : r.kind} · ${period(r.start_date, r.end_date)}`;
       const chg = r.change_type ? ` · ${r.change_type === "delete" ? "suppression demandée" : "modification demandée"}` : "";
       const stateTxt = (TRK_STATUS[r.status] || r.status) + chg + (r.escalated ? " · envoyée à la cheffe de service" : "");
@@ -2118,6 +2127,90 @@
     $("ab-trk-form").addEventListener("submit", (e) => { e.preventDefault(); loadTrack(); });
     for (const id of ["ab-trk-status", "ab-trk-clinic"]) $(id).addEventListener("change", renderTrack);
     $("ab-trk-q").addEventListener("input", renderTrack);
+  }
+
+  // ----- Historique des demandes : toutes les demandes envoyées (demandées, validées, refusées, annulées), archivées comprises -----
+  // Droits décidés en base (absence_requests_history, absence_find) : soi, ses validateurs, la direction et l'administration, la secrétaire du cadre.
+  const hist = { rows: [], tok: 0, offset: 0, more: false, init: false, loaded: false, find: false };
+  const HIST_PAGE = 50;
+  // La saisie ressemble à un numéro : 2026-0012, 0012, 12, 2026-12, éventuellement précédé de « N° »
+  // Un nombre de quatre chiffres commençant par 20 (« 2026 ») est une année : recherche texte et filtre d'année, pas un numéro
+  const looksLikeNo = (s) => { const t = String(s).trim(); return /^(n°?\s*)?(\d{4}\s*[-/.]\s*)?\d{1,6}$/i.test(t) && !/^(n°?\s*)?20\d{2}$/i.test(t); };
+  function histCard(a) {
+    const card = el("article", `card ab-item ab-item-${a.status}`);
+    const head = el("div", "ab-item-head");
+    addNo(head, a.request_no);
+    head.append(el("strong", null, a.name), el("span", "ug-badge", KINDS[a.kind] ? KINDS[a.kind][0] : a.kind), el("strong", null, period(a.start_date, a.end_date)),
+      el("span", `ug-badge ab-st ab-st-${a.status}`, STATUS[a.status] || a.status));
+    if (a.archived_at) head.append(el("span", "ug-badge", "Archivée"));
+    card.append(head);
+    const bits = [];
+    if (a.submitted_at) bits.push("Demandée le " + fmtDT(a.submitted_at));
+    if (a.circuit_name) bits.push("Circuit : " + a.circuit_name);
+    if (a.note) bits.push(a.note);
+    if (bits.length) card.append(el("p", "muted ab-item-meta", bits.join(" · ")));
+    if (a.change_type) {
+      card.append(el("p", "ab-pending-change", a.change_type === "delete" ? "Suppression demandée, en attente de décision."
+        : `Modification demandée : ${a.change_kind && KINDS[a.change_kind] ? KINDS[a.change_kind][0] + ", " : ""}${a.change_start ? period(a.change_start, a.change_end) : ""}, en attente de décision.`));
+    }
+    if (a.decision && a.decided_at) {
+      card.append(el("p", "ab-decision", `${DECISION[a.decision] || a.decision}${a.decided_by_name ? " par " + a.decided_by_name : ""} le ${fmtDT(a.decided_at)}${a.decision_comment ? " : « " + a.decision_comment + " »" : ""}`));
+    }
+    const own = a.user_id === state.ctx.me;
+    const fb = formButton({ id: a.id, status: a.status, submitted_at: a.submitted_at }, own, $("ab-hist-msg"));
+    if (fb) { const row = el("div", "btn-row ab-actions"); row.append(fb); card.append(row); }
+    return card;
+  }
+  async function loadHist(more) {
+    const msg = $("ab-hist-msg");
+    const tok = ++hist.tok;
+    const q = $("ab-hist-q").value.trim();
+    const useFind = !!q && looksLikeNo(q);
+    if (!more) { hist.rows = []; hist.offset = 0; }
+    say(msg, "Chargement…");
+    const yr = $("ab-hist-year").value, st = $("ab-hist-status").value, who = $("ab-hist-who").value;
+    const { data, error } = useFind ? await sb.rpc("absence_find", { p_q: q })
+      : await sb.rpc("absence_requests_history", { p_user: who || null, p_year: yr ? Number(yr) : null, p_status: st ? [st] : null, p_q: q || null, p_limit: HIST_PAGE, p_offset: hist.offset });
+    if (tok !== hist.tok) return;
+    if (error) return say(msg, "L'historique n'a pas pu être chargé. Réessayez dans un instant.", "error");
+    const rows = (data || []).map((a) => Object.assign(a, { start_date: String(a.start_date).slice(0, 10), end_date: String(a.end_date).slice(0, 10) }));
+    hist.find = useFind;
+    hist.rows = hist.rows.concat(rows);
+    hist.offset = hist.rows.length;
+    hist.more = !useFind && rows.length === HIST_PAGE;
+    hist.loaded = true; hist.stale = false;
+    const list = $("ab-hist-list");
+    if (!more) list.replaceChildren();
+    rows.forEach((a) => list.append(histCard(a)));
+    if (!hist.rows.length) list.append(el("p", "muted", useFind ? "Aucune demande trouvée pour ce numéro. Seules les demandes que vous avez le droit de consulter sont retrouvées." : "Aucune demande ne correspond à ces filtres."));
+    say(msg, "");
+    // La recherche par numéro ignore les filtres : le dire discrètement quand l'un d'eux est actif
+    $("ab-hist-note").hidden = !(useFind && (yr || st || who));
+    $("ab-hist-more").hidden = !hist.more;
+    $("ab-hist-count").textContent = hist.rows.length ? (useFind ? `${plur(hist.rows.length, "demande trouvée", "demandes trouvées")}.` : `${plur(hist.rows.length, "demande affichée", "demandes affichées")}${hist.more ? ", d'autres suivent" : ""}.`) : "";
+  }
+  function initHistory() {
+    if (hist.init) return;
+    hist.init = true;
+    $("ab-t-hist").hidden = false;
+    $("ab-t-hist").addEventListener("click", () => setTab("hist"));
+    const y = new Date().getFullYear(), ys = $("ab-hist-year");
+    const all = el("option", null, "Toutes"); all.value = ""; ys.append(all);
+    for (let i = y + 1; i >= Math.min(2026, y); i--) { const o = el("option", null, String(i)); o.value = String(i); ys.append(o); }
+    // Personne : seulement si l'on peut en voir plusieurs (validateurs, direction, administration, secrétaire de médecin cadre)
+    const others = [];
+    if (state.isDir || state.ctx.validates.length) state.people.filter((p) => !p.is_me && (state.isDir || sharesClinic(p, state.ctx.validates))).forEach((p) => others.push(p));
+    state.secOf.forEach((c) => { if (!others.some((p) => p.id === c.id)) others.push({ id: c.id, name: c.name }); });
+    if (others.length) {
+      const sel = $("ab-hist-who");
+      const a0 = el("option", null, "Toutes les personnes"); a0.value = ""; sel.append(a0);
+      const me = el("option", null, "Moi"); me.value = state.ctx.me; sel.append(me);
+      others.forEach((p) => { const o = el("option", null, p.name); o.value = p.id; sel.append(o); });
+      $("ab-hist-who-wrap").hidden = false;
+    }
+    $("ab-hist-form").addEventListener("submit", (e) => { e.preventDefault(); loadHist(false); });
+    for (const id of ["ab-hist-year", "ab-hist-status", "ab-hist-who"]) $(id).addEventListener("change", () => loadHist(false));
+    $("ab-hist-more").addEventListener("click", () => loadHist(true));
   }
 
   // ----- Direction : absence saisie au nom d'un membre, validée d'office -----
@@ -2248,7 +2341,7 @@
   }
 
   function setTab(name) {
-    for (const t of ["plan", "mine", "todo", "agenda", "track", "dir", "exp"]) {
+    for (const t of ["plan", "mine", "todo", "agenda", "track", "hist", "dir", "exp"]) {
       const on = t === name;
       $("ab-t-" + t).setAttribute("aria-selected", String(on));
       $("ab-p-" + t).hidden = !on;
@@ -2259,6 +2352,7 @@
     if (name === "mine") loadMine();
     if (name === "agenda") { loadAgenda(); refreshAgendaCount(); }
     if (name === "track") loadTrack();
+    if (name === "hist" && (!hist.loaded || hist.stale)) loadHist(false);
   }
 
   // ----- Mon circuit de validation (bas des onglets Planning et Mes absences) -----
@@ -2477,6 +2571,7 @@
       if (!who.dataset.bound && !(ctx.validates.length || state.isDir)) { who.dataset.bound = "1"; who.addEventListener("change", () => { state.who = who.value; loadMine(); }); }
       $("ab-who-wrap").hidden = false;
     }
+    initHistory();
     // Mon circuit de validation : pour tout membre qui a l'outil Absences (cette page n'est ouverte qu'à eux) ; lien en lecture du circuit pour un médecin cadre
     if (window.CircuitView) { buildCircuit(); circuitPlace("plan"); }
     $("ab-circuit-link").hidden = ctx.role !== "cadre";
@@ -2484,5 +2579,6 @@
     if (location.hash === "#agenda" && state.agendaCtx && state.agendaCtx.tab) setTab("agenda");
     else if (location.hash === "#todo" && (ctx.validates.length || state.isDir)) setTab("todo");
     else if (location.hash === "#mine") setTab("mine");
+    else if (location.hash === "#hist") setTab("hist");
   })();
 })();

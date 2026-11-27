@@ -2,7 +2,7 @@
 // Les fonctions SQL y déposent un message à chaque événement : nouvelles absences envoyées par lot aux validateurs,
 // demande de changement, validation complète, refus (e-mail immédiat à l'usager), changement accepté ou refusé.
 // Garde-fous : les messages viennent de la base (jamais de la requête) ; chaque message est pris une seule fois
-// (absence_outbox_claim), réessayé jusqu'à 5 fois si l'e-mail échoue ; les refus de plus de 14 jours sont purgés.
+// (absence_outbox_claim), réessayé jusqu'à 5 fois si l'e-mail échoue ; aucune demande n'est supprimée (l'historique est conservé).
 // E-mail : boîte noreply@onconic.ch (secret SMTP_PASSWORD, comme contact-request). Push : abonnements de notify-event-join.
 // Messages destinés à la direction (visa, pré-avis, et messages de validation reçus par un membre « direction ») : un seul e-mail
 // par message, à la boîte commune (secret ABSENCE_FORMS_TO, comme les formulaires) ; à défaut du secret, à l'adresse de chaque membre.
@@ -133,10 +133,13 @@ async function sendOne(row: Row, transport: ReturnType<typeof nodemailer.createT
   if (scopeError) return "notification_scope";
   if (!allowed?.length) return "__skip__"; // demande retirée, déjà décidée ou habilitation retirée
   const { data: rawAbsences, error: readError } = await admin.from("absences")
-    .select("id, user_id, kind, start_date, end_date, change_type, change_kind, change_start, change_end")
+    .select("id, user_id, kind, start_date, end_date, change_type, change_kind, change_start, change_end, request_no")
     .in("id", allowed).order("start_date");
   if (readError) return "notification_read";
-  const absences = (row.payload.absences ?? rawAbsences ?? []).filter((a) => allowed.includes(a.id)).map((a) => externalAbsence(a as Abs & { user_id: string }));
+  // Numéros de demande lus en base à l'envoi (aussi pour les anciennes lignes dont le payload contient déjà les absences)
+  const numbers = new Map<number, string | null>((rawAbsences ?? []).map((a: { id: number; request_no?: string | null }) => [a.id, a.request_no ?? null] as [number, string | null]));
+  const absences = (row.payload.absences ?? rawAbsences ?? []).filter((a) => allowed.includes(a.id))
+    .map((a) => externalAbsence({ ...a, request_no: numbers.get(a.id) ?? null } as Abs & { user_id: string }));
   if (!absences.length) return "__skip__"; // absence supprimée entre-temps : rien à envoyer
 
   const { data: prof } = await admin.from("profiles").select("lang, notify_events, role, notif_prefs").eq("id", row.recipient).maybeSingle();
@@ -245,7 +248,6 @@ Deno.serve(async (req) => {
     return json(req, 200, { file: r.file, pdf: b64(r.bytes) });
   }
 
-  await admin.rpc("absence_purge");
   const { data: rows, error } = await admin.rpc("absence_outbox_claim", { p_limit: 30 });
   if (error) return json(req, 500, { error: "outbox" });
   if (!rows?.length) return json(req, 200, { processed: 0, sent: 0, failed: 0 });
