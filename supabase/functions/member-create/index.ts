@@ -14,6 +14,7 @@ const admin = createClient(URL_, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { a
 
 // Liste blanche côté fonction aussi (la base refuse « admin » et les rôles inconnus)
 const ROLES = ["clinician", "cdc", "cadre", "assistant", "nurse", "pharmacist", "direction"];
+const FRESH_MS = 2 * 60 * 1000; // seuil « compte créé à l'instant »
 const INSTITUTIONS = ["CHUV", "Hors CHUV"];
 
 function allowedOrigin(origin: string) {
@@ -77,8 +78,18 @@ Deno.serve(async (req) => {
   if (!INSTITUTIONS.includes(institution)) return json(req, 400, { error: "invalid_institution" });
   const clinics = cleanList(body.clinics), cdcClinics = cleanList(body.cdc_clinics);
 
+  // Cliniques et institution validées par la base AVANT toute création de compte (aucune invitation ne part pour une demande invalide)
+  const { error: checkError } = await asCaller.rpc("member_create_check", {
+    p_role: role, p_clinics: clinics, p_cdc_clinics: cdcClinics, p_institution: institution,
+  });
+  if (checkError) {
+    if (checkError.code === "OC001") return json(req, 400, { error: "invalid_institution" });
+    if (checkError.code === "OC002") return json(req, 400, { error: "invalid_clinics" });
+    return json(req, 403, { error: "forbidden" });
+  }
+
   const fullName = first + " " + last;
-  let userId: string | undefined, password: string | undefined;
+  let userId: string | undefined, password: string | undefined, createdAt: string | undefined;
   if (mode === "invite") {
     const origin = req.headers.get("origin") ?? "";
     const site = PREVIEW.test(origin) ? origin : SITE;
@@ -91,7 +102,7 @@ Deno.serve(async (req) => {
       console.error("invite failed", error?.code, error?.status);
       return json(req, exists ? 409 : 502, { error: exists ? "user_exists" : "invite_failed" });
     }
-    userId = data.user.id;
+    userId = data.user.id; createdAt = data.user.created_at;
   } else {
     password = provisionalPassword();
     const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: fullName } });
@@ -100,8 +111,12 @@ Deno.serve(async (req) => {
       console.error("create failed", error?.code, error?.status);
       return json(req, exists ? 409 : 502, { error: exists ? "user_exists" : "create_failed" });
     }
-    userId = data.user.id;
+    userId = data.user.id; createdAt = data.user.created_at;
   }
+
+  // inviteUserByEmail peut renvoyer sans erreur un compte déjà invité : un compte qui n'est pas né à l'instant n'est ni modifié ni supprimé
+  const ts = Date.parse(String(createdAt ?? ""));
+  if (!Number.isFinite(ts) || Date.now() - ts > FRESH_MS) return json(req, 409, { error: "user_exists" });
 
   // Le profil est créé par le déclencheur d'inscription ; la base le complète (rôle, cliniques, accès par défaut, journal).
   // En cas d'échec, le compte d'authentification qui vient d'être créé est supprimé.

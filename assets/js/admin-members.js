@@ -83,13 +83,13 @@
   const ROLE_RANK = ["cadre", "cdc", "clinician", "pharmacist", "nurse", "assistant", "direction", "admin"];
   const S = () => window.OnconicSort;
   const personOf = (r) => ({ id: r.id, first: r.first_name, last: r.last_name, name: nameOf(r), role: r.role, clinics: r.clinics });
-  const pendingFirst = (a, b) => (b.role === "member") - (a.role === "member")
-    || (S() ? S().compareNames(personOf(a), personOf(b), S().getMode("membres", SORT_MODES), { roleOrder: ROLE_RANK }) : nameOf(a).localeCompare(nameOf(b), "fr"));
+  const pendingFirst = (mode) => (a, b) => (b.role === "member") - (a.role === "member")
+    || (S() ? S().compareNames(personOf(a), personOf(b), mode, { roleOrder: ROLE_RANK }) : nameOf(a).localeCompare(nameOf(b), "fr"));
   function render() {
     const q = norm($("am-q").value);
     const role = $("am-role").value;
     const rows = state.rows.filter((r) => (!role || r.role === role)
-      && (!q || norm([r.first_name, r.last_name, r.full_name, r.email].join(" ")).includes(q))).sort(pendingFirst);
+      && (!q || norm([r.first_name, r.last_name, r.full_name, r.email].join(" ")).includes(q))).sort(pendingFirst(S() ? S().getMode("membres", SORT_MODES) : null));
     const pending = state.rows.filter((r) => r.role === "member").length;
     $("am-count").textContent = `${plur(rows.length, "membre affiché", "membres affichés")} sur ${state.rows.length}` + (pending ? ` · ${pending} en attente de validation` : "");
     const list = $("am-list");
@@ -540,6 +540,7 @@
     invalid_name: "Prénom et nom sont nécessaires.",
     invalid_role: "Rôle non autorisé.",
     invalid_institution: "Institution inconnue.",
+    invalid_clinics: "Clinique inconnue ou non autorisée pour ce rôle. Aucun compte n'a été créé.",
     user_exists: "Un compte existe déjà avec cette adresse. Retrouvez-le dans la liste pour modifier son rôle.",
     invite_failed: "L'invitation n'a pas pu être envoyée. Réessayez, ou choisissez le mot de passe provisoire.",
     create_failed: "Le compte n'a pas pu être créé. Réessayez.",

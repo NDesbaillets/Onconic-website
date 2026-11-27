@@ -48,6 +48,43 @@ $$;
 revoke execute on function public.member_create_allowed(text) from public, anon;
 grant execute on function public.member_create_allowed(text) to authenticated;
 
+-- Validation commune des cliniques et de l'institution (une seule règle pour member_create_check et member_create_apply).
+-- Codes d'erreur : OC001 institution inconnue, OC002 clinique inconnue.
+create or replace function public.member_create_validate(p_role text, p_institution text, p_clinics text[], p_cdc_clinics text[])
+returns table (institution text, clinics text[], cdc_clinics text[])
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare v_inst text; v_clinics text[] := '{}'; v_cdc text[] := '{}';
+begin
+  -- Institution : CHUV (défaut) ou hors CHUV (vide), comme dans l'écran d'examen des demandes
+  if p_institution is null or p_institution in ('', 'CHUV') then v_inst := 'CHUV';
+  elsif p_institution = 'Hors CHUV' then v_inst := null;
+  else raise exception 'Institution inconnue.' using errcode = 'OC001'; end if;
+  begin
+    if p_role in ('clinician', 'cdc', 'cadre') then v_clinics := public.clinic_choice_check(p_clinics); end if;
+    if p_role in ('cdc', 'cadre') then
+      v_cdc := public.clinic_choice_check(p_cdc_clinics);
+      -- mêmes cliniques que admin_set_cdc_clinics : Plateforme n'en fait pas partie
+      if 'Plateforme' = any (v_cdc) then raise exception 'Clinique inconnue : Plateforme'; end if;
+    end if;
+  exception when raise_exception then
+    raise exception '%', sqlerrm using errcode = 'OC002';
+  end;
+  return query select v_inst, v_clinics, v_cdc;
+end;
+$$;
+revoke execute on function public.member_create_validate(text, text, text[], text[]) from public, anon, authenticated;
+
+-- Contrôle en lecture seule, appelé par l'Edge Function avec le JWT de l'appelant AVANT de créer le compte d'authentification
+create or replace function public.member_create_check(p_role text, p_clinics text[], p_cdc_clinics text[], p_institution text) returns void
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+begin
+  if not public.member_create_allowed(p_role) then raise exception 'Création refusée pour ce rôle.' using errcode = '42501'; end if;
+  perform 1 from public.member_create_validate(p_role, p_institution, p_clinics, p_cdc_clinics);
+end;
+$$;
+revoke execute on function public.member_create_check(text, text[], text[], text) from public, anon;
+grant execute on function public.member_create_check(text, text[], text[], text) to authenticated;
+
 -- 4. Application du profil (Edge Function seulement) ------------------------------------------------------------------------------
 create or replace function public.member_create_apply(p_actor uuid, p_user uuid, p_role text, p_first text, p_last text, p_institution text,
   p_clinics text[], p_cdc_clinics text[], p_mode text) returns void
@@ -69,20 +106,13 @@ begin
   select role into v_cur from public.profiles where id = p_user for update;
   if not found then raise exception 'Profil introuvable.'; end if;
   if v_cur <> 'member' then raise exception 'Ce compte a déjà un rôle.'; end if;
-  -- Institution : CHUV (défaut) ou hors CHUV (vide), comme dans l'écran d'examen des demandes
-  if p_institution is null or p_institution in ('', 'CHUV') then v_inst := 'CHUV';
-  elsif p_institution = 'Hors CHUV' then v_inst := null;
-  else raise exception 'Institution inconnue.'; end if;
-  if p_role in ('clinician', 'cdc', 'cadre') then v_clinics := public.clinic_choice_check(p_clinics); end if;
-  if p_role in ('cdc', 'cadre') then
-    v_cdc := public.clinic_choice_check(p_cdc_clinics);
-    -- mêmes cliniques que admin_set_cdc_clinics : Plateforme n'en fait pas partie
-    if 'Plateforme' = any (v_cdc) then raise exception 'Clinique inconnue : Plateforme'; end if;
-  end if;
+  select v.institution, v.clinics, v.cdc_clinics into v_inst, v_clinics, v_cdc from public.member_create_validate(p_role, p_institution, p_clinics, p_cdc_clinics) v;
 
   update public.profiles set role = p_role, first_name = v_first, last_name = v_last, full_name = v_first || ' ' || v_last,
     institution = v_inst, created_by = p_actor, access_until = null, admin_lead = false,
-    clinics = v_clinics, cdc_clinics = v_cdc
+    clinics = v_clinics, cdc_clinics = v_cdc,
+    -- cliniques choisies par l'administration : initialisées ; vides : le médecin choisit lui-même à sa première connexion
+    clinics_initialized = clinics_initialized or cardinality(v_clinics) > 0
     where id = p_user;
   -- Accès par défaut du rôle, comme admin_set_role
   delete from public.tool_access where user_id = p_user;

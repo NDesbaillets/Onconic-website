@@ -156,6 +156,9 @@ try {
   await p.click('#am-add-submit');
   await p.locator('#am-add-msg.error', { hasText: 'a été retiré' }).waitFor();
   assert.ok(!/invitation/i.test(await p.locator('#am-add-msg').innerText()), 'mode mot de passe : aucune mention');
+  await p.evaluate(() => { window.__FAIL = 'invalid_clinics'; });
+  await p.click('#am-add-submit');
+  await p.locator('#am-add-msg.error', { hasText: 'Clinique inconnue' }).waitFor();
   await p.evaluate(() => { window.__FAIL = 'user_exists'; });
   await p.click('#am-add-submit');
   await p.locator('#am-add-msg.error', { hasText: 'Un compte existe déjà' }).waitFor();

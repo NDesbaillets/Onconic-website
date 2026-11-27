@@ -4,21 +4,24 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
-const calls = { rights: [], create: [], invite: [], apply: [], del: [] };
+const calls = { rights: [], check: [], create: [], invite: [], apply: [], del: [] };
+let checkError = null, createdAt = null;
 const logs = [];
 let delError = null, allowed = true, rightsError = null, applyError = null, authError = null, user = { id: 'caller-1' };
 globalThis.cmAdmin = {
   auth: {
     getUser: async () => ({ data: { user } }),
     admin: {
-      createUser: async (a) => { calls.create.push(a); return authError ? { data: {}, error: authError } : { data: { user: { id: 'new-1' } }, error: null }; },
-      inviteUserByEmail: async (e, o) => { calls.invite.push([e, o]); return authError ? { data: {}, error: authError } : { data: { user: { id: 'new-2' } }, error: null }; },
+      createUser: async (a) => { calls.create.push(a); return authError ? { data: {}, error: authError } : { data: { user: { id: 'new-1', created_at: createdAt ?? new Date().toISOString() } }, error: null }; },
+      inviteUserByEmail: async (e, o) => { calls.invite.push([e, o]); return authError ? { data: {}, error: authError } : { data: { user: { id: 'new-2', created_at: createdAt ?? new Date().toISOString() } }, error: null }; },
       deleteUser: async (id) => { calls.del.push(id); return { error: delError }; },
     },
   },
   rpc: async (name, args) => { assert.equal(name, 'member_create_apply'); calls.apply.push(args); return { error: applyError }; },
 };
-globalThis.cmCaller = { rpc: async (name, args) => { assert.equal(name, 'member_create_allowed'); calls.rights.push(args); return { data: rightsError ? null : allowed, error: rightsError }; } };
+globalThis.cmCaller = { rpc: async (name, args) => {
+  if (name === 'member_create_check') { calls.check.push(args); return { error: checkError }; }
+  assert.equal(name, 'member_create_allowed'); calls.rights.push(args); return { data: rightsError ? null : allowed, error: rightsError }; } };
 globalThis.Deno = { env: { get: (k) => (k === 'SUPABASE_URL' ? 'https://uubowlcyekbgmizrlyxb.supabase.co' : 'fictif') }, serve: (h) => { globalThis.cmHandler = h; } };
 for (const k of ['log', 'error', 'warn', 'info']) console[k] = (...a) => { logs.push(a.map(String).join(' ')); };
 
@@ -32,7 +35,7 @@ const post = (body, headers = {}) => globalThis.cmHandler(new Request('https://e
   method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer jwt', origin: 'https://onconic.ch', ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body) }));
 const reset = () => {
   for (const k of Object.keys(calls)) calls[k].length = 0;
-  logs.length = 0; delError = null; allowed = true; rightsError = null; applyError = null; authError = null; user = { id: 'caller-1' };
+  logs.length = 0; checkError = null; createdAt = null; delError = null; allowed = true; rightsError = null; applyError = null; authError = null; user = { id: 'caller-1' };
 };
 
 test('appelant sans session valide : 401, aucun compte créé', async () => {
@@ -161,4 +164,31 @@ test('échec de la suppression du compte après profile_failed : journalisé san
   const all = logs.join('\n');
   assert.match(all, /cleanup deleteUser failed unexpected_failure/);
   assert.ok(!/alice|martin|example\.com/i.test(all), all);
+});
+
+test('contrôle préalable : clinique ou institution refusée par la base, aucun compte ni invitation créé', async () => {
+  for (const [code, err] of [['OC002', 'invalid_clinics'], ['OC001', 'invalid_institution']]) {
+    reset(); checkError = { code, message: 'x' };
+    const r = await post({ ...base, mode: 'invite' });
+    assert.equal(r.status, 400); assert.equal((await r.json()).error, err);
+    assert.equal(calls.create.length + calls.invite.length + calls.apply.length, 0);
+  }
+  reset(); checkError = { code: '42501', message: 'x' };
+  assert.equal((await post(base)).status, 403);
+  reset();
+  await post({ ...base, role: 'cadre', cdc_clinics: ['ORL'] });
+  assert.deepEqual(calls.check, [{ p_role: 'cadre', p_clinics: ['ORL', 'ION'], p_cdc_clinics: ['ORL'], p_institution: 'CHUV' }]);
+});
+
+test('compte préexistant renvoyé par l\'invitation : 409, ni apply ni suppression ; compte neuf avec apply en échec : supprimé', async () => {
+  reset(); createdAt = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+  let r = await post({ ...base, mode: 'invite' });
+  assert.equal(r.status, 409); assert.equal((await r.json()).error, 'user_exists');
+  assert.equal(calls.apply.length, 0); assert.equal(calls.del.length, 0);
+  reset(); createdAt = new Date(Date.now() - 3 * 60 * 1000).toISOString(); applyError = { code: 'P0001' };
+  r = await post({ ...base, mode: 'invite' });
+  assert.equal(r.status, 409); assert.equal(calls.del.length, 0, 'jamais de suppression d\'un ancien compte');
+  reset(); createdAt = new Date(Date.now() - 30 * 1000).toISOString(); applyError = { code: 'P0001' };
+  r = await post({ ...base, mode: 'invite' });
+  assert.equal(r.status, 500); assert.deepEqual(calls.del, ['new-2']);
 });

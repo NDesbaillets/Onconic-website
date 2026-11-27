@@ -19,22 +19,33 @@ test('création de membres : droits, profil posé, refus d\'écrasement, journal
   try {
     await db.exec(await read('tests/absences/fixture.sql'));
     await db.exec('alter table auth.users add column banned_until timestamptz;');
+    await db.exec("alter table public.calendar_tokens add primary key (user_id); alter table public.calendar_tokens alter column token set default replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');");
     for (const f of ['absences.sql', 'cadre_medecin.sql', 'cadre_validateur.sql', 'absences_validation.sql', 'absences_forms.sql', 'absences_cliniques_datees.sql', 'admin_direction.sql', 'absences_export.sql', 'absences_soldes.sql', 'absences_visibilite.sql', 'absences_preavis.sql', 'absences_vue_ensemble.sql'])
       await db.exec(await read('supabase/' + f));
-    for (const f of ['202611110001_absence_hardening.sql', '202611120001_nurse_role.sql', '202611120002_assistant_default_tools.sql', '202611130001_securite_advisors.sql', '202611160002_comptes_temporaires.sql', '202611170001_circuit_absences.sql', '202611180001_circuit_configurable.sql'])
+    for (const f of ['202611110001_absence_hardening.sql', '202611120001_nurse_role.sql', '202611120002_assistant_default_tools.sql', '202611130001_securite_advisors.sql', '202611140001_absence_planning.sql', '202611160002_comptes_temporaires.sql', '202611170001_circuit_absences.sql'])
       await db.exec(await read('supabase/migrations/' + f));
-    const mig = await read('supabase/migrations/202611270002_creation_membres_direction.sql');
-    await db.exec(mig); await db.exec(mig); // réexécutable (deux fois de suite)
-
-    // 1 admin, 2 direction, 3 assistante cadre administratif, 4 médecin, 5 en attente, 6 direction à fin d'accès échue, 10 à 29 : comptes à créer
-    const people = [[1, 'admin'], [2, 'direction'], [3, 'assistant'], [4, 'clinician'], [5, 'member'], [6, 'direction']];
+    // 1 admin, 2 direction, 3 assistante cadre administratif, 4 médecin, 5 en attente, 6 direction à fin d'accès échue, 7 cadre validateur Thoracique,
+    // 8 médecin Thoracique, 10 à 29 : comptes à créer
+    const people = [[1, 'admin'], [2, 'direction'], [3, 'assistant'], [4, 'clinician'], [5, 'member'], [6, 'direction'], [7, 'cadre'], [8, 'clinician']];
     for (let n = 10; n < 30; n++) people.push([n, 'member']);
     for (const [n, role] of people) {
       await db.query('insert into auth.users(id,email) values($1,$2)', [uid(n), `cm${n}@example.com`]);
-      await db.query('insert into profiles(id,full_name,role,institution) values($1,$2,$3,$4)', [uid(n), `Test ${n}`, role, 'CHUV']);
+      await db.query('insert into profiles(id,full_name,role,institution,clinics,absence_validator) values($1,$2,$3,$4,$5,$6)', [uid(n), `Test ${n}`, role, 'CHUV', n === 7 || n === 8 ? ['Thoracique'] : [], n === 7]);
     }
+    await db.query("insert into absence_validators(clinic,user_id) values ('Thoracique',$1)", [uid(7)]);
+    for (const f of ['202611180001_circuit_configurable.sql', '202611180002_agenda_ultragenda.sql', '202611230001_cliniques_hemato_tournus.sql', '202611230002_absences_suivi_cheffe.sql', '202611270001_absences_historique_numero.sql'])
+      await db.exec(await read('supabase/migrations/' + f));
+    const mig = await read('supabase/migrations/202611270002_creation_membres_direction.sql');
+    await db.exec(mig); await db.exec(mig); // réexécutable (deux fois de suite)
     await db.query('update profiles set admin_lead = true where id=$1', [uid(3)]);
     await db.query('update profiles set access_until = ch_date() - 1 where id=$1', [uid(6)]);
+    // une demande en attente d'un autre membre (Thoracique), validée par le cadre 7
+    await as(8);
+    await db.query("select absence_request('vacances', null, '2027-01-04', '2027-01-05')");
+    await db.query('select absence_submit()');
+    await db.exec('reset role');
+    const pendingBefore = (await db.query("select id, status from absences where user_id=$1", [uid(8)])).rows;
+    assert.equal(pendingBefore[0].status, 'requested');
 
     await t.test('journal : « member_create » accepté, les autres actions aussi, le reste refusé', async () => {
       await db.exec('reset role');
@@ -156,6 +167,53 @@ test('création de membres : droits, profil posé, refus d\'écrasement, journal
       }
       await as(2);
       await assert.rejects(db.query('select * from temp_account_log'), /permission denied/);
+    });
+
+    await t.test('clinique récente (Hématologie) acceptée ; cadre et CDC créés avec cliniques par la direction ; clinics_initialized', async () => {
+      await as(null, 'service_role');
+      await apply(2, 23, 'cadre', { clinics: ['Hématologie', 'Thoracique'], cdc: ['Hématologie'] });
+      await apply(2, 24, 'cdc', { clinics: ['Tournus / Autre'], cdc: ['Tournus / Autre'] });
+      await apply(2, 25, 'clinician', { clinics: [] });
+      await apply(2, 26, 'nurse');
+      let p = await profile(23);
+      assert.deepEqual([p.role, p.clinics, p.cdc_clinics, p.clinics_initialized], ['cadre', ['Hématologie', 'Thoracique'], ['Hématologie'], true]);
+      p = await profile(24);
+      assert.deepEqual([p.role, p.clinics, p.cdc_clinics, p.clinics_initialized], ['cdc', ['Tournus / Autre'], ['Tournus / Autre'], true]);
+      p = await profile(25);
+      assert.deepEqual([p.clinics, p.clinics_initialized], [[], false], 'sans cliniques : le médecin choisit à sa première connexion');
+      assert.equal((await profile(26)).clinics_initialized, false);
+      // choix initial libre pour le médecin sans cliniques, refusé une fois initialisé
+      await as(25);
+      assert.equal((await one('select my_clinics()')).initial, true);
+      await db.query("select my_set_clinics($1)", [['ORL']]);
+      assert.deepEqual((await profile(25)).clinics, ['ORL']);
+      await as(23);
+      assert.equal((await one('select my_clinics()')).initial, false);
+    });
+
+    await t.test('absence_reroute et absence_recheck : sans effet de bord sur la demande en attente d\'un autre membre', async () => {
+      await db.exec('reset role');
+      const after = (await db.query("select id, status from absences where user_id=$1", [uid(8)])).rows;
+      assert.deepEqual(after, pendingBefore, 'toujours en attente, non décidée');
+      assert.equal(await one("select count(*)::int from absence_approvals where absence_id=$1 and decision='pending'", [after[0].id]) > 0, true, 'le validateur Thoracique reste sollicité');
+      // la création d'un cadre validateur potentiel de la même clinique ne retire pas le validateur actuel
+      assert.equal(await one("select count(*)::int from absence_approvals where absence_id=$1 and validator_id=$2", [after[0].id, uid(7)]) , 1);
+    });
+
+    await t.test('member_create_check : matrice d\'autorisation, cliniques et institution invalides', async () => {
+      const chk = (role, cl = [], cdc = [], inst = 'CHUV') => db.query('select member_create_check($1,$2,$3,$4)', [role, cl, cdc, inst]);
+      await as(2);
+      await chk('cadre', ['Hématologie'], ['ORL']);
+      await chk('nurse');
+      await assert.rejects(chk('direction'), /refusée/);
+      await assert.rejects(chk('admin'), /refusée/);
+      await assert.rejects(chk('clinician', ['Nulle part']), (e) => e.code === 'OC002');
+      await assert.rejects(chk('cdc', [], ['Plateforme']), (e) => e.code === 'OC002');
+      await assert.rejects(chk('nurse', [], [], 'Ailleurs'), (e) => e.code === 'OC001');
+      await as(1); await chk('direction');
+      for (const n of [3, 4, 5, 6]) { await as(n); await assert.rejects(chk('nurse'), /refusée/, 'appelant ' + n); }
+      await as(null, 'anon'); await assert.rejects(chk('nurse'), /permission denied/);
+      await as(2); await assert.rejects(db.query("select member_create_validate('nurse','CHUV','{}','{}')"), /permission denied/);
     });
 
     await t.test('comptes temporaires inchangés : un membre créé n\'apparaît pas dans temp_accounts', async () => {
