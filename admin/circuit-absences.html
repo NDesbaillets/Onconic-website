@@ -15,14 +15,14 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261128b">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261128c">
   <link rel="stylesheet" href="/assets/css/circuit.css?v=20261123b">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/circuit-view.js?v=20261123b"></script>
+  <script src="/assets/js/circuit-view.js?v=20261128a"></script>
   <script src="/assets/js/name-sort.js?v=20261128a" defer></script>
-  <script src="/assets/js/admin-circuit.js?v=20261128a" defer></script>
+  <script src="/assets/js/admin-circuit.js?v=20261128b" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -87,6 +87,7 @@
           <section class="cc-sec" aria-labelledby="cc-sim-title">
             <h2 class="cc-eyebrow" id="cc-sim-title">Simulateur</h2>
             <form class="cc-sim" id="cc-form" novalidate>
+              <span id="cc-sim-sort"></span>
               <label>Membre <select id="cc-member"></select></label>
               <label>Motif <select id="cc-kind"><option value="vacances">Vacances</option><option value="congres">Congrès</option><option value="autre">Autre</option></select></label>
               <label>Du <input id="cc-from" type="date" required></label>
@@ -121,6 +122,7 @@
             <summary>Qui suit quel circuit <span id="cc-who-count">(0)</span></summary>
             <p class="cc-hint">Situation d'aujourd'hui, pour les membres qui ont l'outil Absences.</p>
             <div class="cc-sim cc-who-filters">
+              <span id="cc-who-sort"></span>
               <label>Rechercher<input id="cc-who-q" type="search" placeholder="Nom ou circuit" autocomplete="off"></label>
               <label>Circuit<select id="cc-who-circuit"></select></label>
             </div>

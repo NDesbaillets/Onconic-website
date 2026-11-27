@@ -476,7 +476,8 @@
     const box = $("ml-members");
     if (error) return box.replaceChildren(el("p", "form-msg error", error.message));
     const ul = el("ul", "ml-list ml-members");
-    for (const m of data || []) {
+    // Tri par nom de famille (OnconicSort) après réception
+    for (const m of (window.OnconicSort ? window.OnconicSort.sortPeople(data || [], { mode: "family" }) : data || [])) {
       const lab = el("label", "cg-check");
       const c = el("input"); c.type = "checkbox"; c.checked = m.med_plus;
       c.addEventListener("change", async () => {

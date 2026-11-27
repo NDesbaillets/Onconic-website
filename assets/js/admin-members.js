@@ -54,7 +54,8 @@
     det.classList.toggle("has-pending", list.length > 0);
     det.open = list.length > 0;
     if (!list.length) box.append(el("p", "muted", "Aucune demande en attente."));
-    for (const r of list) {
+    // Demandes triées par nom de famille (OnconicSort) après réception
+    for (const r of (window.OnconicSort ? window.OnconicSort.sortPeople(list, { mode: "family" }) : list)) {
       const item = el("article", "card");
       item.append(el("h3", null, r.name), el("p", null, `Actuellement : ${r.current.join(", ") || "aucune"}. Demandé : ${r.clinics.join(", ") || "aucune"}.`));
       const label = el("label", null, "Commentaire (obligatoire pour refuser)");
@@ -449,7 +450,8 @@
       const box2 = el("div", "am-agenda-box"); box2.hidden = !cb2.checked;
       const sel = new Set(r.secretary_of || []);
       const grid2 = el("div", "am-tools am-clinics"); const boxes2 = [];
-      state.rows.filter((x) => x.role === "cadre").forEach((x) => {
+      const cadres = state.rows.filter((x) => x.role === "cadre");
+      (S() ? S().sortPeople(cadres, { get: personOf, mode: "family" }) : cadres).forEach((x) => {
         const l = el("label", "cg-check am-tool"); const c3 = el("input"); c3.type = "checkbox"; c3.value = x.id; c3.checked = sel.has(x.id);
         l.append(c3, el("span", null, nameOf(x))); grid2.append(l); boxes2.push(c3);
       });

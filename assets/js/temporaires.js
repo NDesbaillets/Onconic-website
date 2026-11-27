@@ -27,7 +27,9 @@
     const rows = data || [];
     const active = rows.filter((r) => r.active).length;
     $("tmp-count").textContent = rows.length ? `${active} actif${active > 1 ? "s" : ""}, ${rows.length - active} terminé${rows.length - active > 1 ? "s" : ""}.` : "Aucun compte temporaire pour l'instant.";
-    $("tmp-list").replaceChildren(...rows.map(item));
+    // Comptes actifs d'abord, puis terminés ; dans chaque groupe, nom de famille (OnconicSort) après réception
+    const byName = (list) => (window.OnconicSort ? window.OnconicSort.sortPeople(list, { mode: "family" }) : list);
+    $("tmp-list").replaceChildren(...byName(rows.filter((r) => r.active)).concat(byName(rows.filter((r) => !r.active))).map(item));
   }
 
   function item(r) {

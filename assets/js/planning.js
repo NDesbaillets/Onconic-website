@@ -110,10 +110,14 @@
   }
 
   // ----- Grille -----
-  function visible() {
+  // Toute liste de personnes passe par OnconicSort après réception (nom de famille par défaut, au choix : prénom) ; sans le module, l'ordre reçu
+  const SORT_MODES = ["family", "first"];
+  const sortMode = () => (window.OnconicSort ? window.OnconicSort.getMode("planning-personnel", SORT_MODES) : "family");
+  const sortStaff = (list, mode) => (window.OnconicSort ? window.OnconicSort.sortPeople(list, { mode }) : Array.from(list));
+  function visible(mode) {
     const team = $("pl-team").value, q = $("pl-q").value.trim().toLowerCase();
     const [a, b] = st.loaded;
-    return st.staff.filter((p) => (!team || p.team === team) && (!q || nameOf(p).toLowerCase().includes(q)) && (!st.onlyMe || p.me)
+    return sortStaff(st.staff, mode || sortMode()).filter((p) => (!team || p.team === team) && (!q || nameOf(p).toLowerCase().includes(q)) && (!st.onlyMe || p.me)
       && (!p.start_date || p.start_date <= b) && (!p.end_date || p.end_date >= a));
   }
   function shown(p, code) {
@@ -139,7 +143,7 @@
       (ab ? (ab[1] === "requested" ? " · demande d'absence en attente (app Absences)" : " · absence validée (app Absences)") : "");
   }
   function render() {
-    const ds = days(), ps = visible(), t = $("pl-grid");
+    const ds = days(), ps = visible(sortMode()), t = $("pl-grid");
     $("pl-range").textContent = st.span === "month" ? MONTHS[st.start.getMonth()] + " " + st.start.getFullYear() : fmt(ds[0]) + " – " + fmt(ds[ds.length - 1]);
     const narrow = st.span === "window" && st.winLen >= 91;
     const head0 = el("tr", "pl-months"), head1 = el("tr"), head2 = el("tr");
@@ -343,7 +347,7 @@
     $("pf-status").value = p.status || "fixe"; $("pf-from").value = p.start_date || ""; $("pf-to").value = p.end_date || ""; $("pf-pos").value = p.position || "";
     const acc = $("pf-account"); acc.replaceChildren(el("option", null, "aucun"));
     acc.firstChild.value = "";
-    for (const a of await accounts()) { const o = el("option", null, a.name || a.id); o.value = a.id; acc.append(o); }
+    for (const a of (window.OnconicSort ? window.OnconicSort.sortPeople(await accounts(), { mode: "family" }) : await accounts())) { const o = el("option", null, a.name || a.id); o.value = a.id; acc.append(o); }
     acc.value = p.user_id || "";
     const off = $("pf-off"); off.replaceChildren(el("span"), ...SLOTS.map((s) => el("b", null, s)));
     const wk = $("pl-week"); wk.replaceChildren(el("span"), ...SLOTS.map((s) => el("b", null, s)));
@@ -590,6 +594,7 @@
   for (const [k, v] of Object.entries(TEAMS)) { const o = el("option", null, v); o.value = k; $("pl-team").append(o); }
   $("pl-team").addEventListener("change", render);
   $("pl-q").addEventListener("input", render);
+  if (window.OnconicSort && $("pl-sort-slot")) $("pl-sort-slot").replaceChildren(window.OnconicSort.control("planning-personnel", { modes: SORT_MODES, onChange: render }));
   $("pl-only-me").addEventListener("change", (e) => { st.onlyMe = e.target.checked; render(); });
 
   // ----- Excel -----

@@ -376,7 +376,7 @@
       }
       t.append(tb); wrap.append(t); box.append(wrap);
     }
-    const notes = d.invitees.filter((i) => i.comment);
+    const notes = invitees.filter((i) => i.comment);
     if (notes.length) {
       box.append(el("h3", null, "Commentaires"));
       const ul = el("ul", "oc-comments");

@@ -15,15 +15,15 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261128b">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261128c">
   <link rel="stylesheet" href="/assets/css/circuit.css?v=20261123b">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/circuit-view.js?v=20261123b"></script>
+  <script src="/assets/js/circuit-view.js?v=20261128a"></script>
   <script src="/assets/js/name-sort.js?v=20261128a" defer></script>
   <script src="/assets/js/vd-holidays.js?v=20261128b"></script>
-  <script src="/assets/js/absences.js?v=20261128b" defer></script>
+  <script src="/assets/js/absences.js?v=20261128c" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -188,9 +188,12 @@
             <div class="ab-bar">
               <h2>Mes absences</h2>
               <div class="ab-export">
-                <label id="ab-who-wrap" hidden>Résumé de
-                  <select id="ab-who"></select>
-                </label>
+                <div class="ab-who-group" id="ab-who-wrap" hidden>
+                  <label>Résumé de
+                    <select id="ab-who"></select>
+                  </label>
+                  <span id="ab-who-sort-slot"></span>
+                </div>
                 <label>Année
                   <select id="ab-year"></select>
                 </label>
@@ -319,6 +322,7 @@
             <h2>Absence au nom d'un membre</h2>
             <p class="muted">Saisie directe par la direction, pour la visualisation et la planification : aucune validation, aucun formulaire PDF. Le membre concerné est prévenu par e-mail (pas pour vos propres absences). Pour modifier ou annuler une absence, choisissez le membre dans « Résumé de » (onglet Mes absences) : les boutons apparaissent sur chaque absence.</p>
             <form class="card ab-new" id="ab-dir-form" novalidate>
+              <div class="ab-dir-sort" id="ab-dir-sort-slot"></div>
               <div class="ab-fields">
                 <label>Membre <select id="ab-dir-who" required></select></label>
                 <label>Motif

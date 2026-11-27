@@ -77,6 +77,8 @@
     } else { state.talks = new Map(); state.notes = new Map(); }
     for (const e of state.events) e._hay = norm([e.title, e.description, e.city, e.country, e.venue, e.kind, (e.clinics || []).join(" ")].join(" "));
   }
+  // Listes de personnes : nom de famille (OnconicSort) après réception ; sans le module, l'ordre reçu
+  const sortByFamily = (list) => (window.OnconicSort ? window.OnconicSort.sortPeople(list, { mode: "family" }) : Array.from(list));
   const mine = (e) => (state.att.get(e.id) || []).find((a) => a.is_me);
   const group = (rows) => { const m = new Map(); for (const r of rows || []) { if (!m.has(r.event_id)) m.set(r.event_id, []); m.get(r.event_id).push(r); } return m; };
 
@@ -236,16 +238,25 @@
     const named = att.filter((a) => a.name), anon = att.length - named.length;
     if (!att.length) part.append(el("p", "muted", "Aucun autre membre inscrit pour l'instant."));
     const ul = el("ul", "cg-people");
-    for (const a of named) {
-      const li = el("li");
-      li.append(el("strong", null, a.name), el("span", "muted", " " + STATUS_LABEL[a.status]));
-      const contact = el("span", "cg-contact");
-      if (a.email) { const m = el("a", null, "E-mail"); m.href = `mailto:${a.email}?subject=${encodeURIComponent(e.title)}`; contact.append(m); }
-      const wa = waLink(a.phone, e.title);
-      if (wa) { const w = el("a", null, "WhatsApp"); w.href = wa; w.target = "_blank"; w.rel = "noopener noreferrer"; contact.append(w); }
-      li.append(contact);
-      ul.append(li);
-    }
+    // Intervenants d'abord (ordre du serveur), puis nom de famille par défaut ou au choix (OnconicSort, après réception)
+    const drawPeople = () => {
+      ul.replaceChildren();
+      const sortedNamed = window.OnconicSort
+        ? [true, false].flatMap((pres) => window.OnconicSort.sortPeople(named.filter((a) => (a.status === "presenting") === pres), { mode: window.OnconicSort.getMode("congres-participants", ["family", "first"]) }))
+        : named;
+      for (const a of sortedNamed) {
+        const li = el("li");
+        li.append(el("strong", null, a.name), el("span", "muted", " " + STATUS_LABEL[a.status]));
+        const contact = el("span", "cg-contact");
+        if (a.email) { const m = el("a", null, "E-mail"); m.href = `mailto:${a.email}?subject=${encodeURIComponent(e.title)}`; contact.append(m); }
+        const wa = waLink(a.phone, e.title);
+        if (wa) { const w = el("a", null, "WhatsApp"); w.href = wa; w.target = "_blank"; w.rel = "noopener noreferrer"; contact.append(w); }
+        li.append(contact);
+        ul.append(li);
+      }
+    };
+    drawPeople();
+    if (window.OnconicSort && named.length > 1) part.append(window.OnconicSort.control("congres-participants", { modes: ["family", "first"], onChange: drawPeople }));
     if (named.length) part.append(ul);
     if (anon) part.append(el("p", "muted", `${named.length ? "Et " : ""}${anon} membre${anon > 1 ? "s" : ""} qui préfère${anon > 1 ? "nt" : ""} rester discret${anon > 1 ? "s" : ""}.`));
     const talks = state.talks.get(e.id) || [];
@@ -566,7 +577,7 @@
       $("cg-abs-fields").hidden = true; $("cg-abs-send").hidden = true;
       $("cg-abs-link").hidden = false; $("cg-abs-close").textContent = "Fermer";
     } else {
-      const vnames = (validators.validators || []).map((x) => x.name).join(", ");
+      const vnames = sortByFamily(validators.validators || []).map((x) => x.name).join(", ");
       $("cg-abs-intro").textContent = `Vous participez à « ${e.title} » (${periodCH(start, end)}). Voulez-vous demander l'absence correspondante, avec le motif « congrès » ? `
         + (vnames ? (validators.fallback ? `Aucun validateur n'est désigné pour vos cliniques : la demande sera envoyée par e-mail à l'administration (${vnames}).` : `Une demande de validation sera envoyée par e-mail à : ${vnames}. Chaque validateur doit valider.`) : "Une demande de validation sera envoyée par e-mail à l'administration.")
         + (drafts.length ? ` Vos ${drafts.length} autre${drafts.length > 1 ? "s" : ""} demande${drafts.length > 1 ? "s" : ""} en brouillon (${drafts.map((a) => periodCH(String(a.start_date).slice(0, 10), String(a.end_date).slice(0, 10))).join(" ; ")}) partira${drafts.length > 1 ? "ont" : ""} en même temps.` : "");
@@ -590,7 +601,7 @@
       if (sent.error) { msg.className = "form-msg error"; msg.textContent = "Brouillon enregistré, mais l'envoi a échoué : " + sent.error.message + " Ouvrez Absences pour l'envoyer."; $("cg-abs-fields").hidden = true; btn.hidden = true; $("cg-abs-link").hidden = false; $("cg-abs-close").textContent = "Fermer"; return; }
       absState.done = true;
       try { sb.functions.invoke("notify-absence", { body: {} }).catch(() => {}); } catch (err) { /* facultatif */ }
-      const who = ((sent.data && sent.data.validators) || []).map((x) => x.name).join(", ") || "l'administration";
+      const who = sortByFamily((sent.data && sent.data.validators) || []).map((x) => x.name).join(", ") || "l'administration";
       $("cg-abs-title").textContent = "Demande envoyée";
       $("cg-abs-intro").textContent = `Absence « congrès » demandée du ${periodCH(start, end)}. ${who} ${(((sent.data && sent.data.validators) || []).length > 1) ? "ont été prévenus" : "a été prévenu·e"} par e-mail ; vous serez prévenu·e dès que tout est validé, ou dès qu'un validateur refuse. Elle apparaît en hachuré dans le planning jusqu'à sa validation.`;
       $("cg-abs-fields").hidden = true; btn.hidden = true;
