@@ -527,6 +527,88 @@
     return c;
   }
 
+  // Ajouter un membre (Edge Function member-create) : rôles limités à ce que la base autorise pour l'appelant
+  const ADD_ROLES = ["clinician", "cdc", "cadre", "assistant", "nurse", "pharmacist", "direction"];
+  const ADD_ERRORS = {
+    invalid_email: "Adresse e-mail invalide.",
+    invalid_name: "Prénom et nom sont nécessaires.",
+    invalid_role: "Rôle non autorisé.",
+    invalid_institution: "Institution inconnue.",
+    user_exists: "Un compte existe déjà avec cette adresse. Retrouvez-le dans la liste pour modifier son rôle.",
+    invite_failed: "L'invitation n'a pas pu être envoyée. Réessayez, ou choisissez le mot de passe provisoire.",
+    create_failed: "Le compte n'a pas pu être créé. Réessayez.",
+    profile_failed: "Le compte n'a pas pu être configuré et a été retiré. Réessayez.",
+    forbidden: "Vous n'avez pas le droit de créer ce rôle.",
+    unauthorized: "Session expirée : reconnectez-vous."
+  };
+  function addChecks(box, list, name) {
+    for (const cl of list) {
+      const lab = el("label", "cg-check am-tool");
+      const cb = el("input");
+      cb.type = "checkbox"; cb.value = cl; cb.name = name;
+      lab.append(cb, el("span", null, cl));
+      box.append(lab);
+    }
+  }
+  const addSay = (text, kind) => { const m = $("am-add-msg"); m.textContent = text; m.className = "form-msg" + (kind ? " " + kind : ""); };
+  const addChosen = (box) => [...box.querySelectorAll("input:checked")].map((i) => i.value);
+  function addSync() {
+    const role = $("am-add-role").value;
+    $("am-add-clinics").hidden = !["clinician", "cdc", "cadre"].includes(role);
+    $("am-add-cdc").hidden = !["cdc", "cadre"].includes(role);
+  }
+  async function addSubmit(e) {
+    e.preventDefault();
+    const btn = $("am-add-submit");
+    $("am-add-pass").hidden = true;
+    const role = $("am-add-role").value;
+    const body = {
+      first_name: $("am-add-first").value.trim(), last_name: $("am-add-last").value.trim(), email: $("am-add-email").value.trim(), role,
+      institution: $("am-add-inst").value,
+      clinics: ["clinician", "cdc", "cadre"].includes(role) ? addChosen($("am-add-clinics")) : [],
+      cdc_clinics: ["cdc", "cadre"].includes(role) ? addChosen($("am-add-cdc")) : [],
+      mode: document.querySelector('input[name="am-add-mode"]:checked').value
+    };
+    if (!role) return addSay("Choisissez un rôle.", "error");
+    if (!body.first_name || !body.last_name) return addSay(ADD_ERRORS.invalid_name, "error");
+    if (!body.email || !$("am-add-email").checkValidity()) return addSay(ADD_ERRORS.invalid_email, "error");
+    btn.disabled = true; addSay("Création…");
+    let res;
+    try { res = await sb.functions.invoke("member-create", { body }); } catch (x) { res = { error: x }; }
+    btn.disabled = false;
+    if (res.error) {
+      let code = "";
+      try { code = (await res.error.context.json()).error; } catch (x) { /* réponse non JSON */ }
+      return addSay(ADD_ERRORS[code] || "Création impossible (" + (code || "erreur réseau") + ").", "error");
+    }
+    const data = res.data || {};
+    const who = body.first_name + " " + body.last_name;
+    addSay(data.mode === "invite" ? `Compte créé pour ${who} (${ROLE_LABEL[role]}). Une invitation a été envoyée à ${body.email}.` : `Compte créé pour ${who} (${ROLE_LABEL[role]}).`, "ok");
+    if (data.password) { $("am-add-pass-value").textContent = data.password; $("am-add-pass").hidden = false; }
+    $("am-add-form").reset(); addSync();
+    await refresh();
+  }
+  async function initAdd() {
+    const det = $("am-add");
+    const oks = await Promise.all(ADD_ROLES.map(async (r) => {
+      if (r === "direction" && state.role !== "admin") return false; // seul un administrateur crée une direction
+      try { const { data } = await sb.rpc("member_create_allowed", { p_role: r }); return data === true; } catch (x) { return false; }
+    }));
+    const roles = ADD_ROLES.filter((r, i) => oks[i]);
+    if (!roles.length) { det.hidden = true; return; } // migration absente ou aucun droit
+    const sel = $("am-add-role");
+    sel.replaceChildren(...roles.map((r) => { const o = el("option", null, ROLE_LABEL[r]); o.value = r; return o; }));
+    addChecks($("am-add-clinics"), ABS_CLINICS, "am-add-clinic");
+    addChecks($("am-add-cdc"), CLINICS, "am-add-cdc-clinic");
+    sel.addEventListener("change", addSync);
+    addSync();
+    $("am-add-form").addEventListener("submit", addSubmit);
+    $("am-add-pass-copy").addEventListener("click", async (e) => {
+      try { await navigator.clipboard.writeText($("am-add-pass-value").textContent); e.target.textContent = "Copié"; } catch (x) { e.target.textContent = "Copie impossible"; }
+    });
+    det.hidden = false;
+  }
+
   // Recharge les données en gardant le membre choisi et les positions de défilement
   async function refresh() {
     const y = window.scrollY;
@@ -548,6 +630,8 @@
     try { await load(); } catch (e) { return ($("ug-status").textContent = "Chargement impossible : " + e.message); }
     $("ug-status").hidden = true;
     $("am-tool").hidden = false;
+    $("am-add").hidden = true;
+    initAdd();
     $("am-q").addEventListener("input", render);
     $("am-role").addEventListener("change", render);
     $("am-close").addEventListener("click", closeDetail);

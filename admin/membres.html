@@ -16,11 +16,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
-  <link rel="stylesheet" href="/assets/css/admin-members.css?v=20261117a">
+  <link rel="stylesheet" href="/assets/css/admin-members.css?v=20261127a">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/admin-members.js?v=20261123a" defer></script>
+  <script src="/assets/js/admin-members.js?v=20261127a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -46,6 +46,33 @@
         <p class="form-msg" id="ug-status" role="status">Chargement…</p>
 
         <div id="am-tool" hidden>
+          <details class="am-requests am-add" id="am-add">
+            <summary>Ajouter un membre</summary>
+            <form id="am-add-form" novalidate>
+              <p class="muted am-note">Crée un compte permanent avec le rôle choisi, sans passer par une demande d'accès. Les accès par défaut du rôle s'appliquent.</p>
+              <div class="am-add-grid">
+                <label>Prénom<input id="am-add-first" type="text" maxlength="80" autocomplete="off" required></label>
+                <label>Nom<input id="am-add-last" type="text" maxlength="80" autocomplete="off" required></label>
+                <label class="am-add-wide">Adresse e-mail<input id="am-add-email" type="email" maxlength="254" autocomplete="off" required></label>
+                <label>Rôle<select id="am-add-role"></select></label>
+                <label>Institution<select id="am-add-inst"><option value="CHUV">CHUV</option><option value="Hors CHUV">Hors CHUV</option></select></label>
+              </div>
+              <fieldset class="am-tools am-clinics" id="am-add-clinics" hidden><legend>Cliniques de rattachement (planning et validation des absences)</legend></fieldset>
+              <fieldset class="am-tools am-clinics" id="am-add-cdc" hidden><legend>Cliniques dont le ou la CDC / cadre modifie et valide les fiches Key trials</legend></fieldset>
+              <fieldset class="am-add-mode">
+                <legend>Accès</legend>
+                <label><input type="radio" name="am-add-mode" value="invite" checked> Invitation par e-mail (la personne choisit son mot de passe)</label>
+                <label><input type="radio" name="am-add-mode" value="password"> Mot de passe provisoire (affiché une seule fois, à transmettre)</label>
+              </fieldset>
+              <button class="btn" type="submit" id="am-add-submit">Créer le compte</button>
+              <p class="form-msg" id="am-add-msg" role="status" aria-live="polite"></p>
+              <div class="am-add-pass" id="am-add-pass" hidden>
+                <p><strong>Mot de passe provisoire</strong> (ne sera plus affiché) :</p>
+                <p><code id="am-add-pass-value"></code> <button class="btn btn-outline" type="button" id="am-add-pass-copy">Copier</button></p>
+                <p class="muted">Transmettez-le de vive voix ou par un autre canal que l'e-mail. La personne pourra le changer dans « Mon compte ».</p>
+              </div>
+            </form>
+          </details>
           <details class="am-requests" id="am-requests"><summary id="am-requests-sum">Demandes de changement de cliniques</summary><div id="am-clinic-requests"></div></details>
           <p class="form-msg am-msg" id="am-msg" role="status" aria-live="polite"></p>
           <div class="am-split" id="am-split">

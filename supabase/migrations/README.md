@@ -71,3 +71,11 @@ Les fichiers `supabase/*.sql` sont des bases historiques : ne plus les rejouer (
 - Fichier de plus de 25 Ko : coupures en trois lots indiquées en tête du fichier ; à appliquer avant le déploiement de `notify-absence` (le message lit `request_no`) et de la page. Volume de la reprise : une mise à jour par demande existante (journal d'audit inclus), verrou bref sur `absences`.
 - Tests : `npm --prefix tests/absences test` (`historique-numero.test.mjs`).
 - Attention : `absences.user_id` référence `auth.users (id) on delete cascade` (`supabase/absences.sql`) ; supprimer un compte efface donc physiquement toutes ses demandes, historique compris. Non modifié ici.
+
+## 202611270002 : création de membres par la direction et l'administrateur (27.11.2026)
+
+- `temp_account_log.action` accepte `member_create` ; nouvelles fonctions `member_create_allowed(rôle)` (authenticated), `member_create_apply(...)` (service_role seulement) et la règle interne `member_create_rule`.
+- Direction : médecin assistant, CDC, médecin cadre, assistante, infirmier·ère, pharmacien·ne. Administrateur : les mêmes et `direction`. Jamais `admin`.
+- `member_create_apply` relit le rôle de l'auteur, refuse d'écraser un membre déjà doté d'un rôle, pose profil, cliniques (`clinic_choice_check`) et accès par défaut, puis journalise.
+- Déployer ensuite l'Edge Function `member-create` (vérification du JWT activée, sans `--no-verify-jwt`), puis la page `/admin/membres.html` ; sans la migration, la section « Ajouter un membre » reste masquée.
+- Tests : `creation-membres.test.mjs`, `creation-membres-endpoint.test.mjs` et `NODE_PATH=/opt/node-tools/node_modules node tests/absences/admin-members-add-ui.mjs`.
