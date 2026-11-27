@@ -62,3 +62,11 @@ python3 tests/absences/browser.py
 ## Fichiers historiques
 
 Les fichiers `supabase/*.sql` sont des bases historiques : ne plus les rejouer (ils contiennent les anciens noms de cliniques Lower GI et Upper GI). Les migrations font foi.
+
+## 202611270001 : historique des demandes et numéro unique (27.11.2026)
+
+- Plus aucune suppression de demande : `absence_purge()` devient sans effet, `absence_delete_rejected` archive (`archived_at`), `absence_withdraw(_for)` archive ou annule au lieu de supprimer ; un refus de plus de 14 jours quitte seulement les listes actives.
+- Numéro `AAAA-NNNN` (`absences.request_no`, compteur `absence_request_counters`, déclencheur BEFORE INSERT OR UPDATE) ; reprise des demandes existantes dans la migration (année de dépôt à Zurich, puis ordre chronologique et id), rejouable.
+- Nouvelles RPC `absence_requests_history` et `absence_find` (droit commun `absence_can_view_request`) ; `request_no` ajouté à `absence_to_validate`, `absence_rejected_to_manage`, `absence_track`, `absence_export`, `absence_grid` et aux documents figés.
+- Fichier de plus de 25 Ko : coupures en trois lots indiquées en tête du fichier ; à appliquer avant le déploiement de `notify-absence` (le message lit `request_no`) et de la page. Volume de la reprise : une mise à jour par demande existante (journal d'audit inclus), verrou bref sur `absences`.
+- Tests : `npm --prefix tests/absences test` (`historique-numero.test.mjs`).
