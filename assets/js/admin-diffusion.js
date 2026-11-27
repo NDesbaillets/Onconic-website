@@ -8,6 +8,11 @@
 
   function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
   function say(text, kind) { const m = $("df-msg"); m.className = "form-msg" + (kind ? " " + kind : ""); m.textContent = text; }
+  // Toute liste de personnes passe par OnconicSort après réception (nom de famille par défaut) ; sans le module, l'ordre reçu est conservé
+  const S = () => window.OnconicSort;
+  const MODES = ["family", "first"], DOC_MODES = ["family", "first", "clinic"];
+  const sorted = (list, key, modes, get) => (S() ? S().sortPeople(list, { get, mode: key ? S().getMode(key, modes) : "family" }) : Array.from(list));
+  const control = (key, modes, onChange) => (S() ? S().control(key, { modes, onChange }) : null);
   const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   function check(value, label, on) {
     const l = el("label", "cg-check am-tool"); const c = el("input"); c.type = "checkbox"; c.value = value; c.checked = !!on;
@@ -23,7 +28,7 @@
     const cl = el("fieldset", "aa-cadres"); cl.append(el("legend", null, "Cliniques"));
     const cls = state.clinics.map((c) => { const x = check(c, c, (b.clinics || []).includes(c)); cl.append(x.label); return x.input; });
     const ll = el("fieldset", "aa-cadres"); ll.append(el("legend", null, "Cadres administratifs responsables"));
-    const lds = state.leads.map((p) => { const x = check(p.id, p.name, (b.lead_ids || []).includes(p.id)); ll.append(x.label); return x.input; });
+    const lds = sorted(state.leads).map((p) => { const x = check(p.id, p.name, (b.lead_ids || []).includes(p.id)); ll.append(x.label); return x.input; });
     if (!state.leads.length) ll.append(el("p", "muted", "Aucun cadre administratif : cochez la fonction dans Membres et accès."));
     const out = el("p", "form-msg"); out.setAttribute("role", "status");
     const row = el("div", "btn-row"); const save = el("button", "btn", b.id ? "Enregistrer" : "Créer le bloc"); save.type = "submit"; row.append(save);
@@ -82,8 +87,8 @@
     if (error) return slot.append(el("p", "form-msg error", error.message));
     const sec = el("div");
     sec.append(el("p", null, "Par défaut : " + ((data.default.blocs || []).filter((x) => x.email).length ? "boîte du bloc (" + data.default.blocs.filter((x) => x.email).map((x) => x.name).join(", ") + ")" : "aucune boîte commune")
-      + (data.default.members.length ? " ; " + data.default.members.map((m) => m.name).join(", ") : "") + "."));
-    sec.append(el("p", "muted", "Destinataires effectifs : " + ([...data.effective.emails, ...data.effective.members.map((m) => m.name + " (adresse personnelle)")].join(", ") || "aucun")));
+      + (data.default.members.length ? " ; " + sorted(data.default.members).map((m) => m.name).join(", ") : "") + "."));
+    sec.append(el("p", "muted", "Destinataires effectifs : " + ([...data.effective.emails, ...sorted(data.effective.members).map((m) => m.name + " (adresse personnelle)")].join(", ") || "aucun")));
     const form = el("form", "ab-edit"); form.noValidate = true;
     const modeL = el("label", null, "Personnalisation"); const mode = el("select");
     [["", "Aucune (calcul par défaut)"], ["add", "Ajouter aux destinataires par défaut"], ["replace", "Remplacer les destinataires par défaut"]].forEach(([v, l]) => { const o = el("option", null, l); o.value = v; mode.append(o); });
@@ -93,7 +98,7 @@
     const list = el("div", "aa-cadres"); const picks = new Set(data.member_ids || []);
     const draw = () => {
       list.replaceChildren();
-      state.members.filter((m) => picks.has(m.id) || !q.value || norm(m.name).includes(norm(q.value))).slice(0, 80).forEach((m) => {
+      sorted(state.members.filter((m) => picks.has(m.id) || !q.value || norm(m.name).includes(norm(q.value))), "diffusion-membres", MODES).slice(0, 80).forEach((m) => {
         const x = check(m.id, m.name, picks.has(m.id)); x.input.addEventListener("change", () => { x.input.checked ? picks.add(m.id) : picks.delete(m.id); });
         list.append(x.label);
       });
@@ -101,7 +106,8 @@
     q.addEventListener("input", draw); draw();
     const out = el("p", "form-msg"); out.setAttribute("role", "status");
     const row = el("div", "btn-row"); const save = el("button", "btn", "Enregistrer"); save.type = "submit"; row.append(save);
-    form.append(modeL, eL, mq, list, out, row);
+    const memCtl = control("diffusion-membres", MODES, draw);
+    form.append(modeL, eL, mq, ...(memCtl ? [memCtl] : []), list, out, row);
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault(); save.disabled = true;
       const res = mode.value ? await sb.rpc("admin_form_routing_set", { p_user: d.id, p_mode: mode.value, p_emails: emails.value.split(/[\n;]+/).map((x) => x.trim()).filter(Boolean), p_members: [...picks] })
@@ -116,7 +122,7 @@
   function renderDocs() {
     const q = norm($("df-q").value);
     const box = $("df-docs"); box.replaceChildren();
-    state.docs.filter((d) => !q || norm(d.name + " " + (d.clinics || []).join(" ")).includes(q)).forEach((d) => box.append(docCard(d)));
+    sorted(state.docs.filter((d) => !q || norm(d.name + " " + (d.clinics || []).join(" ")).includes(q)), "diffusion-medecins", DOC_MODES).forEach((d) => box.append(docCard(d)));
   }
   async function loadDocs() {
     const { data, error } = await sb.rpc("admin_form_routing_overview");
@@ -138,9 +144,11 @@
     const { data: role } = await sb.rpc("current_role_name");
     if (role !== "admin" && role !== "direction") return ($("ug-status").textContent = "Page réservée à l'administration.");
     const m = await sb.rpc("admin_members");
-    state.members = (m.data || []).filter((x) => x.role !== "member").map((x) => ({ id: x.id, name: [x.first_name, x.last_name].filter(Boolean).join(" ") || x.full_name || x.email }));
+    state.members = (m.data || []).filter((x) => x.role !== "member").map((x) => ({ id: x.id, first: x.first_name, last: x.last_name, name: [x.first_name, x.last_name].filter(Boolean).join(" ") || x.full_name || x.email }));
     $("ug-status").hidden = true; $("df-tool").hidden = false;
     $("df-q").addEventListener("input", renderDocs);
+    const docCtl = control("diffusion-medecins", DOC_MODES, renderDocs);
+    if (docCtl && $("df-sort-slot")) $("df-sort-slot").replaceChildren(docCtl);
     await load();
   })();
 })();

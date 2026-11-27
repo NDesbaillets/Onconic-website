@@ -11,12 +11,13 @@
   <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#001B4D">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261128c">
   <link rel="stylesheet" href="/assets/css/planning.css?v=20261116e">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/planning.js?v=20261116c" defer></script>
+  <script src="/assets/js/name-sort.js?v=20261128a" defer></script>
+  <script src="/assets/js/planning.js?v=20261128b" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -63,6 +64,7 @@
             </div>
             <label class="pl-filter">Équipe<select id="pl-team"><option value="">Toutes</option></select></label>
             <label class="pl-filter">Nom<input id="pl-q" type="search" autocomplete="off" placeholder="filtrer"></label>
+            <span class="pl-filter" id="pl-sort-slot"></span>
             <label class="pl-inline" id="pl-only-me-wrap" hidden><input type="checkbox" id="pl-only-me"> Seulement ma ligne</label>
             <button type="button" class="btn btn-outline" id="pl-feed" hidden>Mon agenda…</button>
           </div>
@@ -113,7 +115,7 @@
         <label>Statut<select id="pf-status"><option value="fixe">fixe</option><option value="temporaire">temporaire (mission)</option></select></label>
         <label>Début<input id="pf-from" type="date"></label>
         <label>Fin<input id="pf-to" type="date"></label>
-        <label>Ordre d'affichage<input id="pf-pos" type="number" min="0" max="9999"></label>
+        <label>Ordre dans l'export Excel<input id="pf-pos" type="number" min="0" max="9999"></label>
         <label class="pl-wide">Compte Onconic (facultatif)<select id="pf-account"></select></label>
       </div>
       <p class="muted">Jours off habituels</p>

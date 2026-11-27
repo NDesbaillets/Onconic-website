@@ -99,6 +99,17 @@
     return p;
   }
 
+  // Tri des fiches : les personnes par nom de famille (au choix : prénom), les services par leur titre ; les deux mêlés, sur une clé de chaîne
+  const SORT_MODES = ["family", "first"];
+  const collator = new Intl.Collator("fr", { sensitivity: "base", numeric: true });
+  function sortEnts() {
+    const S = window.OnconicSort, mode = S ? S.getMode("annuaire-contacts", SORT_MODES) : "family";
+    const nm = (e) => (S ? S.splitName(e.person) : { first: e.person.first_name, last: e.person.last_name });
+    const key = (e) => { if (!e.person) return e.title; const n = nm(e); return mode === "first" ? n.first + " " + n.last : n.last + " " + n.first; };
+    // Comparaison toujours sur une clé de chaîne (transitive) : nom de famille + prénom pour une personne, titre pour un service
+    state.ents.sort((a, b) => collator.compare(key(a), key(b)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  }
+
   // ----- Données -----
   async function load() {
     const out = [];
@@ -123,10 +134,12 @@
       e.digits = e.rows.map((r) => r._digits).join(" ");
       e.scopes = new Set(e.rows.map((r) => r.scope));
       e.id = e.rows[0].id;
+      // Fiche d'une personne : prénom et nom séparés pour le tri par nom de famille
+      if (e.key.startsWith("p|")) e.person = { id: e.id, first_name: e.rows[0].first_name || "", last_name: e.rows[0].last_name || "" };
     }
-    ents.sort((a, b) => a.title.localeCompare(b.title, "fr"));
     state.rows = out;
     state.ents = ents;
+    sortEnts();
     state.entOf = new Map(out.map((r) => [r.id, groups.get(entityKey(r))]));
     const set = new Set(out.map((r) => r.service));
     const { data: favs } = await sb.from("contact_favorites").select("contact_id");
@@ -460,6 +473,7 @@
     chips($("an-f-scope"), SCOPES, state.scopes);
     $("q").addEventListener("input", (e) => { state.q = e.target.value; state.shown = PAGE; render(); });
     $("an-fav-btn").addEventListener("click", () => { state.showFavs = !state.showFavs; renderFavs(); });
+    if (window.OnconicSort && $("an-sort-slot")) $("an-sort-slot").replaceChildren(window.OnconicSort.control("annuaire-contacts", { modes: SORT_MODES, onChange: () => { sortEnts(); render(); } }));
     $("an-new").addEventListener("click", () => openForm(null));
     $("an-form").addEventListener("submit", save);
     $("an-form").elements.first_name.addEventListener("input", similar);

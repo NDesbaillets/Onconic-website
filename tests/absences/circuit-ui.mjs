@@ -227,7 +227,7 @@ try {
   assert.deepEqual([grp.roles, grp.scope, grp.rule, grp.active], [['cdc', 'cadre'], 'all', 'any', true]);
   assert.equal(await p.locator('#cc-result .cc-col').count(), 3);
   assert.equal(await p.locator('#cc-result .cc-col').first().locator('.cc-card').count(), 2);
-  assert.match(await p.locator('#cc-result .cc-col').first().innerText(), /Cadre Un, Cadre Deux/);
+  assert.match(await p.locator('#cc-result .cc-col').first().innerText(), /Cadre Deux, Cadre Un/);
   assert.match(await p.locator('#cc-result .cc-col').first().innerText(), /consultative/);
   assert.match(await p.locator('#cc-result').innerText(), /étape sautée/);
   assert.match(await p.locator('#cc-result').innerText(), /colonne sautée/);

@@ -209,6 +209,12 @@
   const compareNames = (a, b, mode) => (window.OnconicSort
     ? window.OnconicSort.compareNames(a, b, mode, { roleOrder: ROLE_ORDER })
     : String(a.name).localeCompare(String(b.name), "fr"));
+  // Toute liste de personnes passe par OnconicSort après réception (nom de famille par défaut) ; sans le module, l'ordre reçu est conservé
+  const sortedPeople = (list, key, modes, get) => (window.OnconicSort
+    ? window.OnconicSort.sortPeople(list, { get, mode: window.OnconicSort.getMode(key, modes), ctx: { roleOrder: ROLE_ORDER } })
+    : Array.from(list));
+  const byFamily = (list, get) => (window.OnconicSort ? window.OnconicSort.sortPeople(list, { get, mode: "family" }) : Array.from(list));
+  const sortControl = (key, modes, onChange) => (window.OnconicSort ? window.OnconicSort.control(key, { modes, onChange }) : null);
   function selection() {
     const me = state.ctx.me;
     const { scope, ids } = state.prefs;
@@ -830,7 +836,7 @@
 
   // ----- Brouillons et popup d'envoi -----
   const sd = { target: "", info: { validators: [], fallback: false }, conflicts: [], pending: [] };
-  const names = (list) => list.map((v) => v.name).join(", ");
+  const names = (list) => byFamily(list).map((v) => v.name).join(", ");
   async function loadDrafts() {
     const tgt = sd.target || null;
     const [list, appr] = await Promise.all([sb.rpc("absence_list", { p_user: tgt }), sb.rpc("absence_approvals_all", { p_user: tgt })]);
@@ -1027,7 +1033,7 @@
     const LABEL = { approved: "a validé", pending: "en attente", rejected: "a refusé", skipped: "étape close sans décision individuelle" };
     const list = (items) => {
       const ul = el("ul", "ab-appr-list");
-      items.forEach((r) => {
+      byFamily(items, (r) => ({ id: r.validator_id || r.id, name: r.validator_name || r.name })).forEach((r) => {
         const li = el("li", "ab-appr-" + r.decision);
         li.append(el("strong", null, r.validator_name || r.name),
           document.createTextNode(` : ${LABEL[r.decision] || r.decision}${r.decided_at && ["approved", "rejected"].includes(r.decision) ? " le " + fmtCH(r.decided_at) : ""}${r.comment ? " · « " + r.comment + " »" : ""}`));
@@ -2114,7 +2120,7 @@
           c.append(pills);
           if ((s.people || []).length) {
             const ul = el("ul", "ab-trail-people");
-            s.people.forEach((p) => ul.append(el("li", "st-" + trkSlug(p.state), `${p.name} : ${p.state}${p.at ? " le " + fmtDT(p.at) : ""}${p.comment ? " · « " + p.comment + " »" : ""}`)));
+            byFamily(s.people).forEach((p) => ul.append(el("li", "st-" + trkSlug(p.state), `${p.name} : ${p.state}${p.at ? " le " + fmtDT(p.at) : ""}${p.comment ? " · « " + p.comment + " »" : ""}`)));
             c.append(ul);
           }
           stack.append(c);
@@ -2283,6 +2289,7 @@
 
   // ----- Direction : absence saisie au nom d'un membre, validée d'office -----
   const MEDICAL = /maladie|accident|maternit|paternit|m[ée]dical|enceinte|hospital|sant[ée]/i;
+  const DIR_MODES = ["family", "first", "role", "clinic"], WHO_MODES = ["family", "first"];
   function initDirection() {
     const who = $("ab-dir-who");
     const start = $("ab-dir-start"), end = $("ab-dir-end"), kind = $("ab-dir-kind"), note = $("ab-dir-note"), conf = $("ab-dir-conf");
@@ -2299,11 +2306,21 @@
     // Membres de l'institution CHUV que la direction peut gérer
     (async () => {
       const { data, error } = await sb.rpc("absence_manageable_members");
-      who.replaceChildren();
-      const first = el("option", null, error ? "Liste indisponible" : "Choisir un membre du CHUV…"); first.value = ""; who.append(first);
-      (data || []).forEach((p) => {
-        const o = el("option", null, p.name + ((p.clinics || []).length ? " · " + p.clinics.join(", ") : "")); o.value = p.id; who.append(o);
-      });
+      const members = data || [];
+      // Le serveur renvoie l'ordre du prénom : tri par nom de famille (ou au choix) côté navigateur
+      const draw = () => {
+        const keep = who.value;
+        who.replaceChildren();
+        const first = el("option", null, error ? "Liste indisponible" : "Choisir un membre du CHUV…"); first.value = ""; who.append(first);
+        sortedPeople(members, "direction-membres", DIR_MODES).forEach((p) => {
+          const o = el("option", null, p.name + ((p.clinics || []).length ? " · " + p.clinics.join(", ") : "")); o.value = p.id; who.append(o);
+        });
+        if (keep && members.some((p) => p.id === keep)) who.value = keep;
+      };
+      const slot = $("ab-dir-sort-slot");
+      const ctl = sortControl("direction-membres", DIR_MODES, draw);
+      if (slot && ctl) slot.replaceChildren(ctl);
+      draw();
     })();
     $("ab-dir-form").addEventListener("submit", async (ev) => {
       ev.preventDefault();
@@ -2363,7 +2380,7 @@
     if (!data.length) list.append(el("p", "muted", state.agendaFilter === "todo" ? "Aucun agenda à mettre à jour." : "Aucune tâche."));
     const groups = new Map();
     data.forEach((t) => { if (!groups.has(t.owner_id)) groups.set(t.owner_id, []); groups.get(t.owner_id).push(t); });
-    for (const [, tasks] of groups) {
+    for (const tasks of byFamily([...groups.values()], (g) => ({ id: g[0].owner_id, name: g[0].owner_name }))) {
       const h = el("h3", "ab-ag-owner", tasks[0].owner_name);
       if ((tasks[0].clinics || []).length) h.append(el("span", "muted", " · " + tasks[0].clinics.join(", ")));
       list.append(h);
@@ -2620,7 +2637,6 @@
       $("ab-t-todo").hidden = false;
       const who = $("ab-who");
       const me = el("option", null, "Moi"); me.value = ""; who.append(me);
-      state.people.filter((p) => !p.is_me && (state.isDir || sharesClinic(p, ctx.validates))).sort((x, y) => compareNames(x, y, sortMode())).forEach((p) => { const o = el("option", null, p.name); o.value = p.id; who.append(o); });
       who.addEventListener("change", () => { state.who = who.value; loadMine(); });
       $("ab-who-wrap").hidden = false;
       loadRejected();
@@ -2628,7 +2644,7 @@
     // Blocage Ultragenda et secrétaires de médecin cadre (absents si la migration n'est pas appliquée)
     const ac = await sb.rpc("absence_agenda_context");
     state.agendaCtx = ac.error ? null : ac.data;
-    state.secOf = (state.agendaCtx && state.agendaCtx.secretary_of) || [];
+    state.secOf = byFamily((state.agendaCtx && state.agendaCtx.secretary_of) || []);
     if (state.agendaCtx && state.agendaCtx.tab) initAgenda();
     if (state.secOf.length) {
       const forSel = $("ab-for");
@@ -2638,9 +2654,23 @@
       $("ab-for-wrap").hidden = false;
       const who = $("ab-who");
       if (!who.options.length) { const me = el("option", null, "Moi"); me.value = ""; who.append(me); }
-      state.secOf.forEach((c) => { if (![...who.options].some((o) => o.value === c.id)) { const o = el("option", null, c.name); o.value = c.id; who.append(o); } });
       if (!who.dataset.bound && !(ctx.validates.length || state.isDir)) { who.dataset.bound = "1"; who.addEventListener("change", () => { state.who = who.value; loadMine(); }); }
       $("ab-who-wrap").hidden = false;
+    }
+    // « Résumé de » : personnes visibles et médecins cadres dont on est secrétaire, triés ensemble (nom de famille par défaut)
+    const whoOpts = () => {
+      const who = $("ab-who"), keep = who.value;
+      const cand = (ctx.validates.length || state.isDir) ? state.people.filter((p) => !p.is_me && (state.isDir || sharesClinic(p, ctx.validates))) : [];
+      state.secOf.forEach((c) => { if (!cand.some((p) => p.id === c.id)) cand.push({ id: c.id, name: c.name }); });
+      who.replaceChildren();
+      const me = el("option", null, "Moi"); me.value = ""; who.append(me);
+      sortedPeople(cand, "absences-resume", WHO_MODES).forEach((p) => { const o = el("option", null, p.name); o.value = p.id; who.append(o); });
+      if (keep && cand.some((p) => p.id === keep)) who.value = keep;
+    };
+    if (ctx.validates.length || state.isDir || state.secOf.length) {
+      whoOpts();
+      const ctl = sortControl("absences-resume", WHO_MODES, whoOpts);
+      if (ctl && $("ab-who-sort-slot")) $("ab-who-sort-slot").replaceChildren(ctl);
     }
     initHistory();
     // Mon circuit de validation : pour tout membre qui a l'outil Absences (cette page n'est ouverte qu'à eux) ; lien en lecture du circuit pour un médecin cadre

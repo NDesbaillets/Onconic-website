@@ -27,6 +27,11 @@
     return e;
   }
   const pill = (txt, cls) => el("span", "cc-pill" + (cls ? " " + cls : ""), txt);
+  // Toute liste de personnes passe par OnconicSort après réception (nom de famille par défaut) ; sans le module, l'ordre reçu est conservé
+  const MEMBER_MODES = ["family", "first"];
+  const sortedMembers = (list, key, get) => (window.OnconicSort ? window.OnconicSort.sortPeople(list, { get, mode: window.OnconicSort.getMode(key, MEMBER_MODES) }) : Array.from(list));
+  const byFamily = (list, get) => (window.OnconicSort ? window.OnconicSort.sortPeople(list, { get, mode: "family" }) : Array.from(list));
+  const sortControl = (key, onChange) => (window.OnconicSort ? window.OnconicSort.control(key, { modes: MEMBER_MODES, onChange }) : null);
   const REASONS = CV.REASONS;
   const ROLE_CODES = ["clinician", "cdc", "cadre", "assistant", "pharmacist", "admin", "direction", "nurse"];
   const state = { overview: null, pre: null, cols: [], orig: "", circuits: [], sel: null, detail: null, assign: { member: new Set(), role: new Set(), clinic: new Set() }, assignOrig: "", who: [], req: 0, selected: null, drag: null, ro: false };
@@ -57,7 +62,7 @@
       tr.append(el("td", null, c.clinic), el("td", null, String(c.members)));
       const v = el("td");
       if (!(c.validators || []).length) v.append(el("span", "muted", "Aucun"));
-      for (const x of c.validators || []) {
+      for (const x of byFamily(c.validators || [])) {
         const p = pill(x.name + (x.role === "direction" ? " (direction)" : ""), x.active ? "" : "off");
         if (!x.active) p.title = x.reason;
         v.append(p);
@@ -158,11 +163,11 @@
     if (!list.length) return "";
     return list.slice(0, 3).join(", ") + (list.length > 3 ? " +" + (list.length - 3) : "");
   }
-  function directionNames() { return ((state.overview && state.overview.direction) || []).filter((d) => d.has_tool).map((d) => d.name); }
+  function directionNames() { return byFamily(((state.overview && state.overview.direction) || []).filter((d) => d.has_tool)).map((d) => d.name); }
   function whoLine(s) {
     if (s.kind === "clinique") return "Validateurs désignés par clinique";
     if (s.kind === "direction" || s.kind === "visa") return directionNames().length ? "Direction : " + shortList(directionNames()) : "Aucun membre de la direction";
-    if (s.kind === "personnes") return s.persons.length ? shortList(s.persons.map(memberName)) : s.on_demand ? "Aucune personne désignée : l'envoi restera impossible" : "Aucune personne désignée";
+    if (s.kind === "personnes") return s.persons.length ? shortList(byFamily(s.persons.map((id) => ({ id, name: memberName(id) }))).map((x) => x.name)) : s.on_demand ? "Aucune personne désignée : l'envoi restera impossible" : "Aucune personne désignée";
     if (s.kind === "groupe") return (s.roles.length ? shortList(s.roles.map((r) => ROLES[r] || r)) : "Aucun rôle") + " · " + (s.scope === "all" ? "tout le service" : "même clinique");
     return "";
   }
@@ -350,22 +355,30 @@
   function personsPicker(s) {
     const box = el("div", "cc-persons");
     const known = new Map();
-    for (const m of state.overview.members || []) known.set(m.id, memberLabel(m));
-    for (const st of (state.detail && state.detail.steps) || []) for (const p of st.persons || []) if (!known.has(p.id)) known.set(p.id, p.name || p.id);
+    for (const m of state.overview.members || []) known.set(m.id, { id: m.id, name: m.name, label: memberLabel(m) });
+    for (const st of (state.detail && state.detail.steps) || []) for (const p of st.persons || []) if (!known.has(p.id)) known.set(p.id, { id: p.id, name: p.name || p.id, label: p.name || p.id });
     if (state.ro) for (const id of [...known.keys()]) if (!s.persons.includes(id)) known.delete(id);
     const filter = el("input"); filter.type = "search"; filter.placeholder = "Filtrer par nom"; filter.setAttribute("aria-label", "Filtrer les personnes");
     const list = el("div", "cc-person-list");
-    const rows = [];
+    let rows = [];
     const count = el("span", "cc-hint", plural(s.persons.length, "désignée", "désignées"));
-    for (const [id, label] of [...known].sort((a, b) => a[1].localeCompare(b[1], "fr"))) {
-      const row = check(label, s.persons.includes(id), (on) => {
-        s.persons = on ? [...new Set([...s.persons, id])] : s.persons.filter((x) => x !== id);
-        count.textContent = plural(s.persons.length, "désignée", "désignées");
-        changed();
-      });
-      row.dataset.name = label.toLowerCase();
-      rows.push(row); list.append(row);
-    }
+    const fill = () => {
+      list.replaceChildren(); rows = [];
+      for (const { id, label } of sortedMembers([...known.values()], "circuit-personnes")) {
+        const row = check(label, s.persons.includes(id), (on) => {
+          s.persons = on ? [...new Set([...s.persons, id])] : s.persons.filter((x) => x !== id);
+          count.textContent = plural(s.persons.length, "désignée", "désignées");
+          changed();
+        });
+        row.dataset.name = label.toLowerCase();
+        rows.push(row); list.append(row);
+      }
+      const q = filter.value.trim().toLowerCase();
+      for (const r of rows) r.hidden = !!q && !r.dataset.name.includes(q);
+    };
+    fill();
+    const ctl = sortControl("circuit-personnes", fill);
+    if (ctl) box.append(ctl);
     filter.addEventListener("input", () => { const q = filter.value.trim().toLowerCase(); for (const r of rows) r.hidden = !!q && !r.dataset.name.includes(q); });
     box.append(field("Personnes désignées", filter), count, list);
     return box;
@@ -563,10 +576,17 @@
   }
   function form(o) {
     const sel = $("cc-member");
-    sel.replaceChildren(...(o.members || []).map((m) => {
-      const opt = el("option", null, memberLabel(m));
-      opt.value = m.id; return opt;
-    }));
+    const fillSel = () => {
+      const keep = sel.value;
+      sel.replaceChildren(...sortedMembers(o.members || [], "circuit-simulation").map((m) => {
+        const opt = el("option", null, memberLabel(m));
+        opt.value = m.id; return opt;
+      }));
+      if (keep && (o.members || []).some((m) => m.id === keep)) sel.value = keep;
+    };
+    fillSel();
+    const simCtl = sortControl("circuit-simulation", fillSel);
+    if (simCtl && $("cc-sim-sort")) $("cc-sim-sort").replaceChildren(simCtl);
     const mon = nextMonday(), fri = new Date(mon); fri.setDate(mon.getDate() + 4);
     $("cc-from").value = iso(mon); $("cc-to").value = iso(fri);
     $("cc-to").min = $("cc-from").value;
@@ -722,10 +742,8 @@
   }
   function renderAssign() {
     const o = state.overview || {};
-    const sorter = window.OnconicSort;
-    if (sorter && $("cc-as-sort") && !$("cc-as-sort").firstChild) $("cc-as-sort").append(sorter.control("circuit-membres", { modes: ["family", "first"], onChange: renderAssign }));
-    const mode = sorter ? sorter.getMode("circuit-membres", ["family", "first"]) : "family";
-    const members = [...(o.members || [])].sort((a, b) => (sorter ? sorter.compareNames(a, b, mode) : a.name.localeCompare(b.name, "fr"))).map((m) => ({ id: m.id, label: memberLabel(m) }));
+    if ($("cc-as-sort") && !$("cc-as-sort").firstChild) { const ctl = sortControl("circuit-membres", renderAssign); if (ctl) $("cc-as-sort").append(ctl); }
+    const members = sortedMembers(o.members || [], "circuit-membres").map((m) => ({ id: m.id, label: memberLabel(m) }));
     const roles = ROLE_CODES.map((r) => ({ id: r, label: ROLES[r] || r }));
     const clinics = (o.clinics || []).map((c) => ({ id: c.clinic, label: c.clinic }));
     $("cc-as-lists").replaceChildren(pickList("member", "Membres", members), pickList("role", "Rôles", roles), pickList("clinic", "Cliniques", clinics));
@@ -760,7 +778,7 @@
     for (const h of ["Membre", "Rôle", "Cliniques", "Circuit", "Raison"]) head.append(el("th", null, h));
     const thead = el("thead"); thead.append(head);
     const body = el("tbody");
-    const rows = state.who.filter((w) => (!cid || String(w.circuit_id) === cid) && (!q || (w.name || "").toLowerCase().includes(q) || (w.circuit_name || "").toLowerCase().includes(q)));
+    const rows = sortedMembers(state.who.filter((w) => (!cid || String(w.circuit_id) === cid) && (!q || (w.name || "").toLowerCase().includes(q) || (w.circuit_name || "").toLowerCase().includes(q))), "circuit-qui", (w) => ({ id: w.id || w.user_id, name: w.name || "" }));
     for (const w of rows) {
       const tr = el("tr");
       const reason = el("td", null, REASONS[w.reason] || w.reason);
@@ -814,6 +832,8 @@
     $("cc-box-cancel").addEventListener("click", closeBox);
     $("cc-as-save").addEventListener("click", saveAssign);
     $("cc-who-q").addEventListener("input", renderWho);
+    const whoCtl = sortControl("circuit-qui", renderWho);
+    if (whoCtl && $("cc-who-sort")) $("cc-who-sort").replaceChildren(whoCtl);
     $("cc-who-circuit").addEventListener("change", renderWho);
     $("cc-panel-close").addEventListener("click", closePanel);
     $("cc-scrim").addEventListener("click", closePanel);

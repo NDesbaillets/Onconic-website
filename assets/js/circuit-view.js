@@ -16,7 +16,9 @@
   const pill = (txt, cls) => el("span", "cc-pill" + (cls ? " " + cls : ""), txt);
   // Noms d'une étape ; `more` = personnes non listées (mon circuit : douze noms au plus)
   function names(s) {
-    const list = (s.people || []).map((x) => x.name).join(", ");
+    // Tri par nom de famille (OnconicSort) après réception ; sans le module, l'ordre reçu
+    const people = window.OnconicSort ? window.OnconicSort.sortPeople(s.people || [], { mode: "family" }) : (s.people || []);
+    const list = people.map((x) => x.name).join(", ");
     const more = Number(s.more) || 0;
     if (!more) return list;
     return list + (list ? " " : "") + "et " + more + (more > 1 ? " autres" : " autre");

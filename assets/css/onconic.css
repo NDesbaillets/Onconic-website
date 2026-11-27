@@ -1480,4 +1480,9 @@ details:not(.ug-card) > summary { padding-block: 10px; }
 
 /* Tri des listes de personnes (name-sort.js) */
 .sort-control { display: grid; gap: 4px; font-weight: 500; font-size: .9rem; color: var(--navy-800); }
+.ab-who-group { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: end; }
+.ab-who-group > label { display: grid; gap: 4px; font-weight: 500; font-size: .9rem; color: var(--navy-800); min-width: 0; }
+.ab-dir-sort:empty { display: none; }
+.ab-dir-sort .sort-control, #df-sort-slot .sort-control, .an-sort .sort-control { max-width: 360px; margin-bottom: var(--space-3); }
+.an-sort:empty, #df-sort-slot:empty { display: none; }
 .sort-control select { font: inherit; font-weight: 400; min-height: 40px; padding: 6px 12px; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); color: var(--ink-900); }
