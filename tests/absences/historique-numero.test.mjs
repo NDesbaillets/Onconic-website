@@ -443,3 +443,46 @@ test('9. droits d\'exécution : RPC pour les connectés, fonctions internes et c
     assert.equal((await t.rows("select count(*)::int n from onconic_migrations where version = '202611270001'"))[0].n, 1);
   } finally { await t.db.close(); }
 });
+
+test('10. droits alignés sur absence_list : étape « personnes », validateur dont la clinique a changé, « 2026 » n\'est pas un numéro, archivage retrouvable, approbations filtrées', async () => {
+  const t = await mk();
+  try {
+    // étape « personnes » : la personne désignée dans l'instantané retrouve la demande dans l'historique et par son numéro
+    const R = await t.request(4, dd(0));
+    const num = await t.no(R);
+    assert.deepEqual(await t.ids(9, 'absence_requests_history'), []);
+    assert.deepEqual(await t.ids(9, 'absence_find', [num]), []);
+    await t.sup();
+    await t.db.query("update absences set circuit = coalesce(circuit, '[]'::jsonb) || $2::jsonb where id = $1",
+      [R, JSON.stringify([{ pos: 15, col: 15, kind: 'personnes', label: 'Finances', rule: 'all', blocking: true, active: true, persons: [uid(9)] }])]);
+    assert.deepEqual(await t.ids(9, 'absence_requests_history'), [Number(R)]);
+    assert.deepEqual(await t.ids(9, 'absence_find', [num]), [Number(R)]);
+    // validateur : variante sans dates, toutes les cliniques connues. Changement de clinique programmé avant les dates de la demande :
+    // le validateur de l'ancienne clinique retrouve la demande, comme dans absence_list
+    const R5 = await t.request(5, dd(0));
+    await t.sup();
+    await t.db.query("insert into member_clinic_changes(user_id, valid_from, clinics) values ($1, '2027-01-01', array['Urologie'])", [uid(5)]);
+    assert.ok((await t.ids(3, 'absence_requests_history')).includes(Number(R5)));
+    assert.ok((await t.ids(6, 'absence_requests_history')).includes(Number(R5)));
+    assert.ok((await t.ids(3, 'absence_list', [uid(5)])).includes(Number(R5)));
+    // « 2026 » n'est pas un numéro : liste vide pour la recherche par numéro (recherche texte et filtre d'année à la place)
+    for (const q of ['2026', '2027', ' 2026 ', 'N° 2026']) assert.deepEqual(await t.ids(2, 'absence_find', [q]), [], q);
+    assert.ok((await t.ids(2, 'absence_find', ['2026-1'])).length >= 0);
+    // archivage puis retrouvé dans l'historique et par son numéro ; approbations sans refus archivé ni ancien refus
+    const rj = await t.request(4, dd(2));
+    await t.decide(3, rj, false, 'Refus fictif');
+    const old = await t.request(4, dd(3));
+    await t.decide(3, old, false, 'Vieux refus');
+    await t.sup();
+    await t.db.query("update absences set decided_at = now() - interval '30 days' where id = $1", [old]);
+    const appr = async () => { await t.as(4); const r = (await t.rows('select absence_id from absence_approvals_all()')).map((x) => Number(x.absence_id)); await t.sup(); return r; };
+    let a = await appr();
+    assert.ok(a.includes(Number(rj))); assert.ok(!a.includes(Number(old)));
+    await t.as(4); await t.rpc('absence_delete_rejected', [rj]);
+    a = await appr();
+    assert.ok(!a.includes(Number(rj)));
+    assert.ok((await t.ids(4, 'absence_requests_history')).includes(Number(rj)));
+    assert.ok((await t.ids(4, 'absence_find', [await t.no(rj)])).includes(Number(rj)));
+    assert.ok(!(await t.ids(4, 'absence_list')).includes(Number(rj)));
+  } finally { await t.db.close(); }
+});

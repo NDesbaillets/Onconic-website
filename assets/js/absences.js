@@ -766,6 +766,7 @@
   }
   async function afterChange() {
     state.cache.clear();
+    hist.stale = true; // l'historique se recharge à sa prochaine ouverture
     await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending(), (state.ctx.validates.length || state.isDir) ? Promise.all([loadTodo(), loadRejected()]) : state.todoLoaded ? loadTodo() : null]);
   }
 
@@ -1383,10 +1384,10 @@
       card.append(head);
       const gone = new Date(new Date(a.decided_at).getTime() + 14 * 864e5);
       card.append(el("p", "ab-decision", `Refusée${a.decided_by_name ? " par " + a.decided_by_name : ""} le ${fmtCH(a.decided_at)}${a.decision_comment ? " : « " + a.decision_comment + " »" : ""}. N'apparaîtra plus ici à partir du ${fmtCH(iso(gone))} ; reste consultable dans l'historique.`));
-      const hist = (a.approvals || []).map((x) => ({ validator_name: x.name, decision: x.decision, comment: x.comment, decided_at: x.at, step: x.step, step_label: x.step_label }));
-      if (hist.length) {
+      const decHist = (a.approvals || []).map((x) => ({ validator_name: x.name, decision: x.decision, comment: x.comment, decided_at: x.at, step: x.step, step_label: x.step_label }));
+      if (decHist.length) {
         const d = el("details", "ab-progress");
-        d.append(el("summary", null, "Historique des décisions"), approvalsBlock(hist));
+        d.append(el("summary", null, "Historique des décisions"), approvalsBlock(decHist));
         card.append(d);
       }
       const act = el("div", "btn-row ab-actions");
@@ -1395,6 +1396,7 @@
         const { error: e2 } = await sb.rpc("absence_delete_rejected", { p_id: a.id });
         if (e2) return say($("ab-todo-msg"), e2.message, "error");
         say($("ab-todo-msg"), "Demande refusée archivée. Elle reste consultable dans l'historique.", "ok");
+        hist.stale = true;
         await loadRejected();
       }));
       card.append(act);
@@ -2132,7 +2134,8 @@
   const hist = { rows: [], tok: 0, offset: 0, more: false, init: false, loaded: false, find: false };
   const HIST_PAGE = 50;
   // La saisie ressemble à un numéro : 2026-0012, 0012, 12, 2026-12, éventuellement précédé de « N° »
-  const looksLikeNo = (s) => /^(n°?\s*)?(\d{4}\s*[-/.]\s*)?\d{1,6}$/i.test(String(s).trim());
+  // Un nombre de quatre chiffres commençant par 20 (« 2026 ») est une année : recherche texte et filtre d'année, pas un numéro
+  const looksLikeNo = (s) => { const t = String(s).trim(); return /^(n°?\s*)?(\d{4}\s*[-/.]\s*)?\d{1,6}$/i.test(t) && !/^(n°?\s*)?20\d{2}$/i.test(t); };
   function histCard(a) {
     const card = el("article", `card ab-item ab-item-${a.status}`);
     const head = el("div", "ab-item-head");
@@ -2175,12 +2178,14 @@
     hist.rows = hist.rows.concat(rows);
     hist.offset = hist.rows.length;
     hist.more = !useFind && rows.length === HIST_PAGE;
-    hist.loaded = true;
+    hist.loaded = true; hist.stale = false;
     const list = $("ab-hist-list");
     if (!more) list.replaceChildren();
     rows.forEach((a) => list.append(histCard(a)));
     if (!hist.rows.length) list.append(el("p", "muted", useFind ? "Aucune demande trouvée pour ce numéro. Seules les demandes que vous avez le droit de consulter sont retrouvées." : "Aucune demande ne correspond à ces filtres."));
     say(msg, "");
+    // La recherche par numéro ignore les filtres : le dire discrètement quand l'un d'eux est actif
+    $("ab-hist-note").hidden = !(useFind && (yr || st || who));
     $("ab-hist-more").hidden = !hist.more;
     $("ab-hist-count").textContent = hist.rows.length ? (useFind ? `${plur(hist.rows.length, "demande trouvée", "demandes trouvées")}.` : `${plur(hist.rows.length, "demande affichée", "demandes affichées")}${hist.more ? ", d'autres suivent" : ""}.`) : "";
   }
@@ -2347,7 +2352,7 @@
     if (name === "mine") loadMine();
     if (name === "agenda") { loadAgenda(); refreshAgendaCount(); }
     if (name === "track") loadTrack();
-    if (name === "hist" && !hist.loaded) loadHist(false);
+    if (name === "hist" && (!hist.loaded || hist.stale)) loadHist(false);
   }
 
   // ----- Mon circuit de validation (bas des onglets Planning et Mes absences) -----

@@ -70,3 +70,4 @@ Les fichiers `supabase/*.sql` sont des bases historiques : ne plus les rejouer (
 - Nouvelles RPC `absence_requests_history` et `absence_find` (droit commun `absence_can_view_request`) ; `request_no` ajouté à `absence_to_validate`, `absence_rejected_to_manage`, `absence_track`, `absence_export`, `absence_grid` et aux documents figés.
 - Fichier de plus de 25 Ko : coupures en trois lots indiquées en tête du fichier ; à appliquer avant le déploiement de `notify-absence` (le message lit `request_no`) et de la page. Volume de la reprise : une mise à jour par demande existante (journal d'audit inclus), verrou bref sur `absences`.
 - Tests : `npm --prefix tests/absences test` (`historique-numero.test.mjs`).
+- Attention : `absences.user_id` référence `auth.users (id) on delete cascade` (`supabase/absences.sql`) ; supprimer un compte efface donc physiquement toutes ses demandes, historique compris. Non modifié ici.

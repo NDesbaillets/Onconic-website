@@ -86,8 +86,11 @@ create unique index if not exists absences_request_no_key on public.absences (re
 
 -- 4. Droit de voir une demande, historique, recherche ------------------------------------------------------------------------------
 
--- Une demande (hors brouillon) est visible par la personne, ses validateurs aux dates de la demande, la direction et l'administration,
--- et la secrétaire de ce médecin cadre. Fonction interne : l'appelant est toujours auth.uid().
+-- Une demande (hors brouillon) est visible par la personne, ses validateurs, la direction et l'administration, la secrétaire de ce médecin cadre
+-- et les personnes d'une étape « personnes » de la demande (comme absence_list, absence_rejected_to_manage et absence_delete_rejected).
+-- Validateurs : variante de can_validate_absence SANS dates (toutes les cliniques connues du membre, actuelles et programmées), comme absence_list :
+-- un cadre qui voit la personne dans ses listes retrouve aussi ses anciennes demandes, même si la clinique de la personne a changé depuis.
+-- Fonction interne : l'appelant est toujours auth.uid().
 create or replace function public.absence_can_view_request(p_uid uuid, a public.absences) returns boolean
 language sql stable security definer set search_path = public, pg_temp as $$
   select coalesce(
@@ -95,9 +98,11 @@ language sql stable security definer set search_path = public, pg_temp as $$
       a.user_id = p_uid
       or coalesce((select (case when p.access_until is not null and p.access_until < public.ch_date() then 'member' else p.role end) in ('admin', 'direction')
                      from public.profiles p where p.id = p_uid), false)
-      or public.can_validate_absence(p_uid, a.user_id, public.absence_lo(a), public.absence_hi(a))
-      or public.is_secretary_of(p_uid, a.user_id)), false);
+      or public.can_validate_absence(p_uid, a.user_id)
+      or public.is_secretary_of(p_uid, a.user_id)
+      or public.absence_in_personnes_step(p_uid, a)), false);
 $$;
+revoke execute on function public.absence_can_view_request(uuid, public.absences) from public, anon, authenticated;
 
 -- Noyau commun de l'historique et de la recherche (fonction interne) ; p_no_n / p_no_year : numéro cherché (sans année : toutes les années)
 drop function if exists public.absence_requests_core(uuid, uuid, int, text[], text, int, int, int, int);
@@ -167,6 +172,8 @@ begin
   if s ~ '^[0-9]{4}[-/.][0-9]{1,6}$' then
     y := substr(s, 1, 4)::int; n := substr(s, 6)::int;
   elsif s ~ '^[0-9]{1,6}$' then
+    -- « 2026 » (quatre chiffres commençant par 20) est une année : recherche texte et filtre d'année, pas un numéro
+    if s ~ '^20[0-9]{2}$' then return; end if;
     n := s::int;
   else
     return;
@@ -271,6 +278,30 @@ begin
     -- les brouillons restent à l'intéressé ; une secrétaire voit ceux qu'elle a saisis pour son cadre
     and (a.status <> 'draft' or a.user_id = uid or (a.requested_by = uid and public.is_secretary_of(uid, a.user_id)))
     order by a.start_date desc;
+end;
+$$;
+
+-- Avancement des validations (Mes absences) : mêmes filtres que absence_list (refus de plus de 14 jours et demandes archivées masqués)
+create or replace function public.absence_approvals_all(p_user uuid default null)
+returns table(absence_id bigint, validator_name text, decision text, comment text, decided_at timestamptz, step int, step_label text)
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare uid uuid := auth.uid(); perm boolean := true;
+begin
+  perform public.absence_guard();
+  if p_user is not null and p_user <> uid then
+    perm := public.can_validate_absence(uid, p_user) or public.is_direction_admin() or public.is_secretary_of(uid, p_user);
+    if not perm and not exists (select 1 from public.absences x where x.user_id = p_user and public.absence_in_personnes_step(uid, x)) then
+      raise exception 'Accès refusé.' using errcode = '42501';
+    end if;
+  end if;
+  return query
+    select a.id, r.name, r.decision, case when not a.confidential or a.user_id = uid or public.is_direction_admin() then r.comment end, r.at, r.step, r.step_label
+    from public.absences a cross join lateral public.absence_decision_rows(a) r
+    where a.user_id = coalesce(p_user, uid) and (perm or public.absence_in_personnes_step(uid, a))
+      and (a.status in ('requested', 'rejected') or (a.status = 'approved' and a.change_type is not null))
+      and not (a.status = 'rejected' and a.decided_at < now() - interval '14 days')
+      and a.archived_at is null
+    order by a.id, r.step, r.name;
 end;
 $$;
 
@@ -502,12 +533,12 @@ grant execute on function public.absence_form_data(bigint[]), public.absence_doc
 revoke execute on function
   public.absence_requests_history(uuid, int, text[], text, int, int), public.absence_find(text), public.absence_delete_rejected(bigint),
   public.absence_withdraw(bigint), public.absence_withdraw_for(bigint), public.absence_list(uuid), public.absence_to_validate(),
-  public.absence_rejected_to_manage(), public.absence_export(date, date), public.absence_track(date, date), public.absence_grid(date, date)
+  public.absence_rejected_to_manage(), public.absence_export(date, date), public.absence_track(date, date), public.absence_grid(date, date), public.absence_approvals_all(uuid)
   from public, anon;
 grant execute on function
   public.absence_requests_history(uuid, int, text[], text, int, int), public.absence_find(text), public.absence_delete_rejected(bigint),
   public.absence_withdraw(bigint), public.absence_withdraw_for(bigint), public.absence_list(uuid), public.absence_to_validate(),
-  public.absence_rejected_to_manage(), public.absence_export(date, date), public.absence_track(date, date), public.absence_grid(date, date)
+  public.absence_rejected_to_manage(), public.absence_export(date, date), public.absence_track(date, date), public.absence_grid(date, date), public.absence_approvals_all(uuid)
   to authenticated;
 
 -- absence_purge reste appelable par le rôle service seulement, comme avant

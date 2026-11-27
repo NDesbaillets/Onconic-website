@@ -21,7 +21,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
   <script src="/assets/js/circuit-view.js?v=20261123b"></script>
-  <script src="/assets/js/absences.js?v=20261127a" defer></script>
+  <script src="/assets/js/absences.js?v=20261127b" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -288,6 +288,7 @@
               </div>
             </form>
             <p class="form-msg" id="ab-hist-msg" role="status" aria-live="polite"></p>
+            <p class="muted" id="ab-hist-note" hidden>La recherche par numéro ignore les filtres année, statut et personne.</p>
             <p class="muted" id="ab-hist-count" aria-live="polite"></p>
             <div id="ab-hist-list" class="ab-list"></div>
             <div class="btn-row"><button class="btn btn-outline" type="button" id="ab-hist-more" hidden>Charger la suite</button></div>
