@@ -90,3 +90,12 @@ Les fichiers `supabase/*.sql` sont des bases historiques : ne plus les rejouer (
 - `admin_calendar_save` (quatre types, doublon exact refusé), `admin_calendar_delete` et `admin_calendar_confirm` journalisent ; `admin_calendar_list` change de type de retour (supprimée puis recréée) ; nouvelles `admin_calendar_log_list` et `admin_calendar_impact(début, fin, exclure_id)` (direction et admin seulement).
 - Tests : `calendrier.test.mjs`, `vd-holidays.test.mjs` et `NODE_PATH=/opt/node-tools/node_modules node tests/absences/calendrier-ui.mjs`.
 - Fichier de moins de 25 Ko : un seul lot ; réexécutable (contrainte retrouvée dans le catalogue, `drop function if exists` seulement pour `admin_calendar_list`).
+
+## 202611270004 : lecture des fériés manuels par le planning et Oncoodle (27.11.2026)
+
+- Ordre : appliquer la migration (projet de test d'abord), puis publier le site (`planning.js`, `oncoodle.js`, `oncoodle-core.js`, `vd-holidays.js`). Sans la migration, ces pages affichent un message discret et gardent les fériés calculés.
+- Nouvelle fonction `calendar_feries(p_from, p_to)` (SECURITY DEFINER, STABLE, `authenticated` seulement) : un enregistrement `(day, label)` par jour couvert par une entrée `ferie` de `absence_calendar` ; plage de 800 jours au plus.
+- Droit : tout compte connecté dont le rôle n'est ni nul ni `member` (sans l'outil Absences) ; erreur 42501 sinon. Ne renvoie jamais les autres types d'entrées, ni auteurs, ni identifiants.
+- Aucune table ni autre fonction modifiée ; réexécutable (`create or replace`) ; fichier de moins de 25 Ko, un seul lot.
+- Tests : `feries-lecture.test.mjs` (chaîne de migrations complète, migration appliquée deux fois).
+- Les créneaux Oncoodle déjà créés ne sont pas recalculés ; seules les générations futures sautent les fériés manuels.
