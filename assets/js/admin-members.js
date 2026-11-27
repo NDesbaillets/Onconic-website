@@ -544,6 +544,7 @@
     invite_failed: "L'invitation n'a pas pu être envoyée. Réessayez, ou choisissez le mot de passe provisoire.",
     create_failed: "Le compte n'a pas pu être créé. Réessayez.",
     profile_failed: "Le compte n'a pas pu être configuré et a été retiré. Réessayez.",
+    profile_failed_invite: "Le compte n'a pas pu être configuré et a été retiré. Un e-mail d'invitation a pu partir : son lien ne fonctionnera pas. Réessayez.",
     forbidden: "Vous n'avez pas le droit de créer ce rôle.",
     unauthorized: "Session expirée : reconnectez-vous."
   };
@@ -557,6 +558,13 @@
     }
   }
   const addSay = (text, kind) => { const m = $("am-add-msg"); m.textContent = text; m.className = "form-msg" + (kind ? " " + kind : ""); };
+  let passTimer = null;
+  function hidePass() {
+    clearTimeout(passTimer); passTimer = null;
+    $("am-add-pass-value").textContent = "";
+    $("am-add-pass").hidden = true;
+    $("am-add-pass-copy").textContent = "Copier";
+  }
   const addChosen = (box) => [...box.querySelectorAll("input:checked")].map((i) => i.value);
   function addSync() {
     const role = $("am-add-role").value;
@@ -566,7 +574,7 @@
   async function addSubmit(e) {
     e.preventDefault();
     const btn = $("am-add-submit");
-    $("am-add-pass").hidden = true;
+    hidePass();
     const role = $("am-add-role").value;
     const body = {
       first_name: $("am-add-first").value.trim(), last_name: $("am-add-last").value.trim(), email: $("am-add-email").value.trim(), role,
@@ -585,13 +593,14 @@
     if (res.error) {
       let code = "";
       try { code = (await res.error.context.json()).error; } catch (x) { /* réponse non JSON */ }
+      if (code === "profile_failed" && body.mode === "invite") code = "profile_failed_invite";
       return addSay(ADD_ERRORS[code] || "Création impossible (" + (code || "erreur réseau") + ").", "error");
     }
     const data = res.data || {};
     const who = body.first_name + " " + body.last_name;
     addSay(data.mode === "invite" ? `Compte créé pour ${who} (${ROLE_LABEL[role]}). Une invitation a été envoyée à ${body.email}.` : `Compte créé pour ${who} (${ROLE_LABEL[role]}).`, "ok");
-    if (data.password) { $("am-add-pass-value").textContent = data.password; $("am-add-pass").hidden = false; }
     $("am-add-form").reset(); addSync();
+    if (data.password) { $("am-add-pass-value").textContent = data.password; $("am-add-pass").hidden = false; passTimer = setTimeout(hidePass, 5 * 60 * 1000); }
     await refresh();
   }
   async function initAdd() {
@@ -609,6 +618,9 @@
     sel.addEventListener("change", addSync);
     addSync();
     $("am-add-form").addEventListener("submit", addSubmit);
+    $("am-add-form").addEventListener("reset", hidePass);
+    det.addEventListener("toggle", () => { if (!det.open) hidePass(); });
+    $("am-add-pass-hide").addEventListener("click", hidePass);
     $("am-add-pass-copy").addEventListener("click", async (e) => {
       try { await navigator.clipboard.writeText($("am-add-pass-value").textContent); e.target.textContent = "Copié"; } catch (x) { e.target.textContent = "Copie impossible"; }
     });

@@ -112,6 +112,30 @@ try {
   assert.equal(await p.locator('#am-add-first').inputValue(), '', 'formulaire vidé');
   ok('création avec mot de passe provisoire : envoi nettoyé, mot de passe affiché et copiable, liste rechargée');
 
+  // « Masquer » efface le mot de passe du DOM
+  await p.click('#am-add-pass-hide');
+  assert.equal(await p.locator('#am-add-pass').isVisible(), false);
+  assert.equal(await p.locator('#am-add-pass-value').textContent(), '');
+  // Repli de la section : efface aussi
+  await p.fill('#am-add-first', 'Zoé'); await p.fill('#am-add-last', 'Test'); await p.fill('#am-add-email', 'zoe.test@example.com');
+  await p.selectOption('#am-add-role', 'nurse');
+  await p.locator('input[name="am-add-mode"][value="password"]').check();
+  await p.click('#am-add-submit');
+  await p.locator('#am-add-pass').waitFor({ state: 'visible' });
+  await p.locator('#am-add > summary').click();
+  await p.waitForFunction(() => document.getElementById('am-add-pass-value').textContent === '');
+  await p.locator('#am-add > summary').click();
+  // Délai de 5 minutes : horloge accélérée
+  await p.clock.install();
+  await p.fill('#am-add-first', 'Yan'); await p.fill('#am-add-last', 'Test'); await p.fill('#am-add-email', 'yan.test@example.com');
+  await p.locator('input[name="am-add-mode"][value="password"]').check();
+  await p.click('#am-add-submit');
+  await p.locator('#am-add-pass').waitFor({ state: 'visible' });
+  await p.clock.fastForward(5 * 60 * 1000 + 1000);
+  assert.equal(await p.locator('#am-add-pass').isVisible(), false);
+  assert.equal(await p.locator('#am-add-pass-value').textContent(), '', 'délai : mot de passe effacé');
+  ok('mot de passe provisoire effacé par « Masquer », au repli et après 5 minutes');
+
   // Le mot de passe n'est plus affiché à la création suivante (invitation)
   await p.fill('#am-add-first', 'Omar'); await p.fill('#am-add-last', 'Test'); await p.fill('#am-add-email', 'omar.test@example.com');
   await p.selectOption('#am-add-role', 'direction');
@@ -127,6 +151,11 @@ try {
   await p.fill('#am-add-first', 'Eve'); await p.fill('#am-add-last', 'Test'); await p.fill('#am-add-email', 'eve.test@example.com');
   await p.click('#am-add-submit');
   await p.locator('#am-add-msg.error', { hasText: 'a été retiré' }).waitFor();
+  assert.match(await p.locator('#am-add-msg').innerText(), /e-mail d'invitation a pu partir/, 'mode invitation : mention du lien inutilisable');
+  await p.locator('input[name="am-add-mode"][value="password"]').check();
+  await p.click('#am-add-submit');
+  await p.locator('#am-add-msg.error', { hasText: 'a été retiré' }).waitFor();
+  assert.ok(!/invitation/i.test(await p.locator('#am-add-msg').innerText()), 'mode mot de passe : aucune mention');
   await p.evaluate(() => { window.__FAIL = 'user_exists'; });
   await p.click('#am-add-submit');
   await p.locator('#am-add-msg.error', { hasText: 'Un compte existe déjà' }).waitFor();

@@ -17,7 +17,9 @@ do $$
 declare n text; d text;
 begin
   select conname, pg_get_constraintdef(oid) into n, d from pg_constraint
-   where conrelid = 'public.temp_account_log'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%lead_off%' limit 1;
+   where conrelid = 'public.temp_account_log'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%lead_off%'
+     and conkey = array[(select attnum from pg_attribute where attrelid = 'public.temp_account_log'::regclass and attname = 'action')]
+   limit 1;
   if n is null then
     alter table public.temp_account_log add constraint temp_account_log_action_check check (action in
       ('create', 'extend', 'end', 'expire', 'set_until', 'lead_on', 'lead_off', 'member_create'));

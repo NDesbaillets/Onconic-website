@@ -111,7 +111,8 @@ Deno.serve(async (req) => {
   });
   if (applyError) {
     console.error("member_create_apply failed", applyError.code);
-    await admin.auth.admin.deleteUser(userId);
+    const { error: delError } = await admin.auth.admin.deleteUser(userId);
+    if (delError) console.error("cleanup deleteUser failed", delError.code ?? delError.status);
     return json(req, 500, { error: "profile_failed" });
   }
 

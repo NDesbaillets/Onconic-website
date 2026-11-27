@@ -6,14 +6,14 @@ import ts from 'typescript';
 
 const calls = { rights: [], create: [], invite: [], apply: [], del: [] };
 const logs = [];
-let allowed = true, rightsError = null, applyError = null, authError = null, user = { id: 'caller-1' };
+let delError = null, allowed = true, rightsError = null, applyError = null, authError = null, user = { id: 'caller-1' };
 globalThis.cmAdmin = {
   auth: {
     getUser: async () => ({ data: { user } }),
     admin: {
       createUser: async (a) => { calls.create.push(a); return authError ? { data: {}, error: authError } : { data: { user: { id: 'new-1' } }, error: null }; },
       inviteUserByEmail: async (e, o) => { calls.invite.push([e, o]); return authError ? { data: {}, error: authError } : { data: { user: { id: 'new-2' } }, error: null }; },
-      deleteUser: async (id) => { calls.del.push(id); return { error: null }; },
+      deleteUser: async (id) => { calls.del.push(id); return { error: delError }; },
     },
   },
   rpc: async (name, args) => { assert.equal(name, 'member_create_apply'); calls.apply.push(args); return { error: applyError }; },
@@ -32,7 +32,7 @@ const post = (body, headers = {}) => globalThis.cmHandler(new Request('https://e
   method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer jwt', origin: 'https://onconic.ch', ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body) }));
 const reset = () => {
   for (const k of Object.keys(calls)) calls[k].length = 0;
-  logs.length = 0; allowed = true; rightsError = null; applyError = null; authError = null; user = { id: 'caller-1' };
+  logs.length = 0; delError = null; allowed = true; rightsError = null; applyError = null; authError = null; user = { id: 'caller-1' };
 };
 
 test('appelant sans session valide : 401, aucun compte créé', async () => {
@@ -150,5 +150,15 @@ test('journaux : ni mot de passe ni adresse ni nom, y compris en cas d\'échec',
   const all = logs.join('\n');
   assert.ok(ok.password);
   assert.ok(!all.includes(ok.password));
+  assert.ok(!/alice|martin|example\.com/i.test(all), all);
+});
+
+test('échec de la suppression du compte après profile_failed : journalisé sans donnée personnelle, réponse inchangée', async () => {
+  reset(); applyError = { code: 'P0001', message: 'Alice.Martin@Example.com' }; delError = { code: 'unexpected_failure', status: 500, message: 'alice.martin@example.com' };
+  const r = await post(base);
+  assert.equal(r.status, 500); assert.equal((await r.json()).error, 'profile_failed');
+  assert.deepEqual(calls.del, ['new-1']);
+  const all = logs.join('\n');
+  assert.match(all, /cleanup deleteUser failed unexpected_failure/);
   assert.ok(!/alice|martin|example\.com/i.test(all), all);
 });
