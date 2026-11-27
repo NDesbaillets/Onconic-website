@@ -78,7 +78,13 @@
     }
   }
 
-  const pendingFirst = (a, b) => (b.role === "member") - (a.role === "member") || nameOf(a).localeCompare(nameOf(b), "fr");
+  // Les « en attente » restent en tête, le reste suit le tri choisi (nom de famille par défaut, module name-sort.js)
+  const SORT_MODES = ["family", "first", "role", "clinic"];
+  const ROLE_RANK = ["cadre", "cdc", "clinician", "pharmacist", "nurse", "assistant", "direction", "admin"];
+  const S = () => window.OnconicSort;
+  const personOf = (r) => ({ id: r.id, first: r.first_name, last: r.last_name, name: nameOf(r), role: r.role, clinics: r.clinics });
+  const pendingFirst = (a, b) => (b.role === "member") - (a.role === "member")
+    || (S() ? S().compareNames(personOf(a), personOf(b), S().getMode("membres", SORT_MODES), { roleOrder: ROLE_RANK }) : nameOf(a).localeCompare(nameOf(b), "fr"));
   function render() {
     const q = norm($("am-q").value);
     const role = $("am-role").value;
@@ -634,6 +640,7 @@
     initAdd();
     $("am-q").addEventListener("input", render);
     $("am-role").addEventListener("change", render);
+    if (S() && $("am-sort-slot")) $("am-sort-slot").replaceChildren(S().control("membres", { modes: SORT_MODES, onChange: render }));
     $("am-close").addEventListener("click", closeDetail);
     $("am-back").addEventListener("click", closeDetail);
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.sel && !document.querySelector("dialog[open]")) closeDetail(); });
