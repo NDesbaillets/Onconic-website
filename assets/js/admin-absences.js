@@ -44,6 +44,11 @@
     state.sans = Number(data.cadres_sans_validation) || 0;
   }
 
+  // Tri des cadres (module name-sort.js) : nom de famille par défaut, choix mémorisé
+  const SORT_MODES = ["family", "first"];
+  const sortedCadres = () => (window.OnconicSort
+    ? window.OnconicSort.sortPeople(state.cadres, { mode: window.OnconicSort.getMode("admin-validateurs", SORT_MODES) })
+    : state.cadres);
   function card(c) {
     const root = el("article", "card aa-card");
     const head = el("div", "aa-head");
@@ -73,7 +78,7 @@
         ? "Aucun médecin cadre n'est validateur des absences. Cochez « Validateur des absences » sur sa fiche dans « Membres et accès »."
         : "Aucun membre n'a encore le rôle Médecin cadre. Attribuez-le dans « Membres et accès »."));
     }
-    for (const cadre of state.cadres) {
+    for (const cadre of sortedCadres()) {
       const lab = el("label", "cg-check am-tool");
       const cb = el("input");
       cb.type = "checkbox"; cb.checked = chosen.has(cadre.id);
@@ -189,7 +194,9 @@
     try { await load(); } catch (e) { return ($("ug-status").textContent = "Chargement impossible : " + e.message); }
     $("ug-status").hidden = true;
     $("aa-tool").hidden = false;
-    $("aa-list").replaceChildren(...state.clinics.map(card));
+    const drawList = () => $("aa-list").replaceChildren(...state.clinics.map(card));
+    if (window.OnconicSort && $("aa-sort-slot")) $("aa-sort-slot").replaceChildren(window.OnconicSort.control("admin-validateurs", { modes: SORT_MODES, onChange: drawList }));
+    drawList();
     await initCal();
     await notifications();
   })();

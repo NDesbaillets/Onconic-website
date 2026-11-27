@@ -48,6 +48,40 @@ window.supabase = { createClient: () => ({
   rpc: async (name) => ({ data: name === 'current_role_name' ? 'admin' : name === 'admin_members' ? structuredClone(rows) : (name === 'admin_blocs_list' ? { blocs: [] } : []), error: null }) }) };
 window.confirm = () => true;`;
 
+
+const OC_MOCK = `
+const people = [
+  { id: 'p1', name: 'Alice Zed', role: 'clinician', clinics: ['Thoracique'] },
+  { id: 'p2', name: 'Bob Blanc', role: 'cadre', clinics: ['Thoracique'] },
+  { id: 'p3', name: 'Chloé de la Cruz', role: 'nurse', clinics: ['Thoracique'] },
+  { id: 'p4', name: 'Zoé Abel', role: 'clinician', clinics: ['Thoracique'] }];
+const detail = { poll: { id: 1, kind: 'rsvp', status: 'closed', locked: true, is_creator: false, creator: 'Org Fictif', title: 'Soirée fictive', visibility: 'all', final_option_id: 1, deadline: null, description: '', location: '' },
+  counts: { responded: 4, invited: 4 }, me: null,
+  options: [{ id: 1, day: '2026-12-01', start: null, end: null, yes: 4, maybe: 0, no: 0 }],
+  invitees: people.map((x) => ({ id: x.id, name: x.name, votes: { 1: 'yes' }, required: false, responded: true, comment: '' })) };
+const rpc = async (name) => {
+  const ok = (data) => ({ data, error: null });
+  switch (name) {
+    case 'has_tool': return ok(true);
+    case 'oncoodle_people': return ok(people);
+    case 'oncoodle_get': return ok(detail);
+    case 'oncoodle_list': case 'oncoodle_calendar_requests': return ok([]);
+    case 'oncoodle_prefs': return ok({ email: true });
+    default: return ok(null);
+  }
+};
+window.supabase = { createClient: () => ({
+  auth: { getSession: async () => ({ data: { session: { user: { id: 'me' } } } }), signOut: async () => ({ error: null }) },
+  rpc, functions: { invoke: async () => ({ data: null, error: null }) },
+  from: () => { const q = { select: () => q, eq: () => q, single: async () => ({ data: { role: 'clinician' } }) }; return q; } }) };`;
+
+const AA_MOCK = `
+const cadres = [{ id: 'c1', name: 'Alice Zed', role: 'cadre' }, { id: 'c2', name: 'Bob Blanc', role: 'cadre' }, { id: 'c3', name: 'Zoé Abel', role: 'cadre' }];
+window.supabase = { createClient: () => ({
+  auth: { getSession: async () => ({ data: { session: { user: { id: 'me' } } } }), signOut: async () => ({ error: null }) },
+  rpc: async (name) => ({ data: name === 'current_role_name' ? 'admin' : name === 'admin_absence_config' ? { clinics: [{ clinic: 'Thoracique', max_absent: 2, members: 3, validators: [] }], cadres, cadres_sans_validation: 0 } : [], error: null }),
+  from: () => { const q = { select: () => q, eq: () => q, order: () => q, limit: () => q, then: (r) => Promise.resolve({ data: [], error: null }).then(r) }; return q; } }) };`;
+
 const browser = await chromium.launch({ args: ['--no-sandbox'] });
 const errors = [];
 // Un contexte par scénario ; les rechargements d'un même contexte conservent localStorage
@@ -120,6 +154,37 @@ try {
   assert.equal((await names())[1], 'Bob Blanc', 'cadre avant assistant, infirmier et administrateur');
   ok('membres : en attente en tête, le reste suit le tri choisi');
   await mctx.close();
+
+  // ===== Oncoodle : réponses, suggestions =====
+  const octx = await newCtx(OC_MOCK);
+  const o = await openPage(octx, '/app/oncoodle.html#p=1', '#oc-detail .oc-head');
+  const line = async () => (await o.locator('#oc-detail p', { hasText: /^Participent \(/ }).innerText());
+  assert.equal(await o.locator('#oc-detail select').inputValue(), 'family');
+  assert.match(await line(), /Zoé Abel, Bob Blanc, Chloé de la Cruz, Alice Zed/);
+  await o.locator('#oc-detail select').selectOption('first');
+  assert.match(await line(), /Alice Zed, Bob Blanc, Chloé de la Cruz, Zoé Abel/);
+  ok('oncoodle : réponses triées par nom de famille puis par prénom');
+  await o.locator('#oc-back').click();
+  await o.locator('#oc-new').click();
+  await o.locator('#oc-pick-in').fill('th');
+  const sugg = () => o.locator('#oc-pick-list li button').evaluateAll((n) => n.map((x) => x.textContent.split('  ')[0]));
+  assert.deepEqual(await sugg(), ['Zoé Abel', 'Bob Blanc', 'Chloé de la Cruz', 'Alice Zed']);
+  await o.locator('#oc-sort-slot select').selectOption('role');
+  await o.locator('#oc-pick-in').fill('');
+  await o.locator('#oc-pick-in').fill('th');
+  assert.deepEqual(await sugg(), ['Zoé Abel', 'Alice Zed', 'Bob Blanc', 'Chloé de la Cruz'], 'rôle : médecin assistant, cadre, infirmière');
+  ok('oncoodle : suggestions de destinataires triées, sélecteur dans le formulaire');
+  await octx.close();
+
+  // ===== Absences, administration : validateurs =====
+  const actx = await newCtx(AA_MOCK);
+  const a = await openPage(actx, '/admin/absences.html', '#aa-tool');
+  const cad = () => a.locator('.aa-cadres label span').allTextContents();
+  assert.deepEqual(await cad(), ['Zoé Abel', 'Bob Blanc', 'Alice Zed']);
+  await a.locator('#aa-sort-slot select').selectOption('first');
+  assert.deepEqual(await cad(), ['Alice Zed', 'Bob Blanc', 'Zoé Abel']);
+  ok('administration des absences : cadres triés par nom de famille puis par prénom');
+  await actx.close();
   assert.deepEqual(errors, [], 'aucune erreur de console');
   ok('aucune erreur de page');
 } finally { await browser.close(); server.close(); }
