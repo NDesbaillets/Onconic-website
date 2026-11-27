@@ -47,7 +47,7 @@ const INVENTAIRE = [
   { fichier: 'oncoodle.js', liste: 'Oncoodle : suggestions de destinataires', source: /"oncoodle_people"/, tri: /sortPeople\(hits, "oncoodle-destinataires"/ },
   { fichier: 'oncoodle.js', liste: 'Oncoodle : destinataires calculés', source: /"oncoodle_audience_preview"/, tri: /sortPeople\(f\.members, "oncoodle-destinataires"/ },
   { fichier: 'oncoodle.js', liste: 'Oncoodle : destinataires actuels', source: /"oncoodle_get"/, tri: /sortPeople\(f\.current, "oncoodle-destinataires"/ },
-  { fichier: 'planning.js', liste: 'Planning administratif : personnel', source: /rpc\("plan_grid"/, tri: /sortStaff\(st\.staff, mode \|\| sortMode\(\)\)/ },
+  { fichier: 'planning.js', liste: 'Planning administratif : personnel (nom, prénom ; « Ordre du tableur » = ordre du serveur, géré par sheetOrder)', source: /rpc\("plan_grid"/, tri: /window\.OnconicSort \? window\.OnconicSort\.sortPeople\(list, \{ mode \}\)/ },
   { fichier: 'planning.js', liste: 'Planning administratif : compte Onconic d\'une ligne', source: /rpc\("plan_accounts"\)/, tri: /sortPeople\(await accounts\(\), \{ mode: "family" \}\)/ },
   { fichier: 'temporaires.js', liste: 'Comptes temporaires', source: /rpc\("temp_accounts"\)/, tri: /sortPeople\(list, \{ mode: "family" \}\)/ },
   { fichier: 'medletters.js', liste: 'Lettres médicales : accès « médecin plus »', source: /rpc\("medletters_members"\)/, tri: /sortPeople\(data \|\| \[\], \{ mode: "family" \}\)/ },

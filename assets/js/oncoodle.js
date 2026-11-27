@@ -49,6 +49,26 @@
     if (error) throw new Error(error.code === "42501" ? "Accès refusé." : error.message);
     return data;
   }
+  // Fériés ajoutés à la main par la direction (calendar_feries) : lus au démarrage sur trois ans, puis à la demande quand une date sort de
+  // la plage lue. Les fériés vaudois restent calculés ; si la lecture échoue, la page reste utilisable avec ceux-là et un message le signale.
+  const feries = window.OnconicHolidays.createExtra(async (from, to) => {
+    const { data, error } = await sb.rpc("calendar_feries", { p_from: from, p_to: to });
+    if (error) throw error;
+    return data || [];
+  });
+  const holidayOf = (day) => C.holidayOf(day, feries.map);
+  const FERIES_WARN = "Les fériés ajoutés par la direction n'ont pas pu être chargés : les jours fériés affichés peuvent être incomplets.";
+  function feriesWarn(on) {
+    let w = $("oc-feries-warn");
+    if (!on) { if (w) w.remove(); return; }
+    if (!w) { w = el("p", "muted oc-feries-warn", FERIES_WARN); w.id = "oc-feries-warn"; w.setAttribute("role", "status"); $("oc-tool").prepend(w); }
+  }
+  // Charge les fériés manuels de [from, to] (AAAA-MM-JJ) s'ils manquent ; ne lève jamais d'exception ; renvoie false si la lecture a échoué
+  async function ensureFeries(from, to, pad) {
+    const ok = await feries.ensure(from, to, { pad: pad || 0 });
+    feriesWarn(!ok);
+    return ok;
+  }
   // Envoi immédiat des messages en file (sinon la file est vidée toutes les 5 minutes) ; jamais bloquant
   function kick() { try { sb.functions.invoke("notify-oncoodle", { body: {} }).catch(() => {}); } catch (e) { /* facultatif */ } }
 
@@ -166,13 +186,15 @@
     try { state.detail = await call("oncoodle_get", { p_poll: id }); }
     catch (e) { box.replaceChildren(el("p", "form-msg error", e.message)); return; }
     const d = state.detail;
+    const days = (d.options || []).map((o) => o.day).sort();
+    if (days.length) await ensureFeries(days[0], days[days.length - 1], 30);
     state.answers = Object.assign({}, d.me ? d.me.votes : {});
     state.comment = d.me && d.me.comment ? d.me.comment : "";
     renderDetail(note);
   }
   function cond(o, d) {
     const out = [];
-    const hol = C.holidayOf(o.day), wd = C.weekday(o.day);
+    const hol = holidayOf(o.day), wd = C.weekday(o.day);
     if (hol) out.push(["Jour férié : " + hol, "warn"]);
     else if (wd === 0 || wd === 6) out.push(["Week-end", "warn"]);
     if (o.mine_absent) out.push([o.mine_absent === "approved" ? "Vous êtes absent·e ce jour (Absences)" : "Vous avez une demande d'absence ce jour (en attente)", "warn"]);
@@ -586,7 +608,7 @@
     for (const s of sorted) {
       const gone = s.id && f.removeOptions.has(s.id);
       const li = el("li", gone ? "gone" : "");
-      li.append(el("span", null, `${C.fmtLong(s.day)}, ${C.timeRange(s)}${C.holidayOf(s.day) ? "  (jour férié)" : ""}${s.id ? "" : "  · nouveau"}`));
+      li.append(el("span", null, `${C.fmtLong(s.day)}, ${C.timeRange(s)}${holidayOf(s.day) ? "  (jour férié)" : ""}${s.id ? "" : "  · nouveau"}`));
       const x = button(gone ? "Rétablir" : "×", "oc-x", () => {
         if (s.id) { gone ? f.removeOptions.delete(s.id) : f.removeOptions.add(s.id); }
         else f.slots.splice(f.slots.indexOf(s), 1);
@@ -606,18 +628,23 @@
     else f.slots = C.mergeSlots(f.slots, list, 40 + f.removeOptions.size);
     renderSlots();
   }
-  function onGenerate() {
+  async function onGenerate() {
     const f = state.form;
     const starts = $("g-starts").value.split(/[,;\s]+/).filter(Boolean);
     if (starts.some((s) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(s))) return say("g-msg", "Heures au format 12:00, 12:30.", "error");
-    const g = C.generateSlots({ from: $("g-from").value, to: $("g-to").value, weekdays: [...f.genDays], starts, duration: Number($("g-dur").value), skipHolidays: $("g-holidays").checked, today: todayIso(), max: 40 });
+    const skip = $("g-holidays").checked, from = $("g-from").value, to = $("g-to").value;
+    // Les fériés manuels de la période sont lus avant de générer ; en cas d'échec on avertit seulement quand on les saute
+    const loaded = !from || !to || to < from || feries.has(from, to) ? !feries.failed : await ensureFeries(from, to);
+    const incomplete = skip && !loaded ? " Attention : la liste des fériés ajoutés par la direction n'a pas pu être chargée, les jours fériés peuvent être incomplets." : "";
+    const g = C.generateSlots({ from, to, weekdays: [...f.genDays], starts, duration: Number($("g-dur").value), skipHolidays: skip, extraHolidays: feries.map, today: todayIso(), max: 40 });
     if (g.error) return say("g-msg", g.error, "error");
-    if (!g.slots.length) return say("g-msg", "Aucun créneau ne correspond à ces critères.", "error");
+    if (!g.slots.length) return say("g-msg", "Aucun créneau ne correspond à ces critères." + incomplete, "error");
     const before = f.slots.length;
     addSlots(g.slots);
-    say("g-msg", `${plural(f.slots.length - before, "créneau ajouté", "créneaux ajoutés")}${g.truncated ? " (limite de 40 atteinte)" : ""}.`, "ok");
+    say("g-msg", `${plural(f.slots.length - before, "créneau ajouté", "créneaux ajoutés")}${g.truncated ? " (limite de 40 atteinte)" : ""}.${incomplete}`, incomplete ? "error" : "ok");
   }
-  function onManualAdd() {
+  async function onManualAdd() {
+    await ensureFeries($("m-day").value, $("m-day").value, 30);
     const day = $("m-day").value, st = $("m-start").value, en = $("m-end").value;
     if (!day) return say("oc-slots-msg", "Choisissez un jour.", "error");
     if (day < todayIso()) return say("oc-slots-msg", "Un créneau ne peut pas être dans le passé.", "error");
@@ -837,6 +864,8 @@
     const { data: allowed } = await sb.rpc("has_tool", { p_tool: "oncoodle" });
     if (state.role !== "admin" && allowed !== true) return say("oc-status", "Cet espace est réservé aux membres validés de The Hive.");
     try { state.people = (await call("oncoodle_people")) || []; } catch (e) { return say("oc-status", "Chargement impossible : " + e.message, "error"); }
+    const t0 = todayIso();
+    await ensureFeries(C.addDays(t0, -366), C.addDays(t0, 1100));
     fillTemplates();
     picker("oc-pick-in", "oc-pick-list", "users");
     picker("oc-ex-in", "oc-ex-list", "excl");

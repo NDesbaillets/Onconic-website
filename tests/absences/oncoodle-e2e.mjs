@@ -87,6 +87,7 @@ try {
   assert.equal(await pa.inputValue('input[name=title]'), 'Tumor board');
   await pa.fill('#g-from', '2026-11-16'); await pa.fill('#g-to', '2026-12-04');
   await pa.click('#g-run');
+  await pa.locator('#g-msg', { hasText: /créneaux? ajoutés?/ }).waitFor(); // la génération lit d'abord les fériés ajoutés par la direction
   assert.match(await text(pa, '#g-msg'), /créneaux? ajoutés?/);
   const nSlots = await pa.locator('#oc-slots li').count();
   assert.ok(nSlots >= 6, `créneaux générés : ${nSlots}`);

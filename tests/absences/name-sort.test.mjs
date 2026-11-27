@@ -98,6 +98,24 @@ test('préférence : stockage, valeur corrompue, stockage indisponible', () => {
   assert.equal(S.getMode('y'), 'family', 'aucun localStorage du tout');
 });
 
+test('modes propres à une liste : acceptés seulement quand l\'appelant les déclare, jamais pour les autres listes', () => {
+  const store = {};
+  globalThis.localStorage = fakeStorage(store);
+  try {
+    assert.equal(S.setMode('p', 'sheet'), false, 'inconnu sans déclaration');
+    assert.equal(S.setMode('p', 'sheet', ['sheet']), true);
+    assert.equal(store['onconic.sort.p'], 'sheet');
+    assert.equal(S.getMode('p', ['family', 'first', 'sheet'], ['sheet']), 'sheet');
+    assert.equal(S.getMode('p', ['family', 'first', 'sheet']), 'family', 'non déclaré : retour au nom de famille');
+    assert.equal(S.getMode('p', ['family', 'first'], ['sheet']), 'family', 'non proposé par la liste');
+    assert.equal(S.getMode('p'), 'family', 'liste standard sans déclaration');
+    assert.equal(S.setMode('p', 'nimporte', ['sheet']), false);
+    // un mode inconnu du tri retombe sur le nom de famille
+    const l = [{ id: 1, first: 'Zoé', last: 'Abel' }, { id: 2, first: 'Alice', last: 'Zed' }];
+    assert.deepEqual(S.sortPeople(l, { mode: 'sheet' }).map((x) => x.id), [1, 2]);
+  } finally { delete globalThis.localStorage; }
+});
+
 test('le module ne passe jamais par innerHTML ni par un style en ligne', () => {
   const src = readFileSync(new URL('../../assets/js/name-sort.js', import.meta.url), 'utf8');
   assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write|\.style\b|setAttribute\(\s*["']style/.test(src));

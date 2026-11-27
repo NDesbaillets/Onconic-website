@@ -1,10 +1,12 @@
 // Oncoodle : logique pure (dates, jours fériés vaudois, génération et classement des créneaux, fichier agenda, modèles).
 // Chargé par la page (window.OncoodleCore) et par les tests Node (module.exports). Aucun accès au DOM ni au réseau.
 (function (root, factory) {
-  const api = factory();
+  const api = factory(root);
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.OncoodleCore = api;
-})(typeof self !== "undefined" ? self : this, function () {
+})(typeof self !== "undefined" ? self : this, function (root) {
+  // Calcul des fériés vaudois : assets/js/vd-holidays.js (window.OnconicHolidays dans le navigateur, require sous Node pour les tests)
+  const VD = typeof module === "object" && module.exports ? require("./vd-holidays.js") : root.OnconicHolidays;
   const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
   const DAYS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
 
@@ -21,32 +23,13 @@
   const toMin = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
   const fromMin = (n) => `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
 
-  // ----- Jours fériés vaudois (Pâques par l'algorithme de Meeus), identiques à ceux de la page Absences -----
-  const cache = new Map();
-  function easter(y) {
-    const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
-    const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
-    const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
-    const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
-    return new Date(Date.UTC(y, month - 1, day));
-  }
-  function holidays(y) {
-    if (cache.has(y)) return cache.get(y);
-    const map = new Map();
-    const at = (m, d) => new Date(Date.UTC(y, m, d));
-    const off = (n) => { const d = easter(y); d.setUTCDate(d.getUTCDate() + n); return d; };
-    const sep1 = at(8, 1).getUTCDay();
-    const firstSunday = 1 + ((7 - sep1) % 7);
-    [[at(0, 1), "Nouvel An"], [at(0, 2), "2 janvier"], [off(-2), "Vendredi saint"], [off(1), "Lundi de Pâques"], [off(39), "Ascension"],
-      [off(50), "Lundi de Pentecôte"], [at(7, 1), "Fête nationale"], [at(8, firstSunday + 15), "Lundi du Jeûne fédéral"], [at(11, 25), "Noël"]]
-      .forEach(([d, l]) => map.set(iso(d), l));
-    cache.set(y, map);
-    return map;
-  }
-  const holidayOf = (day) => holidays(Number(day.slice(0, 4))).get(day) || null;
+  // ----- Jours fériés vaudois : calcul du module partagé vd-holidays.js, identique à celui de la page Absences -----
+  // Les fériés ajoutés à la main par la direction arrivent en paramètre (extra : Map date -> intitulé, ou null), jamais par un état global.
+  const holidays = (y) => VD.holidays(y);
+  const holidayOf = (day, extra) => VD.holidayWith(day, extra) || null;
 
   // ----- Générateur de créneaux -----
-  // { from, to, weekdays: [1..5], starts: ["12:00"], duration: 60 (minutes, 0 = journée entière), skipHolidays, today, max }
+  // { from, to, weekdays: [1..5], starts: ["12:00"], duration: 60 (minutes, 0 = journée entière), skipHolidays, extraHolidays (Map date -> intitulé), today, max }
   function generateSlots(o) {
     const out = [];
     const max = o.max || 40;
@@ -58,7 +41,7 @@
     for (let d = o.from; d <= o.to; d = addDays(d, 1)) {
       if (o.today && d < o.today) continue;
       if (!wd.has(weekday(d))) continue;
-      if (o.skipHolidays !== false && holidayOf(d)) continue;
+      if (o.skipHolidays !== false && holidayOf(d, o.extraHolidays)) continue;
       for (const s of starts) {
         if (out.length >= max) { truncated = true; break; }
         if (!s || !o.duration) out.push({ day: d, start: null, end: null });

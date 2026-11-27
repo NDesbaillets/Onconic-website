@@ -28,26 +28,31 @@
   const workdays = (from, to) => { const out = []; for (let d = new Date(from); d <= to; d = addDays(d, 1)) if (d.getDay() % 6) out.push(new Date(d)); return out; };
   const slot = (d, h) => (d.getDay() - 1) * 2 + h;
 
-  // Jours fériés vaudois, même calcul que l'app Absences
-  const holCache = new Map();
-  function easter(y) {
-    const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
-    const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
-    const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
-    const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
-    return new Date(y, month - 1, day, 12);
+  // Jours fériés : calcul vaudois du module partagé vd-holidays.js (même que l'app Absences) et fériés ajoutés à la main par la direction
+  // (calendar_feries, lus au démarrage sur trois ans puis à la demande quand la fenêtre affichée en sort). Si la lecture échoue, la page reste
+  // utilisable avec les seuls fériés calculés et un message discret le signale.
+  const VD = window.OnconicHolidays;
+  const feries = VD.createExtra(async (from, to) => {
+    const { data, error } = await sb.rpc("calendar_feries", { p_from: from, p_to: to });
+    if (error) throw error;
+    return data || [];
+  });
+  const holidayOf = (d) => feries.holidayOf(iso(d));
+  function feriesWarn(on) {
+    let w = $("pl-feries-warn");
+    if (!on) { if (w) w.remove(); return; }
+    if (!w) {
+      w = el("p", "muted pl-feries-warn", "Les fériés ajoutés par la direction n'ont pas pu être chargés : les jours fériés affichés peuvent être incomplets.");
+      w.id = "pl-feries-warn"; w.setAttribute("role", "status");
+      $("pl-tool").prepend(w);
+    }
   }
-  function holidays(y) {
-    if (holCache.has(y)) return holCache.get(y);
-    const map = new Map(), at = (m, d) => new Date(y, m, d, 12), off = (n) => addDays(easter(y), n);
-    const firstSunday = 1 + ((7 - at(8, 1).getDay()) % 7);
-    [[at(0, 1), "Nouvel An"], [at(0, 2), "2 janvier"], [off(-2), "Vendredi saint"], [off(1), "Lundi de Pâques"], [off(39), "Ascension"],
-      [off(50), "Lundi de Pentecôte"], [at(7, 1), "Fête nationale"], [at(8, firstSunday + 15), "Lundi du Jeûne fédéral"], [at(11, 25), "Noël"]]
-      .forEach(([d, l]) => map.set(iso(d), l));
-    holCache.set(y, map);
-    return map;
+  // Charge les fériés manuels de la plage [from, to] (Date) si elle sort de ce qui est déjà lu ; ne lève jamais d'exception
+  async function ensureFeries(from, to, pad) {
+    const ok = await feries.ensure(iso(from), iso(to), { pad: pad || 0 });
+    feriesWarn(!ok);
+    return ok;
   }
-  const holidayOf = (d) => holidays(d.getFullYear()).get(iso(d));
 
   // ----- État -----
   const st = {
@@ -79,7 +84,8 @@
     st.by = Object.fromEntries(st.codes.map((c) => [c.code, c]));
     st.coverage = g.coverage || [];
     const known = new Map(st.staff.map((s) => [s.id, s]));
-    for (const s of g.staff || []) known.set(s.id, s);
+    // _ord : rang reçu du serveur (ordre du tableur). Un chargement complet le renumérote ; une plage ajoutée garde le rang déjà connu
+    (g.staff || []).forEach((s, i) => { s._ord = replaceFrom || !known.has(s.id) ? i : known.get(s.id)._ord; known.set(s.id, s); });
     st.staff = [...known.values()];
     if (replaceFrom) {
       for (const k of [...st.cells.keys()]) { const d = k.split("|")[1]; if (d >= replaceFrom && d <= replaceTo) st.cells.delete(k); }
@@ -93,7 +99,7 @@
     const ds = days();
     const from = ds[0], to = ds[ds.length - 1];
     try {
-      const g = await fetchGrid(from, to);
+      const [g] = await Promise.all([fetchGrid(from, to), ensureFeries(from, to, 366)]);
       st.staff = [];
       absorb(g, iso(from), iso(to));
       st.loaded = [iso(from), iso(to)];
@@ -111,9 +117,11 @@
 
   // ----- Grille -----
   // Toute liste de personnes passe par OnconicSort après réception (nom de famille par défaut, au choix : prénom) ; sans le module, l'ordre reçu
-  const SORT_MODES = ["family", "first"];
-  const sortMode = () => (window.OnconicSort ? window.OnconicSort.getMode("planning-personnel", SORT_MODES) : "family");
-  const sortStaff = (list, mode) => (window.OnconicSort ? window.OnconicSort.sortPeople(list, { mode }) : Array.from(list));
+  // « sheet » : ordre du tableur (champ « Ordre dans l'export Excel », celui du serveur) ; mode propre à cette liste
+  const SORT_MODES = ["family", "first", "sheet"], SORT_EXTRA = { sheet: "Ordre du tableur" };
+  const sortMode = () => (window.OnconicSort ? window.OnconicSort.getMode("planning-personnel", SORT_MODES, Object.keys(SORT_EXTRA)) : "family");
+  const sheetOrder = (list) => Array.from(list).sort((a, b) => (a._ord == null ? 1e9 : a._ord) - (b._ord == null ? 1e9 : b._ord) || a.id - b.id);
+  const sortStaff = (list, mode) => (mode === "sheet" ? sheetOrder(list) : window.OnconicSort ? window.OnconicSort.sortPeople(list, { mode }) : Array.from(list));
   function visible(mode) {
     const team = $("pl-team").value, q = $("pl-q").value.trim().toLowerCase();
     const [a, b] = st.loaded;
@@ -417,6 +425,7 @@
   // Changements calculés sur une plage qui peut dépasser la fenêtre affichée : les cases existantes sont chargées d'abord
   async function ensureLoaded(from, to) {
     const [a, b] = st.loaded;
+    await ensureFeries(from, to);
     if (iso(from) >= a && iso(to) <= b) return;
     const g = await fetchGrid(from, to);
     absorb(g);
@@ -594,7 +603,7 @@
   for (const [k, v] of Object.entries(TEAMS)) { const o = el("option", null, v); o.value = k; $("pl-team").append(o); }
   $("pl-team").addEventListener("change", render);
   $("pl-q").addEventListener("input", render);
-  if (window.OnconicSort && $("pl-sort-slot")) $("pl-sort-slot").replaceChildren(window.OnconicSort.control("planning-personnel", { modes: SORT_MODES, onChange: render }));
+  if (window.OnconicSort && $("pl-sort-slot")) $("pl-sort-slot").replaceChildren(window.OnconicSort.control("planning-personnel", { modes: SORT_MODES, extra: SORT_EXTRA, onChange: render }));
   $("pl-only-me").addEventListener("change", (e) => { st.onlyMe = e.target.checked; render(); });
 
   // ----- Excel -----
@@ -617,7 +626,7 @@
     msg.textContent = "Préparation…";
     try {
       await loadScript(EXCELJS, "ExcelJS");
-      const g = await fetchGrid(parse(a), parse(b));
+      const [g] = await Promise.all([fetchGrid(parse(a), parse(b)), ensureFeries(parse(a), parse(b))]);
       const by = Object.fromEntries((g.codes || []).map((c) => [c.code, c]));
       const cells = new Map((g.cells || []).map(([id, day, h, code]) => [key(id, day, h), code]));
       const abs = new Map((g.absences || []).map(([id, day, code, status]) => [id + "|" + day, [code, status]]));
@@ -819,6 +828,7 @@
     const { data: tools } = await sb.rpc("my_tools");
     if (!(tools || []).includes("planning")) return say($("pl-status"), "Le planning admin est réservé aux membres du CHUV.");
     const t = today();
+    await ensureFeries(addDays(t, -366), addDays(t, 1100));
     $("pl-x-from").value = iso(new Date(t.getFullYear(), t.getMonth(), 1, 12));
     $("pl-x-to").value = iso(new Date(t.getFullYear(), t.getMonth() + 1, 0, 12));
     await load();
