@@ -80,3 +80,13 @@ Les fichiers `supabase/*.sql` sont des bases historiques : ne plus les rejouer (
 - Déployer ensuite l'Edge Function `member-create` (vérification du JWT activée, sans `--no-verify-jwt`), puis la page `/admin/membres.html` ; sans la migration, la section « Ajouter un membre » reste masquée.
 - Tests : `creation-membres.test.mjs`, `creation-membres-endpoint.test.mjs` et `NODE_PATH=/opt/node-tools/node_modules node tests/absences/admin-members-add-ui.mjs`.
 - Cliniques des médecins créés : si l'administration en choisit, `clinics_initialized` passe à vrai ; sans cliniques, le médecin les choisit lui-même à sa première connexion (choix initial libre). `member_create_check` valide rôle, cliniques et institution avant toute création de compte ; une adresse déjà utilisée donne `user_exists` avant tout appel à Auth (`member_email_taken`). Aucun compte n'est jamais supprimé automatiquement : si `member_create_apply` échoue (`profile_failed`), le compte reste « en attente » (rôle `member`) et la direction lui donne son rôle depuis Membres et accès ; `OC003` (déjà un rôle) donne `user_exists`.
+
+## 202611270003 : calendrier des fériés et événements géré par la direction (27.11.2026)
+
+- Ordre : appliquer la migration (projet de test d'abord), puis publier le site (`/admin/calendrier.html`, planning, `vd-holidays.js`). Sans la migration, la page d'administration signale des erreurs ; le planning reste utilisable.
+- `absence_calendar.kind` accepte `ferie` et `presence_obligatoire` ; colonnes `created_by`, `updated_by`, `updated_at` ; journal en ajout seul `absence_calendar_log` (RLS, aucun droit direct).
+- `vd_holiday_dates` devient STABLE et SECURITY DEFINER (fériés calculés par `vd_holiday_calc` plus entrées `ferie`) ; la migration s'interrompt si un index, une colonne générée ou une contrainte en dépend. `absence_workdays`, `absence_workday_list` et `absence_circuit_mine` en profitent sans autre changement.
+- Effet rétroactif : un férié ajouté ou supprimé change les jours ouvrables des absences déjà déposées, y compris des soldes de vacances. `admin_calendar_impact` en donne le nombre ; la page demande confirmation.
+- `admin_calendar_save` (quatre types, doublon exact refusé), `admin_calendar_delete` et `admin_calendar_confirm` journalisent ; `admin_calendar_list` change de type de retour (supprimée puis recréée) ; nouvelles `admin_calendar_log_list` et `admin_calendar_impact(début, fin, exclure_id)` (direction et admin seulement).
+- Tests : `calendrier.test.mjs`, `vd-holidays.test.mjs` et `NODE_PATH=/opt/node-tools/node_modules node tests/absences/calendrier-ui.mjs`.
+- Fichier de moins de 25 Ko : un seul lot ; réexécutable (contrainte retrouvée dans le catalogue, `drop function if exists` seulement pour `admin_calendar_list`).
