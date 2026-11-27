@@ -15,12 +15,12 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261128a">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261128b">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
   <script src="/assets/js/name-sort.js?v=20261128a" defer></script>
-  <script src="/assets/js/admin-absences.js?v=20261128a" defer></script>
+  <script src="/assets/js/admin-absences.js?v=20261128b" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -42,7 +42,7 @@
         <span class="eyebrow">Administration</span>
         <h1>Absences : valideurs par clinique</h1>
         <hr class="rule">
-        <p><a class="btn btn-outline" href="/admin/circuit-absences.html">Voir le circuit de validation</a> <a class="btn btn-outline" href="/admin/diffusion-absences.html">Diffusion des absences</a></p>
+        <p><a class="btn btn-outline" href="/admin/circuit-absences.html">Voir le circuit de validation</a> <a class="btn btn-outline" href="/admin/diffusion-absences.html">Diffusion des absences</a> <a class="btn btn-outline" href="/admin/calendrier.html">Gérer le calendrier</a></p>
         <p class="form-msg" id="ug-status" role="status">Chargement…</p>
 
         <div id="aa-tool" hidden>
@@ -51,26 +51,7 @@
           <p class="form-msg" id="aa-msg" role="status" aria-live="polite"></p>
           <div id="aa-sort-slot"></div>
           <div id="aa-list" class="aa-grid"></div>
-
-          <section class="aa-cal" aria-labelledby="aa-cal-title">
-            <h2 id="aa-cal-title">Agenda commun</h2>
-            <p class="muted">S'affiche en première ligne du planning des absences, pour tous. Les jours fériés vaudois sont calculés automatiquement. Les vacances scolaires vaudoises sont importées chaque mois depuis OpenHolidays et restent « à confirmer » jusqu'à votre validation (vérifiez sur <a href="https://www.vd.ch/vacances" rel="noopener">vd.ch/vacances</a>). Les congrès importants se signalent dans l'app Congrès (case « Afficher dans l'agenda des absences »). Ajoutez ici les autres événements (retraite de service, fermeture).</p>
-            <div class="card aa-sync" id="aa-sync"></div>
-            <form class="card aa-cal-form" id="aa-cal-form" novalidate>
-              <label>Type
-                <select id="aa-cal-kind">
-                  <option value="evenement">Événement important</option>
-                  <option value="vacances_scolaires">Vacances scolaires</option>
-                </select>
-              </label>
-              <label>Intitulé <input id="aa-cal-label" type="text" maxlength="120" required autocomplete="off" placeholder="ex. Retraite du service"></label>
-              <label>Du <input id="aa-cal-start" type="date" required></label>
-              <label>Au (inclus) <input id="aa-cal-end" type="date" required></label>
-              <button class="btn" type="submit">Ajouter</button>
-            </form>
-            <p class="form-msg" id="aa-cal-msg" role="status" aria-live="polite"></p>
-            <div class="aa-cal-list" id="aa-cal-list"></div>
-          </section>
+          <p class="muted">Les jours fériés, vacances scolaires, événements et présences obligatoires se gèrent dans <a href="/admin/calendrier.html">Gérer le calendrier</a>.</p>
         </div>
       </div>
     </section>

@@ -1169,6 +1169,8 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .ab-key.ab-cal-vacances_scolaires, .ab-grid td.ab-cal-vacances_scolaires { background: #C3CBD9; color: var(--navy-800); }
 .ab-key.ab-cal-evenement, .ab-grid td.ab-cal-evenement { background: var(--amber-50); color: var(--amber-700); outline: 2px solid var(--amber-700); outline-offset: -2px; }
 .ab-key.ab-cal-congres, .ab-grid td.ab-cal-congres { background: var(--white); color: var(--navy-800); outline: 2px solid var(--navy-800); outline-offset: -2px; }
+.ab-key.ab-cal-presence_obligatoire, .ab-grid td.ab-cal-presence_obligatoire { background: #FBEAEA; color: #8A1F1F; outline: 2px dashed #8A1F1F; outline-offset: -2px; }
+.ab-warn.ab-presence { border-color: #8A1F1F; background: #FBEAEA; }
 .ab-grid td.ab-cal-c[data-cal] { cursor: pointer; }
 .ab-grid td.ab-cal-c[data-cal]:focus-visible { outline: 3px solid var(--amber-500); outline-offset: -3px; }
 .ab-detail p .ug-badge { margin-right: 6px; }
@@ -1215,18 +1217,6 @@ input[type="file"]::file-selector-button:hover { background: var(--mist); }
 .ab-mini-grid tr.ab-count-row td.ab-we { background: #E8ECF3; }
 
 /* Administration : agenda commun */
-.aa-cal { margin-top: var(--space-5); display: grid; gap: var(--space-3); }
-.aa-cal h2 { margin: 0; font-size: 1.6rem; }
-.aa-cal-form { display: grid; grid-template-columns: minmax(150px, 190px) minmax(0, 1fr) minmax(140px, 170px) minmax(140px, 170px) auto; gap: var(--space-3); align-items: end; padding: var(--space-3) var(--space-4); }
-.aa-cal-form label { display: grid; gap: 4px; font-weight: 500; font-size: .9rem; color: var(--navy-800); min-width: 0; }
-.aa-cal-form input, .aa-cal-form select { font: inherit; font-weight: 400; min-height: 44px; padding: 8px 12px; border: 1px solid var(--navy-200); border-radius: 0; background: var(--white); color: var(--ink-900); min-width: 0; width: 100%; }
-.aa-cal-list { display: grid; gap: var(--space-2); }
-.aa-cal-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--navy-100); background: var(--white); }
-.aa-cal-item .aa-cal-when { font-weight: 500; min-width: 190px; }
-.aa-cal-item .aa-cal-label { flex: 1 1 240px; }
-.aa-cal-item .btn { min-height: 44px; }
-@media (max-width: 900px) { .aa-cal-form { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 520px) { .aa-cal-form { grid-template-columns: 1fr; } }
 
 /* Congrès : proposition de demande d'absence */
 .cg-dialog.cg-abs { width: min(560px, calc(100vw - 32px)); }
@@ -1308,9 +1298,6 @@ details:not(.ug-card) > summary { padding-block: 10px; }
 .cg-combined, .ab-combined { display: grid; gap: var(--space-2); border-top: 1px solid var(--navy-100); padding-top: var(--space-3); margin-top: var(--space-2); }
 .cg-combined h4, .ab-combined h4 { margin: 0; font-size: 1rem; font-weight: 500; color: var(--navy-800); }
 .cg-combined p, .ab-combined p { margin: 0; max-width: none; }
-.aa-sync { display: grid; gap: var(--space-2); margin-bottom: var(--space-3); }
-.aa-sync p { margin: 0; max-width: none; }
-.aa-sync .btn { justify-self: start; }
 .ug-badge.cg-abs-badge { background: var(--white); color: var(--navy-800); border: 1px solid var(--navy-800); }
 /* Absences : ordre d'affichage des personnes */
 .ab-order { display: grid; gap: var(--space-2); border-top: 1px solid var(--navy-100); padding-top: var(--space-3); }

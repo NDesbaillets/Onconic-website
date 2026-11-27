@@ -47,29 +47,44 @@
   const period = (a, b) => (a === b ? fmtCH(a) : `${fmtCH(a)} – ${fmtCH(b)}`);
   const monthStart = (y, m) => iso(new Date(Date.UTC(y, m, 1)));
   const monthEnd = (y, m) => iso(new Date(Date.UTC(y, m + 1, 0)));
-  // Jours fériés vaudois d'une année (calculés, Pâques par l'algorithme de Meeus) : date ISO -> nom
-  const holCache = new Map();
-  function easter(y) {
-    const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
-    const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
-    const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
-    const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
-    return new Date(Date.UTC(y, month - 1, day));
+  // Jours fériés : vaudois calculés (module partagé vd-holidays.js, mêmes dates qu'en base) et fériés ajoutés à la main par la direction
+  // (entrées « ferie » de l'agenda commun, plages dépliées). Ils servent partout : grille, jours ouvrables, exports.
+  const VD = window.OnconicHolidays;
+  const ferieList = new Map(); // id -> { label, start, end }
+  const ferieDays = new Map(); // date ISO -> entrées « ferie » qui la couvrent
+  const presenceList = new Map(); // id -> { label, start, end } (présence obligatoire)
+  function ingestCal(list) {
+    for (const c of list || []) {
+      const e = { label: c.label, start: String(c.start_date).slice(0, 10), end: String(c.end_date).slice(0, 10) };
+      if (c.kind === "presence_obligatoire") presenceList.set(c.id, e);
+      else if (c.kind === "ferie" && !ferieList.has(c.id)) {
+        ferieList.set(c.id, e);
+        const last = Math.min(pd(e.end) - pd(e.start), 31 * 864e5) / 864e5;
+        for (let i = 0; i <= last; i++) { const day = iso(new Date(pd(e.start).getTime() + i * 864e5)); if (!ferieDays.has(day)) ferieDays.set(day, []); ferieDays.get(day).push(e); }
+      }
+    }
   }
-  function holidays(y) {
-    if (holCache.has(y)) return holCache.get(y);
-    const map = new Map();
-    const at = (m, d) => new Date(Date.UTC(y, m, d));
-    const off = (n) => { const d = easter(y); d.setUTCDate(d.getUTCDate() + n); return d; };
-    const sep1 = at(8, 1).getUTCDay(); // 0 = dimanche
-    const firstSunday = 1 + ((7 - sep1) % 7);
-    [[at(0, 1), "Nouvel An"], [at(0, 2), "2 janvier"], [off(-2), "Vendredi saint"], [off(1), "Lundi de Pâques"], [off(39), "Ascension"],
-      [off(50), "Lundi de Pentecôte"], [at(7, 1), "Fête nationale"], [at(8, firstSunday + 15), "Lundi du Jeûne fédéral"], [at(11, 25), "Noël"]]
-      .forEach(([d, l]) => map.set(iso(d), l));
-    holCache.set(y, map);
-    return map;
+  const holidayOf = (day) => { const m = ferieDays.get(day); return m ? "Férié : " + m.map((x) => x.label).join(" ; ") : VD.holidayOf(day); };
+  // Présences obligatoires qui chevauchent la période demandée
+  const presenceOverlaps = (start, end) => [...presenceList.values()].filter((x) => x.start <= end && x.end >= start).sort((x, y) => (x.start < y.start ? -1 : 1));
+  function presenceBox(start, end) {
+    const list = start && end ? presenceOverlaps(start, end) : [];
+    if (!list.length) return null;
+    const box = el("div", "ab-warn ab-presence");
+    box.setAttribute("role", "status");
+    list.forEach((x) => box.append(el("p", null, `Cette période chevauche une présence obligatoire : ${x.label} (${period(x.start, x.end)})`)));
+    return box;
   }
-  const holidayOf = (day) => holidays(Number(day.slice(0, 4))).get(day);
+  // Fenêtre de trois ans (celle où une demande peut être déposée : de J-366 à J+1100) chargée au démarrage ; la lecture du planning
+  // complète ensuite pour les mois affichés.
+  async function loadFeries() {
+    try {
+      const t = pd(todayIso());
+      const from = iso(new Date(t.getTime() - 366 * 864e5)), to = iso(new Date(t.getTime() + 1100 * 864e5));
+      const { data, error } = await sb.rpc("absence_calendar", { p_from: from, p_to: to });
+      if (!error) ingestCal(data);
+    } catch (_) { /* sans les fériés ajoutés, les fériés vaudois calculés restent appliqués */ }
+  }
   // Jours ouvrables (lundi à vendredi, jours fériés vaudois déduits) d'une période, éventuellement limitée à [from, to]
   function workdays(a, b, from, to) {
     let s = pd(a), e = pd(b);
@@ -101,6 +116,8 @@
     return `Du ${period(c.first_day, c.last_day)} : ${c.peak} membres de la clinique ${c.clinic} seraient absents en même temps (maximum prévu : ${c.max_absent})`
       + (who ? `. Déjà absent·e·s ou en demande : ${who}.` : ".");
   }
+  // Période demandée d'une demande : les nouvelles dates si c'est une modification, sinon les dates de l'absence
+  const asked = (a) => (a.change_type === "modify" && a.change_start && a.change_end ? [String(a.change_start).slice(0, 10), String(a.change_end).slice(0, 10)] : [String(a.start_date).slice(0, 10), String(a.end_date).slice(0, 10)]);
   function warnBox(conflicts, title) {
     if (!conflicts || !conflicts.length) return null;
     const box = el("div", "ab-warn");
@@ -137,6 +154,7 @@
     ]);
     if (error) throw error;
     const cal = (calRes.data || []).map((c) => Object.assign(c, { start_date: String(c.start_date).slice(0, 10), end_date: String(c.end_date).slice(0, 10) }));
+    ingestCal(cal);
     const byUser = new Map();
     for (const a of data || []) {
       a.start_date = String(a.start_date).slice(0, 10); a.end_date = String(a.end_date).slice(0, 10);
@@ -307,13 +325,14 @@
 
   // Entrées de l'agenda commun pour un jour : férié vaudois (calculé), événements, congrès signalés dans Congrès,
   // vacances scolaires (saisies par l'admin ou importées)
-  const CAL_LETTER = { ferie: "F", evenement: "É", congres: "★", vacances_scolaires: "S" };
-  const CAL_KIND = { ferie: "Férié", evenement: "Événement", congres: "Congrès", vacances_scolaires: "Vacances scolaires" };
+  const CAL_LETTER = { ferie: "F", evenement: "É", presence_obligatoire: "P", congres: "★", vacances_scolaires: "S" };
+  const CAL_KIND = { ferie: "Férié", evenement: "Événement", presence_obligatoire: "Présence obligatoire", congres: "Congrès", vacances_scolaires: "Vacances scolaires" };
   function calEntries(day, cal) {
     const out = [];
-    const h = holidayOf(day);
+    const h = VD.holidayOf(day);
     if (h) out.push({ kind: "ferie", label: h + " (férié vaudois)", start: day, end: day });
-    for (const kind of ["evenement", "congres"])
+    (ferieDays.get(day) || []).forEach((x) => out.push({ kind: "ferie", label: "Férié : " + x.label, start: x.start, end: x.end }));
+    for (const kind of ["evenement", "presence_obligatoire", "congres"])
       cal.filter((c) => c.kind === kind && c.start_date <= day && day <= c.end_date).forEach((c) => out.push({ kind, label: c.label, start: c.start_date, end: c.end_date }));
     cal.filter((c) => c.kind === "vacances_scolaires" && c.start_date <= day && day <= c.end_date).forEach((c) => out.push({ kind: "vacances_scolaires", label: c.label, start: c.start_date, end: c.end_date }));
     return out;
@@ -631,7 +650,7 @@
     box.append(el("strong", null, fmtCH(day)));
     calEntries(day, cal).forEach((x) => {
       const row = el("p");
-      row.append(el("span", "ug-badge", CAL_KIND[x.kind]), document.createTextNode(" " + x.label + (x.kind === "ferie" ? "" : ` · ${period(x.start, x.end)}`)));
+      row.append(el("span", "ug-badge", CAL_KIND[x.kind]), document.createTextNode(" " + x.label + (x.kind === "ferie" && x.start === x.end ? "" : ` · ${period(x.start, x.end)}`)));
       box.append(row);
     });
     box.hidden = false;
@@ -681,6 +700,8 @@
       if (ops) box.append(ops);
       const w = warnBox(t.conflicts, "Attention : trop d'absences en même temps si vous validez");
       if (w) box.append(w);
+      const pw = presenceBox(...asked(t));
+      if (pw) box.append(pw);
       box.append(...decisionControls(t, async (msg) => {
         await afterChange();
         const done = el("p", "form-msg ok", msg); done.setAttribute("role", "status");
@@ -724,6 +745,8 @@
     const a = $("ab-start").value, b = $("ab-end").value;
     $("ab-days").textContent = a && b && b >= a ? `${plur(workdays(a, b), "jour ouvrable", "jours ouvrables")} (hors week-ends et fériés vaudois), ${plur((pd(b) - pd(a)) / 864e5 + 1, "jour calendaire", "jours calendaires")}` : "";
     $("ab-note-hint").textContent = $("ab-kind").value === "autre" ? "(obligatoire)" : "(facultatif)";
+    const pz = $("ab-presence");
+    if (pz) { pz.replaceChildren(); const pw = a && b && b >= a ? presenceBox(a, b) : null; if (pw) pz.append(pw); }
   }
   // Le formulaire crée un brouillon. « Demander l'absence » ouvre ensuite la fenêtre d'envoi groupé ;
   // « Enregistrer en brouillon » s'arrête là (le bandeau des brouillons permet d'envoyer plus tard).
@@ -850,6 +873,7 @@
     warn.replaceChildren();
     const w = warnBox(sd.conflicts, "Attention : trop d'absences en même temps");
     if (w) { w.append(el("p", "muted", "La demande peut quand même être envoyée ; les validateurs voient le même avertissement.")); warn.append(w); }
+    for (const a of state.drafts) { const pw = presenceBox(a.start_date, a.end_date); if (pw) { pw.prepend(el("strong", null, "Présence obligatoire : " + period(a.start_date, a.end_date))); warn.append(pw); } }
   }
   function askConfirm() {
     const n = state.drafts.length;
@@ -1335,6 +1359,8 @@
       if (prog.length) { const d = el("details", "ab-progress"); d.append(el("summary", null, `Validation par la clinique : ${approvalCount(prog)} sur ${prog.length}`), approvalsBlock(prog)); card.append(d); }
       const w = warnBox(a.conflicts, "Attention : trop d'absences en même temps si la demande est validée");
       if (w) card.append(w);
+      const pw = presenceBox(...asked(a));
+      if (pw) card.append(pw);
       const others = opinionsBlock(a.opinions, a.step_label ? `Autres avis : ${a.step_label}` : "Autres pré-avis de la direction");
       if (others) card.append(others);
       const fs = el("fieldset", "ab-op-choice");
@@ -1609,6 +1635,8 @@
       if (ops) card.append(ops);
       const w = warnBox(a.conflicts, "Attention : trop d'absences en même temps si vous validez");
       if (w) card.append(w);
+      const pw = presenceBox(...asked(a));
+      if (pw) card.append(pw);
       card.append(...decisionControls(a, (msg) => { say($("ab-todo-msg"), msg, "ok"); return afterChange(); }));
       const pdfRow = el("div", "btn-row ab-actions");
       pdfRow.append(button("Imprimer le formulaire (PDF)", "btn btn-outline", () => downloadForm(a, null, $("ab-todo-msg"))));
@@ -2585,6 +2613,7 @@
     // Mon circuit de validation : pour tout membre qui a l'outil Absences (cette page n'est ouverte qu'à eux) ; lien en lecture du circuit pour un médecin cadre
     if (window.CircuitView) { buildCircuit(); circuitPlace("plan"); }
     $("ab-circuit-link").hidden = ctx.role !== "cadre";
+    await loadFeries();
     await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending()]);
     if (location.hash === "#agenda" && state.agendaCtx && state.agendaCtx.tab) setTab("agenda");
     else if (location.hash === "#todo" && (ctx.validates.length || state.isDir)) setTab("todo");

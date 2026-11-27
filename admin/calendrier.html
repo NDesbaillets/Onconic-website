@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co; img-src 'self' data:; style-src 'self'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Calendrier · Administration · Onconic</title>
+  <link rel="icon" href="/assets/img/mark-on-light.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#001B4D">
+  <meta name="apple-mobile-web-app-title" content="Onconic">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261128b">
+  <link rel="stylesheet" href="/assets/css/admin-calendrier.css?v=20261128b">
+  <script src="/assets/js/site.js?v=20261110b" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="/assets/js/config.js?v=20261028"></script>
+  <script src="/assets/js/vd-holidays.js?v=20261128b"></script>
+  <script src="/assets/js/admin-calendrier.js?v=20261128b" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/fr/"><img class="mark" src="/assets/img/mark-on-light.svg" alt="" width="40" height="35"><img class="wordmark" src="/assets/img/wordmark-on-light.svg" alt="Onconic" width="116" height="16"></a>
+      <button class="nav-toggle" aria-controls="nav" aria-expanded="false">Menu</button>
+      <nav class="nav" id="nav">
+        <a href="/fr/app/">The Hive</a>
+        <a href="/fr/app/compte.html">Mon compte</a>
+        <button class="btn btn-outline" id="logout" type="button">Se déconnecter</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section ug">
+      <div class="container">
+        <a class="btn btn-outline hive-back" href="/admin/absences.html">← Absences : valideurs</a>
+        <span class="eyebrow">Administration</span>
+        <h1>Calendrier des fériés et événements</h1>
+        <hr class="rule">
+        <p class="form-msg" id="ug-status" role="status">Chargement…</p>
+
+        <div id="ac-tool" hidden>
+          <p class="muted">Ce calendrier est la première ligne du planning des absences, visible de tous les membres qui ont l'outil Absences. Les fériés vaudois sont calculés et ne se modifient pas. Un <strong>férié</strong> ajouté ici (pont, fermeture) est déduit des jours ouvrables de tout le monde, y compris des absences déjà déposées. Une <strong>présence obligatoire</strong> déclenche seulement un avertissement, non bloquant, à la demande d'absence et chez le validateur.</p>
+
+          <div class="ac-bar">
+            <div class="ac-year" role="group" aria-label="Année">
+              <button class="btn btn-outline" id="ac-prev" type="button" aria-label="Année précédente">‹</button>
+              <label class="ac-year-input">Année <input id="ac-year" type="number" min="2000" max="2100" step="1" inputmode="numeric"></label>
+              <button class="btn btn-outline" id="ac-next" type="button" aria-label="Année suivante">›</button>
+            </div>
+            <label>Type
+              <select id="ac-filter-kind">
+                <option value="">Tous les types</option>
+                <option value="calc">Fériés vaudois (calculés)</option>
+                <option value="ferie">Fériés ajoutés</option>
+                <option value="presence_obligatoire">Présences obligatoires</option>
+                <option value="evenement">Événements</option>
+                <option value="vacances_scolaires">Vacances scolaires</option>
+              </select>
+            </label>
+            <label>Recherche <input id="ac-q" type="search" autocomplete="off" placeholder="Intitulé"></label>
+          </div>
+
+          <form class="card ac-form" id="ac-form" novalidate>
+            <h2 id="ac-form-title">Ajouter une entrée</h2>
+            <label>Type
+              <select id="ac-kind">
+                <option value="ferie">Férié</option>
+                <option value="presence_obligatoire">Présence obligatoire</option>
+                <option value="evenement">Événement important</option>
+                <option value="vacances_scolaires">Vacances scolaires</option>
+              </select>
+            </label>
+            <label>Intitulé <input id="ac-label" type="text" maxlength="120" required autocomplete="off" placeholder="ex. Pont de l'Ascension"></label>
+            <label>Du <input id="ac-start" type="date" required></label>
+            <label>Au (inclus) <input id="ac-end" type="date" required></label>
+            <p class="muted ac-help" id="ac-help"></p>
+            <div class="ac-form-actions">
+              <button class="btn" id="ac-save" type="submit">Ajouter</button>
+              <button class="btn btn-outline" id="ac-cancel" type="button" hidden>Annuler la modification</button>
+            </div>
+          </form>
+          <div class="card ac-confirm" id="ac-confirm" role="alert" hidden></div>
+          <p class="form-msg" id="ac-msg" role="status" aria-live="polite"></p>
+
+          <h2 id="ac-list-title">Entrées de l'année</h2>
+          <div class="ac-list" id="ac-list"></div>
+
+          <section class="ac-sec" aria-labelledby="ac-sync-title">
+            <h2 id="ac-sync-title">Vacances scolaires (OpenHolidays)</h2>
+            <p class="muted">Les vacances scolaires vaudoises sont importées chaque mois depuis OpenHolidays et restent « à confirmer » jusqu'à votre validation (vérifiez sur <a href="https://www.vd.ch/vacances" rel="noopener">vd.ch/vacances</a>). Les congrès importants se signalent dans l'app Congrès (case « Afficher dans l'agenda des absences »).</p>
+            <div class="card ac-sync" id="ac-sync"></div>
+          </section>
+
+          <section class="ac-sec" aria-labelledby="ac-log-title">
+            <h2 id="ac-log-title">Dernières modifications</h2>
+            <div class="ac-log" id="ac-log"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 Onconic · Lausanne, Suisse</span>
+      <span class="motto">ONCOLOGY MADE ICONIC</span>
+      <span class="footer-links"><a href="/fr/mentions-legales.html">Mentions légales</a> · <a href="/fr/confidentialite.html">Confidentialité</a> · <a href="mailto:contact@onconic.ch">contact@onconic.ch</a></span>
+    </div>
+  </footer>
+</body>
+</html>
