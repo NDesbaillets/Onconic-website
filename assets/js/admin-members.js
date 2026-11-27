@@ -541,11 +541,11 @@
     invalid_role: "Rôle non autorisé.",
     invalid_institution: "Institution inconnue.",
     invalid_clinics: "Clinique inconnue ou non autorisée pour ce rôle. Aucun compte n'a été créé.",
-    user_exists: "Un compte existe déjà avec cette adresse. Retrouvez-le dans la liste pour modifier son rôle.",
+    user_exists: "Un compte existe déjà avec cette adresse (peut-être en attente). Retrouvez-le dans la liste pour changer son rôle.",
     invite_failed: "L'invitation n'a pas pu être envoyée. Réessayez, ou choisissez le mot de passe provisoire.",
     create_failed: "Le compte n'a pas pu être créé. Réessayez.",
-    profile_failed: "Le compte n'a pas pu être configuré et a été retiré. Réessayez.",
-    profile_failed_invite: "Le compte n'a pas pu être configuré et a été retiré. Un e-mail d'invitation a pu partir : son lien ne fonctionnera pas. Réessayez.",
+    profile_failed: "Le compte a été créé mais le rôle n'a pas pu être attribué. Il apparaît dans la liste des membres en attente : ouvrez sa fiche pour lui donner son rôle.",
+    profile_failed_invite: "Le compte a été créé mais le rôle n'a pas pu être attribué. Un e-mail d'invitation est parti. Le compte apparaît dans la liste des membres en attente : ouvrez sa fiche pour lui donner son rôle.",
     forbidden: "Vous n'avez pas le droit de créer ce rôle.",
     unauthorized: "Session expirée : reconnectez-vous."
   };
@@ -594,7 +594,7 @@
     if (res.error) {
       let code = "";
       try { code = (await res.error.context.json()).error; } catch (x) { /* réponse non JSON */ }
-      if (code === "profile_failed" && body.mode === "invite") code = "profile_failed_invite";
+      if (code === "profile_failed") { addSay(ADD_ERRORS[body.mode === "invite" ? "profile_failed_invite" : "profile_failed"], "error"); await refresh(); return; }
       return addSay(ADD_ERRORS[code] || "Création impossible (" + (code || "erreur réseau") + ").", "error");
     }
     const data = res.data || {};

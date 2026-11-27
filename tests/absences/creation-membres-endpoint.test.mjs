@@ -14,7 +14,7 @@ globalThis.cmAdmin = {
     admin: {
       createUser: async (a) => { calls.create.push(a); return authError ? { data: {}, error: authError } : { data: { user: { id: 'new-1', created_at: createdAt ?? new Date().toISOString() } }, error: null }; },
       inviteUserByEmail: async (e, o) => { calls.invite.push([e, o]); return authError ? { data: {}, error: authError } : { data: { user: { id: 'new-2', created_at: createdAt ?? new Date().toISOString() } }, error: null }; },
-      deleteUser: async (id) => { calls.del.push(id); return { error: delError }; },
+      deleteUser: async (id) => { calls.del.push(id); throw new Error('deleteUser ne doit jamais être appelé'); },
     },
   },
   rpc: async (name, args) => {
@@ -108,13 +108,28 @@ test('invitation : lien de retour vers le site (aperçu accepté sur le projet d
   assert.equal(calls.invite[0][1].redirectTo, 'https://onconic.ch/fr/nouveau-mot-de-passe.html');
 });
 
-test('si member_create_apply échoue, le compte d\'authentification créé est supprimé : 500 profile_failed', async () => {
-  for (const mode of ['password', 'invite']) {
-    reset(); applyError = { code: 'P0001', message: 'Ce compte a déjà un rôle.' };
+test('si member_create_apply échoue : 500 profile_failed, le compte reste en attente, aucune suppression', async () => {
+  for (const mode of ['password', 'invite']) for (const code of ['P0001', '42501', '57014', undefined]) {
+    reset(); applyError = { code, message: 'Alice.Martin@Example.com' };
     const r = await post({ ...base, mode });
     assert.equal(r.status, 500); assert.equal((await r.json()).error, 'profile_failed');
-    assert.deepEqual(calls.del, [mode === 'password' ? 'new-1' : 'new-2']);
+    assert.equal(calls.apply.length, 1);
+    assert.ok(!/alice|martin|example\.com/i.test(logs.join('\n')));
   }
+});
+
+test('« déjà un rôle » (OC003) : 409 user_exists sans suppression', async () => {
+  for (const mode of ['password', 'invite']) {
+    reset(); applyError = { code: 'OC003', message: 'Ce compte a déjà un rôle.' };
+    const r = await post({ ...base, mode });
+    assert.equal(r.status, 409); assert.equal((await r.json()).error, 'user_exists');
+  }
+});
+
+test('compte plus ancien renvoyé par l\'invitation : jamais supprimé, apply tranche', async () => {
+  reset(); createdAt = new Date(Date.now() - 3600 * 1000).toISOString(); applyError = { code: '42501' };
+  const r = await post({ ...base, mode: 'invite' });
+  assert.equal(r.status, 500);
 });
 
 test('e-mail existant : 409 user_exists, rien n\'est appliqué ; autres échecs : 502', async () => {
@@ -158,16 +173,6 @@ test('journaux : ni mot de passe ni adresse ni nom, y compris en cas d\'échec',
   assert.ok(!/alice|martin|example\.com/i.test(all), all);
 });
 
-test('échec de la suppression du compte après profile_failed : journalisé sans donnée personnelle, réponse inchangée', async () => {
-  reset(); applyError = { code: 'P0001', message: 'Alice.Martin@Example.com' }; delError = { code: 'unexpected_failure', status: 500, message: 'alice.martin@example.com' };
-  const r = await post(base);
-  assert.equal(r.status, 500); assert.equal((await r.json()).error, 'profile_failed');
-  assert.deepEqual(calls.del, ['new-1']);
-  const all = logs.join('\n');
-  assert.match(all, /cleanup deleteUser failed unexpected_failure/);
-  assert.ok(!/alice|martin|example\.com/i.test(all), all);
-});
-
 test('contrôle préalable : clinique ou institution refusée par la base, aucun compte ni invitation créé', async () => {
   for (const [code, err] of [['OC002', 'invalid_clinics'], ['OC001', 'invalid_institution']]) {
     reset(); checkError = { code, message: 'x' };
@@ -182,19 +187,6 @@ test('contrôle préalable : clinique ou institution refusée par la base, aucun
   assert.deepEqual(calls.check, [{ p_role: 'cadre', p_clinics: ['ORL', 'ION'], p_cdc_clinics: ['ORL'], p_institution: 'CHUV' }]);
 });
 
-test('compte préexistant renvoyé par l\'invitation : 409, ni apply ni suppression ; compte neuf avec apply en échec : supprimé', async () => {
-  reset(); createdAt = new Date(Date.now() - 3 * 60 * 1000).toISOString();
-  let r = await post({ ...base, mode: 'invite' });
-  assert.equal(r.status, 409); assert.equal((await r.json()).error, 'user_exists');
-  assert.equal(calls.apply.length, 0); assert.equal(calls.del.length, 0);
-  reset(); createdAt = new Date(Date.now() - 3 * 60 * 1000).toISOString(); applyError = { code: 'P0001' };
-  r = await post({ ...base, mode: 'invite' });
-  assert.equal(r.status, 409); assert.equal(calls.del.length, 0, 'jamais de suppression d\'un ancien compte');
-  reset(); createdAt = new Date(Date.now() - 1000).toISOString(); applyError = { code: 'P0001' };
-  r = await post({ ...base, mode: 'invite' });
-  assert.equal(r.status, 500); assert.deepEqual(calls.del, ['new-2']);
-});
-
 test('adresse déjà prise : 409 sans appel à Auth (ni invitation, ni création, ni suppression), adresse normalisée', async () => {
   for (const mode of ['invite', 'password']) {
     reset(); taken = true;
@@ -205,7 +197,7 @@ test('adresse déjà prise : 409 sans appel à Auth (ni invitation, ni création
   }
 });
 
-test('deux requêtes concurrentes sur le même compte frais : la seconde échoue en OC003, aucune suppression', async () => {
+test('deux requêtes concurrentes sur le même compte : la seconde échoue en OC003, aucune suppression', async () => {
   reset();
   let n = 0;
   applyHook = async () => (++n === 1 ? { error: null } : { error: { code: 'OC003', message: 'Ce compte a déjà un rôle.' } });
@@ -216,17 +208,5 @@ test('deux requêtes concurrentes sur le même compte frais : la seconde échoue
   assert.ok(!logs.join('\n').match(/alice|example\.com/i));
 });
 
-test('échec d\'apply (autre erreur) sur un compte créé par cette requête : supprimé ; compte plus ancien que t0 - 5 s : jamais', async () => {
-  reset(); applyError = { code: '42501' };
-  let r = await post({ ...base, mode: 'invite' });
-  assert.equal(r.status, 500); assert.deepEqual(calls.del, ['new-2']);
-  reset(); createdAt = new Date(Date.now() - 6000).toISOString(); applyError = { code: '42501' };
-  r = await post({ ...base, mode: 'invite' });
-  assert.equal(r.status, 409); assert.equal(calls.del.length, 0); assert.equal(calls.apply.length, 0);
-  reset(); createdAt = new Date(Date.now() - 2000).toISOString(); applyError = { code: '42501' };
-  r = await post({ ...base, mode: 'password' });
-  assert.equal(r.status, 500); assert.deepEqual(calls.del, ['new-1'], 'dans la marge de 5 s');
-  reset(); applyError = { code: 'OC003' };
-  r = await post({ ...base, mode: 'password' });
-  assert.equal(r.status, 409); assert.equal(calls.del.length, 0);
-});
+
+test.afterEach(() => { assert.equal(calls.del.length, 0, 'deleteUser n\'a jamais été appelé'); });
