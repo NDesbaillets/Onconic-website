@@ -132,8 +132,8 @@
     b.hidden = false;
     ok.focus();
   }
-  async function impact(start, end) {
-    const { data, error } = await sb.rpc("admin_calendar_impact", { p_start: start, p_end: end });
+  async function impact(start, end, excludeId) {
+    const { data, error } = await sb.rpc("admin_calendar_impact", { p_start: start, p_end: end, p_exclude_id: excludeId || null });
     if (error) throw error;
     return Number(data) || 0;
   }
@@ -180,15 +180,18 @@
     const p = { id: state.editing, kind: $("ac-kind").value, label: $("ac-label").value.trim(), start: $("ac-start").value, end: $("ac-end").value };
     if (p.label.length < 2 || p.label.length > 120) return say("L'intitulé compte de 2 à 120 caractères.", "error");
     if (!p.start || !p.end || p.end < p.start) return say("Vérifiez les dates : la fin doit être le même jour ou après le début.", "error");
-    // Les jours ouvrables changent si un férié est ajouté, déplacé ou retiré (type modifié) : plage de l'ancien et du nouveau férié
+    // Les jours ouvrables ne changent que si un férié est ajouté, retiré, déplacé ou si son type change : un simple changement d'intitulé
+    // n'appelle aucune confirmation. L'entrée modifiée est ignorée par le contrôle (p_exclude_id) pour simuler son retrait.
     const old = state.editing ? state.entries.find((c) => c.id === state.editing) : null;
+    const wasFerie = !!old && old.kind === "ferie", isFerie = p.kind === "ferie";
+    const sameDays = wasFerie && isFerie && day(old.start_date) === p.start && day(old.end_date) === p.end;
     const ranges = [];
-    if (p.kind === "ferie") ranges.push([p.start, p.end]);
-    if (old && old.kind === "ferie") ranges.push([day(old.start_date), day(old.end_date)]);
+    if (isFerie && !sameDays) ranges.push([p.start, p.end]);
+    if (wasFerie && !sameDays) ranges.push([day(old.start_date), day(old.end_date)]);
     if (!ranges.length) return doSave(p);
     const from = ranges.map((r) => r[0]).sort()[0], to = ranges.map((r) => r[1]).sort().reverse()[0];
     let n;
-    try { n = await impact(from, to); } catch (e) { return say("Contrôle d'impact impossible : " + errText(e), "error"); }
+    try { n = await impact(from, to, state.editing); } catch (e) { return say("Contrôle d'impact impossible : " + errText(e), "error"); }
     if (!n) return doSave(p);
     say("");
     ask([impactText(n), "Les jours ouvrables des absences concernées sont recalculés pour tout le monde. Enregistrer quand même ?"], "Enregistrer", () => doSave(p));
@@ -206,7 +209,7 @@
     const lines = [`Supprimer « ${c.label} » (${period(c.start_date, c.end_date)}) ?`];
     if (c.kind === "ferie") {
       let n;
-      try { n = await impact(day(c.start_date), day(c.end_date)); } catch (e) { return say("Contrôle d'impact impossible : " + errText(e), "error"); }
+      try { n = await impact(day(c.start_date), day(c.end_date), c.id); } catch (e) { return say("Contrôle d'impact impossible : " + errText(e), "error"); }
       if (n) lines.unshift(impactText(n));
     }
     say("");

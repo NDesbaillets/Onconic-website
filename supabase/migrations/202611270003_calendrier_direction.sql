@@ -209,9 +209,11 @@ begin
 end;
 $$;
 
--- Nombre d'absences (ni brouillon, ni refusée, ni annulée) qui couvrent au moins un jour ouvrable (lundi à vendredi, hors fériés
--- vaudois calculés) de la plage : celles dont le nombre de jours ouvrables change si on y ajoute ou retire un férié. Aucun nom.
-create or replace function public.admin_calendar_impact(p_start date, p_end date) returns int
+-- Nombre d'absences (ni brouillon, ni refusée, ni annulée) dont la période, ou la période d'une demande de changement en cours, couvre au
+-- moins un jour dont le statut « férié » change réellement : lundi à vendredi, ni férié vaudois calculé, ni couvert par un AUTRE férié manuel.
+-- p_exclude_id ignore l'entrée visée (modification ou suppression d'un férié existant). Renvoie un entier seul, aucun nom.
+drop function if exists public.admin_calendar_impact(date, date);
+create or replace function public.admin_calendar_impact(p_start date, p_end date, p_exclude_id bigint default null) returns int
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 declare n int;
 begin
@@ -219,10 +221,14 @@ begin
   if p_start is null or p_end is null or p_end < p_start then raise exception 'Vérifiez les dates.'; end if;
   select count(*)::int into n from public.absences a
    where a.status not in ('draft', 'rejected', 'cancelled')
-     and a.start_date <= p_end and a.end_date >= p_start
-     and exists (select 1 from generate_series(greatest(a.start_date, p_start), least(a.end_date, p_end, p_start + 400), interval '1 day') g (d)
-                  where extract(isodow from g.d) < 6
-                    and not (g.d::date = any (public.vd_holiday_calc(extract(year from g.d)::int))));
+     and exists (
+       select 1 from (values (a.start_date, a.end_date), (a.change_start, a.change_end)) pp (s, e)
+        cross join lateral generate_series(greatest(pp.s, p_start), least(pp.e, p_end, p_start + 400), interval '1 day') g (d)
+        where pp.s is not null and pp.e is not null
+          and extract(isodow from g.d) < 6
+          and not (g.d::date = any (public.vd_holiday_calc(extract(year from g.d)::int)))
+          and not exists (select 1 from public.absence_calendar c
+                           where c.kind = 'ferie' and c.id is distinct from p_exclude_id and g.d::date between c.start_date and c.end_date));
   return n;
 end;
 $$;
@@ -232,9 +238,11 @@ do $$
 declare f text;
 begin
   foreach f in array array['absence_calendar(date, date)', 'admin_calendar_save(bigint, text, text, date, date)', 'admin_calendar_delete(bigint)',
-    'admin_calendar_confirm(bigint)', 'admin_calendar_list()', 'admin_calendar_log_list(int)', 'admin_calendar_impact(date, date)',
+    'admin_calendar_confirm(bigint)', 'admin_calendar_list()', 'admin_calendar_log_list(int)', 'admin_calendar_impact(date, date, bigint)',
     'admin_calendar_sync_status()']
   loop
+    -- admin_calendar_sync_status() vient de agenda_commun.sql : ignorée là où elle n'existe pas
+    continue when to_regprocedure('public.' || f) is null;
     execute format('revoke execute on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;

@@ -61,7 +61,7 @@ test('1. contrainte de type, colonnes, volatilité et dépendances de vd_holiday
     const imm = await t.rows(`select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.provolatile = 'i' and p.prosrc like '%vd_holiday_dates%'`);
     assert.deepEqual(imm, [], 'aucune fonction IMMUTABLE ne s\'appuie sur vd_holiday_dates');
     assert.ok((await t.rows("select indexdef from pg_indexes where indexname = 'absence_calendar_ferie'"))[0].indexdef.includes("kind = 'ferie'"));
-    assert.equal((await t.rows("select has_function_privilege('anon', 'public.admin_calendar_impact(date, date)', 'execute') a, has_function_privilege('authenticated', 'public.admin_calendar_impact(date, date)', 'execute') b"))[0].a, false);
+    assert.equal((await t.rows("select has_function_privilege('anon', 'public.admin_calendar_impact(date, date, bigint)', 'execute') a, has_function_privilege('authenticated', 'public.admin_calendar_impact(date, date, bigint)', 'execute') b"))[0].a, false);
     assert.equal((await t.rows("select count(*)::int n from onconic_migrations where version = '202611270003'").catch(() => [{ n: 1 }]))[0].n, 1);
   } finally { await t.db.close(); }
 });
@@ -147,7 +147,7 @@ test('4. droits : membre ordinaire, assistante admin_lead, cadre et anonyme refu
     await t.as(2);
     await t.fails(t.db.query('select * from absence_calendar_log'), /permission denied/);
     await t.sup();
-    for (const f of ['admin_calendar_save(bigint, text, text, date, date)', 'admin_calendar_delete(bigint)', 'admin_calendar_confirm(bigint)', 'admin_calendar_list()', 'admin_calendar_log_list(int)', 'admin_calendar_impact(date, date)'])
+    for (const f of ['admin_calendar_save(bigint, text, text, date, date)', 'admin_calendar_delete(bigint)', 'admin_calendar_confirm(bigint)', 'admin_calendar_list()', 'admin_calendar_log_list(int)', 'admin_calendar_impact(date, date, bigint)'])
       assert.equal((await t.rows(`select has_function_privilege('anon', 'public.${f}', 'execute') a`))[0].a, false, f);
   } finally { await t.db.close(); }
 });
@@ -266,5 +266,40 @@ test('8. absence_calendar (planning) renvoie les nouveaux types sans changement 
     assert.deepEqual(Object.keys(r[0]), ['id', 'kind', 'label', 'start_date', 'end_date']);
     // un membre ordinaire lit l'agenda, mais pas l'administration
     await t.fails(t.rows('select * from admin_calendar_list()'), /admin only/);
+  } finally { await t.db.close(); }
+});
+
+test('9. admin_calendar_impact : jours dont le statut change vraiment, autre férié manuel, p_exclude_id, demande de changement', async () => {
+  const t = await mk();
+  try {
+    const mkAbs = async (n, a, b) => { await t.as(n); const id = (await t.rpc('absence_request', ['vacances', null, a, b])).id; await t.sup(); await t.db.query("update absences set status = 'requested' where id = $1", [id]); return id; };
+    await mkAbs(4, '2027-03-16', '2027-03-18');
+    const idChg = await mkAbs(6, '2027-03-01', '2027-03-02');
+    // demande de changement en cours : la nouvelle période couvre la plage
+    await t.db.query("update absences set change_type = 'modify', change_kind = 'vacances', change_start = '2027-03-17', change_end = '2027-03-19', change_requested_at = now() where id = $1", [idChg]);
+    const imp = async (a, b, ex = null) => { await t.as(2); try { return await t.rpc('admin_calendar_impact', [a, b, ex]); } finally { await t.sup(); } };
+    assert.equal(await imp('2027-03-19', '2027-03-19'), 1, 'seule la demande de changement couvre le 19.03');
+    assert.equal(await imp('2027-03-17', '2027-03-17'), 2);
+    // un autre férié manuel couvre déjà le 17.03 : rien ne change
+    const a = await t.save(2, 'ferie', 'Pont fictif', '2027-03-17');
+    assert.equal(await imp('2027-03-17', '2027-03-17'), 0, 'jour déjà férié');
+    assert.equal(await imp('2027-03-17', '2027-03-17', a), 2, 'suppression simulée de l\'entrée : les jours redeviennent ouvrables');
+    assert.equal(await imp('2027-03-16', '2027-03-18', a), 2);
+    assert.equal(await imp('2027-03-16', '2027-03-18'), 2, 'le 16 et le 18 restent à changer pour une nouvelle entrée voisine');
+    assert.equal(typeof (await imp('2027-03-16', '2027-03-18')), 'number');
+  } finally { await t.db.close(); }
+});
+
+test('10. soldes : absence_balance_calc change après ajout puis suppression d\'un férié manuel', async () => {
+  const t = await mk();
+  try {
+    await t.as(4); const id = (await t.rpc('absence_request', ['vacances', null, '2027-03-15', '2027-03-19'])).id; await t.sup();
+    await t.db.query("update absences set status = 'approved' where id = $1", [id]);
+    const used = async () => (await t.rpc('absence_balance_calc', [uid(4), 2027])).vacation.used;
+    assert.equal(Number(await used()), 5);
+    const fid = await t.save(2, 'ferie', 'Pont fictif', '2027-03-17');
+    assert.equal(Number(await used()), 4, 'le férié ajouté réduit les jours déduits du solde');
+    await t.as(2); await t.rpc('admin_calendar_delete', [fid]); await t.sup();
+    assert.equal(Number(await used()), 5);
   } finally { await t.db.close(); }
 });

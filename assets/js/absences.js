@@ -53,17 +53,48 @@
   const ferieList = new Map(); // id -> { label, start, end }
   const ferieDays = new Map(); // date ISO -> entrées « ferie » qui la couvrent
   const presenceList = new Map(); // id -> { label, start, end } (présence obligatoire)
-  function ingestCal(list) {
+  const feriesCovered = []; // plages [from, to] déjà lues dans absence_calendar
+  const feriesState = { at: 0 };
+  function rebuildFeries() {
+    ferieDays.clear();
+    for (const e of ferieList.values()) {
+      const last = Math.min(pd(e.end) - pd(e.start), 31 * 864e5) / 864e5;
+      for (let i = 0; i <= last; i++) { const day = iso(new Date(pd(e.start).getTime() + i * 864e5)); if (!ferieDays.has(day)) ferieDays.set(day, []); ferieDays.get(day).push(e); }
+    }
+  }
+  // Entrées lues pour la plage [from, to] : elles remplacent celles qu'on connaissait pour cette plage (modifiées ou supprimées entre-temps)
+  function ingestCal(list, from, to) {
+    const seen = new Set((list || []).map((c) => c.id));
+    if (from && to) for (const m of [ferieList, presenceList]) for (const [id, e] of [...m]) if (e.start <= to && e.end >= from && !seen.has(id)) m.delete(id);
     for (const c of list || []) {
       const e = { label: c.label, start: String(c.start_date).slice(0, 10), end: String(c.end_date).slice(0, 10) };
       if (c.kind === "presence_obligatoire") presenceList.set(c.id, e);
-      else if (c.kind === "ferie" && !ferieList.has(c.id)) {
-        ferieList.set(c.id, e);
-        const last = Math.min(pd(e.end) - pd(e.start), 31 * 864e5) / 864e5;
-        for (let i = 0; i <= last; i++) { const day = iso(new Date(pd(e.start).getTime() + i * 864e5)); if (!ferieDays.has(day)) ferieDays.set(day, []); ferieDays.get(day).push(e); }
-      }
+      else if (c.kind === "ferie") ferieList.set(c.id, e);
     }
+    rebuildFeries();
   }
+  function feriesWarn(on) {
+    let w = $("ab-feries-warn");
+    if (!on) { if (w) w.remove(); return; }
+    if (!w) { w = el("p", "muted ab-feries-warn", "Les fériés ajoutés par la direction n'ont pas pu être chargés ; les jours ouvrables affichés peuvent différer."); w.id = "ab-feries-warn"; w.setAttribute("role", "status"); $("ab-tool").prepend(w); }
+  }
+  async function fetchFeries(from, to) {
+    try {
+      const { data, error } = await sb.rpc("absence_calendar", { p_from: from, p_to: to });
+      if (error) throw error;
+      ingestCal(data, from, to);
+      feriesCovered.push([from, to]);
+      feriesState.at = Date.now();
+      feriesWarn(false);
+      return true;
+    } catch (_) { feriesWarn(true); return false; }
+  }
+  // Lit les fériés ajoutés sur l'étendue réellement utilisée (exports, historique) avant de calculer des jours ouvrables
+  async function ensureFeries(from, to) {
+    if (!from || !to || feriesCovered.some(([f, t]) => f <= from && t >= to)) return true;
+    return fetchFeries(from, to);
+  }
+  const spanOf = (rows) => rows.reduce((r, x) => [!r[0] || x.start_date < r[0] ? x.start_date : r[0], !r[1] || x.end_date > r[1] ? x.end_date : r[1]], [null, null]);
   const holidayOf = (day) => { const m = ferieDays.get(day); return m ? "Férié : " + m.map((x) => x.label).join(" ; ") : VD.holidayOf(day); };
   // Présences obligatoires qui chevauchent la période demandée
   const presenceOverlaps = (start, end) => [...presenceList.values()].filter((x) => x.start <= end && x.end >= start).sort((x, y) => (x.start < y.start ? -1 : 1));
@@ -78,12 +109,9 @@
   // Fenêtre de trois ans (celle où une demande peut être déposée : de J-366 à J+1100) chargée au démarrage ; la lecture du planning
   // complète ensuite pour les mois affichés.
   async function loadFeries() {
-    try {
-      const t = pd(todayIso());
-      const from = iso(new Date(t.getTime() - 366 * 864e5)), to = iso(new Date(t.getTime() + 1100 * 864e5));
-      const { data, error } = await sb.rpc("absence_calendar", { p_from: from, p_to: to });
-      if (!error) ingestCal(data);
-    } catch (_) { /* sans les fériés ajoutés, les fériés vaudois calculés restent appliqués */ }
+    const t = pd(todayIso());
+    feriesCovered.length = 0;
+    return fetchFeries(iso(new Date(t.getTime() - 366 * 864e5)), iso(new Date(t.getTime() + 1100 * 864e5)));
   }
   // Jours ouvrables (lundi à vendredi, jours fériés vaudois déduits) d'une période, éventuellement limitée à [from, to]
   function workdays(a, b, from, to) {
@@ -117,7 +145,7 @@
       + (who ? `. Déjà absent·e·s ou en demande : ${who}.` : ".");
   }
   // Période demandée d'une demande : les nouvelles dates si c'est une modification, sinon les dates de l'absence
-  const asked = (a) => (a.change_type === "modify" && a.change_start && a.change_end ? [String(a.change_start).slice(0, 10), String(a.change_end).slice(0, 10)] : [String(a.start_date).slice(0, 10), String(a.end_date).slice(0, 10)]);
+  const asked = (a) => (a.change_type === "delete" ? [null, null] : a.change_type === "modify" && a.change_start && a.change_end ? [String(a.change_start).slice(0, 10), String(a.change_end).slice(0, 10)] : [String(a.start_date).slice(0, 10), String(a.end_date).slice(0, 10)]);
   function warnBox(conflicts, title) {
     if (!conflicts || !conflicts.length) return null;
     const box = el("div", "ab-warn");
@@ -154,7 +182,7 @@
     ]);
     if (error) throw error;
     const cal = (calRes.data || []).map((c) => Object.assign(c, { start_date: String(c.start_date).slice(0, 10), end_date: String(c.end_date).slice(0, 10) }));
-    ingestCal(cal);
+    if (calRes.error) feriesWarn(true); else ingestCal(cal, from, to);
     const byUser = new Map();
     for (const a of data || []) {
       a.start_date = String(a.start_date).slice(0, 10); a.end_date = String(a.end_date).slice(0, 10);
@@ -795,6 +823,7 @@
   }
   async function afterChange() {
     state.cache.clear();
+    await loadFeries();
     hist.stale = true; // l'historique se recharge à sa prochaine ouverture
     await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending(), (state.ctx.validates.length || state.isDir) ? Promise.all([loadTodo(), loadRejected()]) : state.todoLoaded ? loadTodo() : null]);
   }
@@ -914,6 +943,7 @@
       const ag = await sb.rpc("absence_agenda_status", { p_user: state.who || null });
       if (!ag.error && ag.data) state.agendaStatus = ag.data;
     }
+    { const [f, t] = spanOf(state.mine); await ensureFeries(f, t); }
     fillYears();
     renderMine();
   }
@@ -1747,6 +1777,7 @@
     const msg = $("ab-mine-msg");
     say(msg, "Préparation du document…");
     try {
+      await ensureFeries($("ab-year").value ? `${$("ab-year").value}-01-01` : spanOf(state.mine)[0], $("ab-year").value ? `${$("ab-year").value}-12-31` : spanOf(state.mine)[1]);
       await loadScript(DOCX, "docx");
       const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, ShadingType, AlignmentType, BorderStyle } = window.docx;
       const year = $("ab-year").value;
@@ -2023,6 +2054,7 @@
     const rows = (abs.data || []).map(day10), decisions = (dec.data || []).map(day10);
     const planning = plan.data || { members: [], absences: [] };
     planning.absences = (planning.absences || []).map(day10);
+    { const [f, t] = spanOf(rows.concat(decisions, planning.absences)); await ensureFeries(f && f < w.from ? f : w.from, t && t > w.to ? t : w.to); }
     try { await loadScript(EXCELJS, "ExcelJS"); } catch (e) { return say(msg, e.message, "error"); }
     const wb = new window.ExcelJS.Workbook();
     const p = addPlanningSheet(wb, planning, w);
@@ -2208,6 +2240,7 @@
     if (tok !== hist.tok) return;
     if (error) return say(msg, "L'historique n'a pas pu être chargé. Réessayez dans un instant.", "error");
     const rows = (data || []).map((a) => Object.assign(a, { start_date: String(a.start_date).slice(0, 10), end_date: String(a.end_date).slice(0, 10) }));
+    { const [f, t] = spanOf(rows); await ensureFeries(f, t); if (tok !== hist.tok) return; }
     hist.find = useFind;
     hist.rows = hist.rows.concat(rows);
     hist.offset = hist.rows.length;
@@ -2614,6 +2647,13 @@
     if (window.CircuitView) { buildCircuit(); circuitPlace("plan"); }
     $("ab-circuit-link").hidden = ctx.role !== "cadre";
     await loadFeries();
+    // Retour sur l'onglet après un moment : fériés et présences relus (une entrée a pu être modifiée ou supprimée par la direction)
+    document.addEventListener("visibilitychange", async () => {
+      if (document.visibilityState !== "visible" || Date.now() - feriesState.at < 5 * 60 * 1000) return;
+      await loadFeries();
+      state.cache.clear();
+      renderGrid(); renderMine();
+    });
     await Promise.all([renderGrid(), loadMine(), loadDrafts(), refreshPending()]);
     if (location.hash === "#agenda" && state.agendaCtx && state.agendaCtx.tab) setTab("agenda");
     else if (location.hash === "#todo" && (ctx.validates.length || state.isDir)) setTab("todo");

@@ -64,7 +64,10 @@ let drafts = [];
 const todo = [{ id: 1, user_id: 'alice', name: 'Alice Fictive', clinics: ['Thoracique'], kind: 'vacances', note: null, start_date: '2026-11-23', end_date: '2026-11-27', status: 'requested', change_type: null,
   conflicts: [], progress: [{ name: 'Cadre Fictive', validator_name: 'Cadre Fictive', decision: 'pending', step: 0 }], stage: 1, opinions: [], step_kind: 'clinique', step_label: 'Validateurs de clinique',
   steps: [{ pos: 10, kind: 'clinique', label: 'Validateurs de clinique', mine: true }] }];
-const cal = [{ id: 31, kind: 'ferie', label: 'Pont fictif', start_date: '2026-11-20', end_date: '2026-11-20' },
+const T2 = (id, name, extra) => Object.assign(JSON.parse(JSON.stringify(todo[0])), { id, user_id: 'u' + id, name }, extra);
+todo.push(T2(2, 'Bob Fictif', { start_date: '2026-11-24', end_date: '2026-11-25', change_type: 'delete' }));
+todo.push(T2(3, 'Carla Fictive', { start_date: '2026-12-01', end_date: '2026-12-04', change_type: 'modify', change_kind: 'vacances', change_start: '2026-11-24', change_end: '2026-11-25' }));
+window.__cal = [{ id: 33, kind: 'ferie', label: 'Férié passé fictif', start_date: '2025-05-14', end_date: '2025-05-14' }, { id: 31, kind: 'ferie', label: 'Pont fictif', start_date: '2026-11-20', end_date: '2026-11-20' },
   { id: 32, kind: 'presence_obligatoire', label: 'Séminaire fictif', start_date: '2026-11-24', end_date: '2026-11-25' }];
 const rpc = async (name, args) => {
   window.__calls.push({ name, args });
@@ -74,11 +77,11 @@ const rpc = async (name, args) => {
     case 'absence_people': return ok(people);
     case 'absence_clinics': return ok([{ clinic: 'Thoracique', max_absent: 2 }]);
     case 'absence_grid': return ok(grid.filter((g) => g.end_date >= args.p_from && g.start_date <= args.p_to));
-    case 'absence_calendar': return ok(cal.filter((c) => c.end_date >= args.p_from && c.start_date <= args.p_to));
+    case 'absence_calendar': if (window.__calFail) return { data: null, error: { message: 'panne simulée' } }; return ok(window.__cal.filter((c) => c.end_date >= args.p_from && c.start_date <= args.p_to));
     case 'absence_pending_count': return ok(todo.length);
     case 'absence_to_validate': return ok(JSON.parse(JSON.stringify(todo)));
     case 'absence_request': drafts = [{ id: 77, user_id: 'me', kind: args.p_kind, status: 'draft', start_date: args.p_start, end_date: args.p_end, note: null, requested_by: 'me', change_type: null }]; return ok({ id: 77, conflicts: [] });
-    case 'absence_list': return ok(JSON.parse(JSON.stringify(drafts)));
+    case 'absence_list': return ok(JSON.parse(JSON.stringify(drafts.concat([{ id: 90, user_id: 'me', kind: 'vacances', status: 'approved', start_date: '2025-05-12', end_date: '2025-05-16', note: null, change_type: null }]))));
     case 'absence_my_validators': return ok({ validators: [{ id: 'me', name: 'Cadre Fictive' }], fallback: false });
     case 'absence_agenda_context': return { data: null, error: { message: 'absent' } };
     case 'absence_notification_status': return ok({ pending: 0, failed: 0, sent: 0 });
@@ -171,7 +174,7 @@ try {
   assert.match(await p.locator('#ac-confirm').innerText(), /Cette modification change le nombre de jours ouvrables de 2 absence\(s\) déjà déposée\(s\)\./);
   assert.equal((await calls(p, 'admin_calendar_save')).length, 0, 'rien n\'est enregistré avant la confirmation');
   const imp = await calls(p, 'admin_calendar_impact');
-  assert.deepEqual(imp[0].args, { p_start: '2026-05-14', p_end: '2026-05-15' });
+  assert.deepEqual(imp[0].args, { p_start: '2026-05-14', p_end: '2026-05-15', p_exclude_id: null });
   await p.locator('#ac-confirm').getByRole('button', { name: 'Annuler' }).click();
   assert.equal(await p.locator('#ac-confirm').isVisible(), false);
   assert.equal((await calls(p, 'admin_calendar_save')).length, 0);
@@ -212,14 +215,25 @@ try {
   assert.equal(await p.locator('#ac-form-title').innerText(), 'Modifier l\'entrée');
   assert.equal(await p.locator('#ac-cancel').isVisible(), true);
   await p.fill('#ac-label', 'Pont fictif corrigé');
-  await p.evaluate(() => { window.__impact = 0; });
-  await p.click('#ac-save'); // aucun jour ouvrable touché : enregistrement direct
+  const nImp0 = (await calls(p, 'admin_calendar_impact')).length;
+  await p.click('#ac-save'); // simple changement d'intitulé : aucun contrôle d'impact, enregistrement direct
   await p.waitForFunction(() => /Entrée modifiée/.test(document.getElementById('ac-msg').textContent));
+  assert.equal((await calls(p, 'admin_calendar_impact')).length, nImp0, 'intitulé seul : pas de contrôle d\'impact');
   const mod = (await calls(p, 'admin_calendar_save')).pop();
   assert.deepEqual(mod.args, { p_id: 3, p_kind: 'ferie', p_label: 'Pont fictif corrigé', p_start: '2026-05-15', p_end: '2026-05-15' });
   assert.ok((await labels(p)).includes('Pont fictif corrigé'));
   assert.match(await p.locator('#ac-list .ac-item', { hasText: 'Pont fictif corrigé' }).innerText(), /modifié par Direction Fictive/);
   assert.match(await p.locator('#ac-log').innerText(), /Modification · Férié ajouté « Pont fictif corrigé »/);
+  // changement de dates d'un férié : contrôle sur l'union des plages, entrée ignorée (p_exclude_id)
+  await p.locator('#ac-list .ac-item', { hasText: 'Pont fictif corrigé' }).getByRole('button', { name: 'Modifier' }).click();
+  await p.fill('#ac-start', '2026-05-15'); await p.fill('#ac-end', '2026-05-18');
+  await p.evaluate(() => { window.__impact = 1; });
+  await p.click('#ac-save');
+  await p.locator('#ac-confirm').waitFor({ state: 'visible' });
+  assert.match(await p.locator('#ac-confirm').innerText(), /de 1 absence\(s\)/);
+  assert.deepEqual((await calls(p, 'admin_calendar_impact')).pop().args, { p_start: '2026-05-15', p_end: '2026-05-18', p_exclude_id: 3 });
+  await p.locator('#ac-confirm').getByRole('button', { name: 'Annuler' }).click();
+  await p.click('#ac-cancel');
   // annulation d'une modification
   await p.locator('#ac-list .ac-item', { hasText: 'Retraite fictive' }).getByRole('button', { name: 'Modifier' }).click();
   await p.click('#ac-cancel');
@@ -233,6 +247,7 @@ try {
   await p.locator('#ac-confirm').waitFor({ state: 'visible' });
   assert.match(await p.locator('#ac-confirm').innerText(), /change le nombre de jours ouvrables de 3 absence\(s\)/);
   assert.equal((await calls(p, 'admin_calendar_delete')).length, 0);
+  assert.deepEqual((await calls(p, 'admin_calendar_impact')).pop().args, { p_start: '2026-05-15', p_end: '2026-05-15', p_exclude_id: 3 }, 'suppression simulée par p_exclude_id');
   await p.locator('#ac-confirm').getByRole('button', { name: 'Supprimer' }).click();
   await p.waitForFunction(() => /Entrée supprimée/.test(document.getElementById('ac-msg').textContent));
   assert.equal((await calls(p, 'admin_calendar_delete'))[0].args.p_id, 3);
@@ -300,11 +315,49 @@ try {
   await p.locator('#ab-todo-list article').first().waitFor();
   assert.match(await p.locator('#ab-todo-list article').first().innerText(), /Cette période chevauche une présence obligatoire : Séminaire fictif \(24\.11\.2026 – 25\.11\.2026\)/);
   assert.match(await p.locator('#ab-todo-list article').first().innerText(), /5 jours ouvrables/, 'semaine du 23.11 : aucun férié ajouté')
+  const bob = p.locator('#ab-todo-list article', { hasText: 'Bob Fictif' });
+  assert.doesNotMatch(await bob.innerText(), /présence obligatoire/, 'demande de suppression : aucun avertissement de présence');
+  assert.match(await p.locator('#ab-todo-list article', { hasText: 'Carla Fictive' }).innerText(), /Cette période chevauche une présence obligatoire : Séminaire fictif/, 'modification : la nouvelle période est comparée');
   await p.locator('#ab-t-plan').click();
   await p.locator('td[data-id="1"]').first().click();
   assert.match(await p.locator('#ab-detail').innerText(), /Cette période chevauche une présence obligatoire : Séminaire fictif/);
   await shot(p, 'planning-validateur');
   ok('carte du validateur (À valider) et détail du planning : avertissement de présence obligatoire');
+
+  // Entrée modifiée puis supprimée entre deux chargements : la page relit les fériés au retour sur l'onglet
+  const plus = () => p.evaluate(() => { const n = Date.now(); Date.now = () => n + 10 * 60 * 1000; document.dispatchEvent(new Event('visibilitychange')); });
+  const cls = (i) => p.locator('#ab-scroll thead th.ab-d').nth(i).getAttribute('class');
+  await p.locator('#ab-t-plan').click();
+  await p.evaluate(() => { window.__cal.find((c) => c.id === 31).start_date = '2026-11-19'; window.__cal.find((c) => c.id === 31).end_date = '2026-11-19'; });
+  await plus();
+  await p.waitForFunction(() => /ab-we/.test(document.querySelectorAll('#ab-scroll thead th.ab-d')[18].className));
+  assert.doesNotMatch(await cls(19), /ab-we/, 'ancienne date : redevenue ouvrable');
+  await p.evaluate(() => { window.__cal = window.__cal.filter((c) => c.id !== 31); });
+  await plus();
+  await p.waitForFunction(() => !/ab-we/.test(document.querySelectorAll('#ab-scroll thead th.ab-d')[18].className));
+  assert.doesNotMatch(await cls(18), /ab-we/, 'entrée supprimée : plus de férié');
+  ok('modification de dates puis suppression d\'un férié entre deux chargements : la grille suit');
+
+  // Mes absences d'une année passée : les fériés ajoutés de cette année sont lus avant le calcul des jours ouvrables
+  await p.locator('#ab-t-mine').click();
+  await p.selectOption('#ab-year', '2025');
+  await p.locator('#ab-p-mine summary', { hasText: 'Passées' }).click();
+  assert.match(await p.locator('#ab-p-mine').innerText(), /4 jours ouvrables/, 'du 12 au 16.05.2025 moins le férié du 14.05 ajouté');
+  const past = (await calls(p, 'absence_calendar')).filter((c) => c.args.p_from <= '2025-05-12' && c.args.p_to >= '2025-05-16' && c.args.p_from > '2020-01-01');
+  assert.ok(past.length >= 1, 'plage de l\'absence passée lue');
+  // Export Word d'une année passée : fériés lus pour l'année avant la préparation du document
+  await p.evaluate(() => { window.__calls.length = 0; });
+  await p.click('#ab-docx');
+  await p.waitForFunction(() => window.__calls.some((c) => c.name === 'absence_calendar'));
+  assert.deepEqual((await calls(p, 'absence_calendar'))[0].args, { p_from: '2025-01-01', p_to: '2025-12-31' });
+  ok('année passée : fériés ajoutés lus pour Mes absences et l\'export Word');
+  await p.context().close();
+
+  // Panne de lecture des fériés : message discret
+  p = await open('window.__calFail = true;' + PLAN_MOCK, '/app/absences.html', '#ab-tool');
+  await p.locator('#ab-feries-warn').waitFor({ state: 'visible' });
+  assert.match(await p.locator('#ab-feries-warn').innerText(), /Les fériés ajoutés par la direction n'ont pas pu être chargés ; les jours ouvrables affichés peuvent différer/);
+  ok('lecture des fériés en échec : message affiché, planning utilisable');
   await p.context().close();
 } finally { await browser.close(); server.close(); }
 if (errors.length) { console.error('Erreurs de page :\n' + errors.join('\n')); process.exit(1); }
