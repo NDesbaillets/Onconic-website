@@ -122,7 +122,7 @@ try {
   assert.ok(r.x > l.x + l.width - 1, 'panneau à droite de la liste');
   assert.match(await p.locator('#ab-todo-side .ab-mini-title').innerText(), /Planning de Thoracique/);
   const names = () => p.locator('#ab-todo-side tbody tr:not(.ab-cal):not(.ab-count-row) th .ab-pname').allInnerTexts();
-  assert.deepEqual(await names(), ['Alice Fictive', 'Bob Fictif', 'Cadre Fictive (moi)', 'Erik Fictif'], 'demandeur en tête, cliniques de la demande seulement');
+  assert.deepEqual(await names(), ['Alice Fictive', 'Bob Fictif', 'Erik Fictif', 'Cadre Fictive (moi)'], 'demandeur en tête, cliniques de la demande seulement, puis nom de famille (Fictif avant Fictive)');
   assert.equal(await p.locator('#ab-todo-side tr.ab-req').count(), 1);
   assert.equal(await p.locator('#ab-todo-side thead th.ab-hl').count(), 5, 'cinq jours demandés surlignés');
   assert.match(await p.locator('#ab-todo-side .ab-mini-range').innerText(), /23\.11\.2026 – 11\.12\.2026/, 'trois semaines au moins');
@@ -134,7 +134,7 @@ try {
   assert.equal(await cardsLoc.nth(1).getAttribute('aria-current'), 'true');
   assert.equal(await cardsLoc.nth(0).getAttribute('aria-current'), null);
   await p.waitForFunction(() => /07\.12\.2026/.test(document.querySelector('#ab-todo-side .ab-mini-range')?.textContent || ''));
-  assert.deepEqual(await names(), ['Erik Fictif', 'Alice Fictive', 'Bob Fictif', 'Cadre Fictive (moi)']);
+  assert.deepEqual(await names(), ['Erik Fictif', 'Bob Fictif', 'Alice Fictive', 'Cadre Fictive (moi)']);
   ok('changement de sélection : planning et demandeur en tête mis à jour');
   await cardsLoc.nth(0).focus();
   await p.keyboard.press('Enter');

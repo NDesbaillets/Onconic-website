@@ -15,11 +15,12 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261111a">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261128a">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
-  <script src="/assets/js/admin-absences.js?v=20261123a" defer></script>
+  <script src="/assets/js/name-sort.js?v=20261128a" defer></script>
+  <script src="/assets/js/admin-absences.js?v=20261128a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -48,6 +49,7 @@
           <p class="muted">Le <a href="/admin/circuit-absences.html">circuit de validation</a> montre qui valide quoi, dans quel ordre, et permet de le simuler. Pour chaque clinique, choisissez les médecins cadres qui valident les absences de ses membres. Seuls les médecins cadres cochés « Validateur des absences » dans <a href="/admin/membres.html">Membres et accès</a> apparaissent ici (tous les cadres ne valident pas). Un seul valideur suffit à décider. Sans valideur désigné, les demandes vont aux administrateurs, qui peuvent de toute façon tout valider. Seuls les médecins, CDC et cadres sont rattachés à une clinique (page <a href="/admin/membres.html">Membres et accès</a>) ; les autres rôles relèvent de la clinique « Administration ».</p>
           <p class="muted">Le seuil d'absents simultanés déclenche un avertissement, non bloquant, pour le demandeur et pour le valideur : il est atteint quand le nombre de membres de la clinique absents le même jour (demandes en attente comprises) dépasse le maximum indiqué.</p>
           <p class="form-msg" id="aa-msg" role="status" aria-live="polite"></p>
+          <div id="aa-sort-slot"></div>
           <div id="aa-list" class="aa-grid"></div>
 
           <section class="aa-cal" aria-labelledby="aa-cal-title">

@@ -157,6 +157,12 @@
 
   // ----- Sélection des personnes affichées -----
   const sharesClinic = (p, list) => (p.clinics || []).some((c) => list.includes(c));
+  // Tri des personnes (module name-sort.js) : nom de famille par défaut, choix mémorisé sur cet appareil
+  const SORT_MODES = ["family", "first", "role", "clinic"];
+  const sortMode = () => (window.OnconicSort ? window.OnconicSort.getMode("absences", SORT_MODES) : "family");
+  const compareNames = (a, b, mode) => (window.OnconicSort
+    ? window.OnconicSort.compareNames(a, b, mode, { roleOrder: ROLE_ORDER })
+    : String(a.name).localeCompare(String(b.name), "fr"));
   function selection() {
     const me = state.ctx.me;
     const { scope, ids } = state.prefs;
@@ -168,10 +174,10 @@
       const mine = state.ctx.clinics || [];
       list = state.people.filter((p) => p.is_me || sharesClinic(p, mine));
     } else list = state.people.filter((p) => (p.clinics || []).includes(scope));
-    // Ordre choisi par le membre (« Ordre d'affichage »), puis moi en tête et ordre alphabétique
+    // Ordre choisi par le membre (« Ordre d'affichage »), puis moi en tête et tri choisi (nom de famille par défaut)
     const rank = new Map(state.prefs.order.map((id, i) => [id, i]));
     const r = (p) => (rank.has(p.id) ? rank.get(p.id) : Infinity);
-    return list.sort((a, b) => (r(a) - r(b)) || (b.is_me - a.is_me) || a.name.localeCompare(b.name, "fr"));
+    return list.sort((a, b) => (r(a) - r(b)) || (b.is_me - a.is_me) || compareNames(a, b, sortMode()));
   }
 
   // ----- Ordre d'affichage des personnes sélectionnées -----
@@ -691,7 +697,7 @@
     const chosen = new Set(selection().map((p) => p.id));
     const list = $("ab-pick-list");
     list.replaceChildren();
-    for (const p of state.people) {
+    for (const p of state.people.slice().sort((x, y) => compareNames(x, y, sortMode()))) {
       if (q && !norm(p.name + " " + (p.clinics || []).join(" ")).includes(q)) continue;
       const lab = el("label", "cg-check ab-pick-item");
       const cb = el("input");
@@ -1511,7 +1517,7 @@
     if (box.dataset.tok !== tok) return;
     // Membres des cliniques de la demande (ceux que les fonctions existantes montrent à ce validateur), demandeur en tête
     const req = state.people.find((p) => p.id === a.user_id) || { id: a.user_id, name: a.name, clinics, is_me: false };
-    const others = state.people.filter((p) => p.id !== a.user_id && sharesClinic(p, clinics)).sort((x, y) => x.name.localeCompare(y.name, "fr"));
+    const others = state.people.filter((p) => p.id !== a.user_id && sharesClinic(p, clinics)).sort((x, y) => compareNames(x, y, sortMode()));
     const people = [req, ...others];
     const byUser = new Map(data.byUser);
     // Nouvelle période d'une modification : barre « en attente » ajoutée au demandeur pour la lire dans la grille
@@ -1852,7 +1858,7 @@
       for (const k of keys) { if (!groups.has(k)) groups.set(k, []); groups.get(k).push(m); }
     }
     const order = [...groups.keys()].sort((a, b) => (a === "Sans clinique") - (b === "Sans clinique") || a.localeCompare(b, "fr"));
-    return order.map((k) => [k, groups.get(k).sort((a, b) => (ROLE_ORDER[a.role] || 9) - (ROLE_ORDER[b.role] || 9) || a.name.localeCompare(b.name, "fr"))]);
+    return order.map((k) => [k, groups.get(k).sort((a, b) => (ROLE_ORDER[a.role] || 9) - (ROLE_ORDER[b.role] || 9) || compareNames(a, b, sortMode() === "first" ? "first" : "family"))]);
   }
   function addPlanningSheet(wb, plan, w) {
     const ws = wb.addWorksheet("Planning", { views: [{ state: "frozen", xSplit: 2, showGridLines: false }], properties: { defaultRowHeight: 20 } });
@@ -1958,7 +1964,7 @@
     }
     const ws = wb.addWorksheet("Synthèse");
     ws.columns = ["Nom", "Rôle", "Cliniques", "Demandes acceptées", "Jours ouvrables acceptés", "dont vacances", "dont congrès", "dont autre", "En attente", "Validées avec changement en attente", "Refusées", "Annulées", "Changements acceptés", "Changements refusés"].map((header) => ({ header }));
-    [...people.values()].sort((a, b) => a.name.localeCompare(b.name, "fr")).forEach((p) => {
+    [...people.values()].sort((a, b) => compareNames(a, b, sortMode())).forEach((p) => {
       ws.addRow([p.name, ROLE_NAME[p.role] || p.role, (p.clinics || []).join(", "), p.ok, p.days.vacances + p.days.congres + p.days.autre, p.days.vacances, p.days.congres, p.days.autre, p.pending, p.changePending, p.rejected, p.cancelled, p.chOk, p.chKo]);
     });
     styleSheet(ws, [26, 18, 24, 12, 14, 10, 10, 10, 10, 16, 10, 10, 14, 14]);
@@ -2201,6 +2207,7 @@
     const others = [];
     if (state.isDir || state.ctx.validates.length) state.people.filter((p) => !p.is_me && (state.isDir || sharesClinic(p, state.ctx.validates))).forEach((p) => others.push(p));
     state.secOf.forEach((c) => { if (!others.some((p) => p.id === c.id)) others.push({ id: c.id, name: c.name }); });
+    others.sort((x, y) => compareNames(x, y, sortMode()));
     if (others.length) {
       const sel = $("ab-hist-who");
       const a0 = el("option", null, "Toutes les personnes"); a0.value = ""; sel.append(a0);
@@ -2471,6 +2478,9 @@
     // Planning
     fillScope();
     $("ab-rows").value = String(state.prefs.rows);
+    if (window.OnconicSort && $("ab-sort-slot")) {
+      $("ab-sort-slot").replaceChildren(window.OnconicSort.control("absences", { modes: SORT_MODES, onChange: () => { renderGrid(); renderOrder(); if (!$("ab-pick").hidden) renderPicker(); } }));
+    }
     $("ab-scope").addEventListener("change", (e) => { state.tempScope = null; state.prefs.scope = e.target.value; savePrefs(); fillScope(); renderGrid(); if (!$("ab-pick").hidden) renderPicker(); });
     $("ab-temp-back").addEventListener("click", () => { state.tempScope = null; renderGrid(); if (!$("ab-pick").hidden) renderPicker(); });
     $("ab-rows").addEventListener("change", (e) => { state.prefs.rows = Number(e.target.value); savePrefs(); renderGrid(); });
@@ -2549,7 +2559,7 @@
       $("ab-t-todo").hidden = false;
       const who = $("ab-who");
       const me = el("option", null, "Moi"); me.value = ""; who.append(me);
-      state.people.filter((p) => !p.is_me && (state.isDir || sharesClinic(p, ctx.validates))).forEach((p) => { const o = el("option", null, p.name); o.value = p.id; who.append(o); });
+      state.people.filter((p) => !p.is_me && (state.isDir || sharesClinic(p, ctx.validates))).sort((x, y) => compareNames(x, y, sortMode())).forEach((p) => { const o = el("option", null, p.name); o.value = p.id; who.append(o); });
       who.addEventListener("change", () => { state.who = who.value; loadMine(); });
       $("ab-who-wrap").hidden = false;
       loadRejected();

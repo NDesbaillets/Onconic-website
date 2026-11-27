@@ -59,3 +59,15 @@
 .am-until input { font: inherit; padding: 6px 8px; border: 1px solid var(--navy-200); }
 .am-resend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
 .am-resend-msg { font-size: .88rem; }
+
+/* Ajouter un membre */
+.am-add > form { padding: 0 16px 16px; display: grid; gap: var(--space-3); }
+.am-add-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-3); }
+.am-add-grid label { display: grid; gap: 4px; font-weight: 500; font-size: .92rem; color: var(--navy-800); }
+.am-add-grid input, .am-add-grid select { font: inherit; padding: 8px 10px; border: 1px solid var(--navy-200); background: var(--white); color: var(--ink-900); }
+.am-add-wide { grid-column: 1 / -1; }
+.am-add-mode { border: 1px solid var(--navy-100); padding: var(--space-2) var(--space-3); margin: 0; }
+.am-add-mode legend { font-weight: 500; color: var(--navy-800); padding: 0 4px; }
+.am-add-mode label { display: flex; gap: var(--space-2); align-items: flex-start; margin: 6px 0; font-size: .92rem; }
+.am-add-pass { padding: var(--space-3); background: var(--amber-50); border-left: 3px solid var(--amber-500); }
+.am-add-pass code { font-size: 1.15rem; letter-spacing: .04em; padding: 2px 6px; background: var(--white); border: 1px solid var(--navy-100); }

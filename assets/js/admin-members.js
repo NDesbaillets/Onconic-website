@@ -78,12 +78,18 @@
     }
   }
 
-  const pendingFirst = (a, b) => (b.role === "member") - (a.role === "member") || nameOf(a).localeCompare(nameOf(b), "fr");
+  // Les « en attente » restent en tête, le reste suit le tri choisi (nom de famille par défaut, module name-sort.js)
+  const SORT_MODES = ["family", "first", "role", "clinic"];
+  const ROLE_RANK = ["cadre", "cdc", "clinician", "pharmacist", "nurse", "assistant", "direction", "admin"];
+  const S = () => window.OnconicSort;
+  const personOf = (r) => ({ id: r.id, first: r.first_name, last: r.last_name, name: nameOf(r), role: r.role, clinics: r.clinics });
+  const pendingFirst = (mode) => (a, b) => (b.role === "member") - (a.role === "member")
+    || (S() ? S().compareNames(personOf(a), personOf(b), mode, { roleOrder: ROLE_RANK }) : nameOf(a).localeCompare(nameOf(b), "fr"));
   function render() {
     const q = norm($("am-q").value);
     const role = $("am-role").value;
     const rows = state.rows.filter((r) => (!role || r.role === role)
-      && (!q || norm([r.first_name, r.last_name, r.full_name, r.email].join(" ")).includes(q))).sort(pendingFirst);
+      && (!q || norm([r.first_name, r.last_name, r.full_name, r.email].join(" ")).includes(q))).sort(pendingFirst(S() ? S().getMode("membres", SORT_MODES) : null));
     const pending = state.rows.filter((r) => r.role === "member").length;
     $("am-count").textContent = `${plur(rows.length, "membre affiché", "membres affichés")} sur ${state.rows.length}` + (pending ? ` · ${pending} en attente de validation` : "");
     const list = $("am-list");
@@ -527,6 +533,101 @@
     return c;
   }
 
+  // Ajouter un membre (Edge Function member-create) : rôles limités à ce que la base autorise pour l'appelant
+  const ADD_ROLES = ["clinician", "cdc", "cadre", "assistant", "nurse", "pharmacist", "direction"];
+  const ADD_ERRORS = {
+    invalid_email: "Adresse e-mail invalide.",
+    invalid_name: "Prénom et nom sont nécessaires.",
+    invalid_role: "Rôle non autorisé.",
+    invalid_institution: "Institution inconnue.",
+    invalid_clinics: "Clinique inconnue ou non autorisée pour ce rôle. Aucun compte n'a été créé.",
+    user_exists: "Un compte existe déjà avec cette adresse (peut-être en attente). Retrouvez-le dans la liste pour changer son rôle.",
+    invite_failed: "L'invitation n'a pas pu être envoyée. Réessayez, ou choisissez le mot de passe provisoire.",
+    create_failed: "Le compte n'a pas pu être créé. Réessayez.",
+    profile_failed: "Le compte a été créé mais le rôle n'a pas pu être attribué. Il apparaît dans la liste des membres en attente : ouvrez sa fiche pour lui donner son rôle.",
+    profile_failed_invite: "Le compte a été créé mais le rôle n'a pas pu être attribué. Un e-mail d'invitation est parti. Le compte apparaît dans la liste des membres en attente : ouvrez sa fiche pour lui donner son rôle.",
+    forbidden: "Vous n'avez pas le droit de créer ce rôle.",
+    unauthorized: "Session expirée : reconnectez-vous."
+  };
+  function addChecks(box, list, name) {
+    for (const cl of list) {
+      const lab = el("label", "cg-check am-tool");
+      const cb = el("input");
+      cb.type = "checkbox"; cb.value = cl; cb.name = name;
+      lab.append(cb, el("span", null, cl));
+      box.append(lab);
+    }
+  }
+  const addSay = (text, kind) => { const m = $("am-add-msg"); m.textContent = text; m.className = "form-msg" + (kind ? " " + kind : ""); };
+  let passTimer = null;
+  function hidePass() {
+    clearTimeout(passTimer); passTimer = null;
+    $("am-add-pass-value").textContent = "";
+    $("am-add-pass").hidden = true;
+    $("am-add-pass-copy").textContent = "Copier";
+  }
+  const addChosen = (box) => [...box.querySelectorAll("input:checked")].map((i) => i.value);
+  function addSync() {
+    const role = $("am-add-role").value;
+    $("am-add-clinics").hidden = !["clinician", "cdc", "cadre"].includes(role);
+    $("am-add-cdc").hidden = !["cdc", "cadre"].includes(role);
+  }
+  async function addSubmit(e) {
+    e.preventDefault();
+    const btn = $("am-add-submit");
+    hidePass();
+    const role = $("am-add-role").value;
+    const body = {
+      first_name: $("am-add-first").value.trim(), last_name: $("am-add-last").value.trim(), email: $("am-add-email").value.trim(), role,
+      institution: $("am-add-inst").value,
+      clinics: ["clinician", "cdc", "cadre"].includes(role) ? addChosen($("am-add-clinics")) : [],
+      cdc_clinics: ["cdc", "cadre"].includes(role) ? addChosen($("am-add-cdc")) : [],
+      mode: document.querySelector('input[name="am-add-mode"]:checked').value
+    };
+    if (!role) return addSay("Choisissez un rôle.", "error");
+    if (!body.first_name || !body.last_name) return addSay(ADD_ERRORS.invalid_name, "error");
+    if (!body.email || !$("am-add-email").checkValidity()) return addSay(ADD_ERRORS.invalid_email, "error");
+    btn.disabled = true; addSay("Création…");
+    let res;
+    try { res = await sb.functions.invoke("member-create", { body }); } catch (x) { res = { error: x }; }
+    btn.disabled = false;
+    if (res.error) {
+      let code = "";
+      try { code = (await res.error.context.json()).error; } catch (x) { /* réponse non JSON */ }
+      if (code === "profile_failed") { addSay(ADD_ERRORS[body.mode === "invite" ? "profile_failed_invite" : "profile_failed"], "error"); await refresh(); return; }
+      return addSay(ADD_ERRORS[code] || "Création impossible (" + (code || "erreur réseau") + ").", "error");
+    }
+    const data = res.data || {};
+    const who = body.first_name + " " + body.last_name;
+    addSay(data.mode === "invite" ? `Compte créé pour ${who} (${ROLE_LABEL[role]}). Une invitation a été envoyée à ${body.email}.` : `Compte créé pour ${who} (${ROLE_LABEL[role]}).`, "ok");
+    $("am-add-form").reset(); addSync();
+    if (data.password) { $("am-add-pass-value").textContent = data.password; $("am-add-pass").hidden = false; passTimer = setTimeout(hidePass, 5 * 60 * 1000); }
+    await refresh();
+  }
+  async function initAdd() {
+    const det = $("am-add");
+    const oks = await Promise.all(ADD_ROLES.map(async (r) => {
+      if (r === "direction" && state.role !== "admin") return false; // seul un administrateur crée une direction
+      try { const { data } = await sb.rpc("member_create_allowed", { p_role: r }); return data === true; } catch (x) { return false; }
+    }));
+    const roles = ADD_ROLES.filter((r, i) => oks[i]);
+    if (!roles.length) { det.hidden = true; return; } // migration absente ou aucun droit
+    const sel = $("am-add-role");
+    sel.replaceChildren(...roles.map((r) => { const o = el("option", null, ROLE_LABEL[r]); o.value = r; return o; }));
+    addChecks($("am-add-clinics"), ABS_CLINICS, "am-add-clinic");
+    addChecks($("am-add-cdc"), CLINICS, "am-add-cdc-clinic");
+    sel.addEventListener("change", addSync);
+    addSync();
+    $("am-add-form").addEventListener("submit", addSubmit);
+    $("am-add-form").addEventListener("reset", hidePass);
+    det.addEventListener("toggle", () => { if (!det.open) hidePass(); });
+    $("am-add-pass-hide").addEventListener("click", hidePass);
+    $("am-add-pass-copy").addEventListener("click", async (e) => {
+      try { await navigator.clipboard.writeText($("am-add-pass-value").textContent); e.target.textContent = "Copié"; } catch (x) { e.target.textContent = "Copie impossible"; }
+    });
+    det.hidden = false;
+  }
+
   // Recharge les données en gardant le membre choisi et les positions de défilement
   async function refresh() {
     const y = window.scrollY;
@@ -548,8 +649,11 @@
     try { await load(); } catch (e) { return ($("ug-status").textContent = "Chargement impossible : " + e.message); }
     $("ug-status").hidden = true;
     $("am-tool").hidden = false;
+    $("am-add").hidden = true;
+    initAdd();
     $("am-q").addEventListener("input", render);
     $("am-role").addEventListener("change", render);
+    if (S() && $("am-sort-slot")) $("am-sort-slot").replaceChildren(S().control("membres", { modes: SORT_MODES, onChange: render }));
     $("am-close").addEventListener("click", closeDetail);
     $("am-back").addEventListener("click", closeDetail);
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.sel && !document.querySelector("dialog[open]")) closeDetail(); });

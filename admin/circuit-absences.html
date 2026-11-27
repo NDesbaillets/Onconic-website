@@ -15,13 +15,14 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261123a">
+  <link rel="stylesheet" href="/assets/css/onconic.css?v=20261128a">
   <link rel="stylesheet" href="/assets/css/circuit.css?v=20261123b">
   <script src="/assets/js/site.js?v=20261110b" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="/assets/js/config.js?v=20261028"></script>
   <script src="/assets/js/circuit-view.js?v=20261123b"></script>
-  <script src="/assets/js/admin-circuit.js?v=20261123b" defer></script>
+  <script src="/assets/js/name-sort.js?v=20261128a" defer></script>
+  <script src="/assets/js/admin-circuit.js?v=20261128a" defer></script>
 </head>
 <body>
   <header class="site-header">
@@ -99,6 +100,7 @@
           <details class="cc-sec cc-fold" id="cc-assign-box" open hidden>
             <summary>Qui suit ce circuit</summary>
             <p class="cc-hint" id="cc-assign-hint">Une cible (membre, rôle ou clinique) ne suit qu'un circuit. Pour revenir au circuit général, retirez la cible de ce circuit.</p>
+            <div id="cc-as-sort"></div>
             <div class="cc-as-lists" id="cc-as-lists"></div>
             <p class="form-msg" id="cc-as-msg" role="status" aria-live="polite"></p>
             <div class="cc-row" id="cc-as-actions">

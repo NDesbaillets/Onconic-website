@@ -722,7 +722,10 @@
   }
   function renderAssign() {
     const o = state.overview || {};
-    const members = [...(o.members || [])].sort((a, b) => a.name.localeCompare(b.name, "fr")).map((m) => ({ id: m.id, label: memberLabel(m) }));
+    const sorter = window.OnconicSort;
+    if (sorter && $("cc-as-sort") && !$("cc-as-sort").firstChild) $("cc-as-sort").append(sorter.control("circuit-membres", { modes: ["family", "first"], onChange: renderAssign }));
+    const mode = sorter ? sorter.getMode("circuit-membres", ["family", "first"]) : "family";
+    const members = [...(o.members || [])].sort((a, b) => (sorter ? sorter.compareNames(a, b, mode) : a.name.localeCompare(b.name, "fr"))).map((m) => ({ id: m.id, label: memberLabel(m) }));
     const roles = ROLE_CODES.map((r) => ({ id: r, label: ROLES[r] || r }));
     const clinics = (o.clinics || []).map((c) => ({ id: c.clinic, label: c.clinic }));
     $("cc-as-lists").replaceChildren(pickList("member", "Membres", members), pickList("role", "Rôles", roles), pickList("clinic", "Cliniques", clinics));

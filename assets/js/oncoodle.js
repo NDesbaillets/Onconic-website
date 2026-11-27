@@ -325,6 +325,12 @@
     const b = $("oc-save"); if (b) b.disabled = false;
   }
 
+  // Tri des personnes (module name-sort.js) : nom de famille par défaut, choix mémorisé par liste
+  const sorter = () => window.OnconicSort;
+  const sortPeople = (list, key, modes) => (sorter() ? sorter().sortPeople(list, { mode: sorter().getMode(key, modes), ctx: { roleOrder: C.ROLE_ORDER } }) : list.slice());
+  const sortControl = (key, modes, onChange) => (sorter() ? sorter().control(key, { modes, onChange }) : null);
+  const INVITE_MODES = ["family", "first"], RECIP_MODES = ["family", "first", "role"];
+
   function renderOverview(box, d, rsvp) {
     const p = d.poll;
     if (!d.invitees.length) {
@@ -332,11 +338,14 @@
       return;
     }
     box.append(el("h3", null, "Réponses"));
+    const sc = sortControl("oncoodle-invites", INVITE_MODES, () => renderDetail());
+    if (sc) box.append(sc);
+    const invitees = sortPeople(d.invitees, "oncoodle-invites", INVITE_MODES);
     if (rsvp) {
       const o = d.options[0];
       const groups = [["yes", "Participent"], ["maybe", "Peut-être"], ["no", "Ne participent pas"], [null, "Pas encore répondu"]];
       for (const [a, label] of groups) {
-        const who = d.invitees.filter((i) => (i.votes[o.id] || null) === a);
+        const who = invitees.filter((i) => (i.votes[o.id] || null) === a);
         const h = el("p", null);
         h.append(el("strong", null, `${label} (${who.length})`));
         if (who.length) h.append(document.createTextNode(" : " + who.map((i) => i.name + (i.required ? " ★" : "")).join(", ")));
@@ -351,7 +360,7 @@
       for (const o of d.options) hr.append(el("th", null, C.optionLabel(o)));
       const th = el("thead"); th.append(hr); t.append(th);
       const tb = el("tbody");
-      for (const i of d.invitees) {
+      for (const i of invitees) {
         const tr = el("tr");
         const n = el("td", null, i.name);
         if (i.required) { n.append(document.createTextNode(" "), el("span", "oc-star", "★")); n.lastChild.setAttribute("title", "Participant·e obligatoire"); }
@@ -542,6 +551,8 @@
     renderSlots();
     renderRules();
     renderChips();
+    const slot = $("oc-sort-slot"), sc = sortControl("oncoodle-destinataires", RECIP_MODES, () => { renderCurrent(); if (state.form && state.form.members && state.form.members.length) schedulePreview(); });
+    if (slot) slot.replaceChildren(...(sc ? [sc] : []));
     renderCurrent();
     schedulePreview();
     show("form");
@@ -676,8 +687,8 @@
       list.replaceChildren();
       if (q.length < 2) return void (list.hidden = true);
       const f = state.form, taken = new Set(f.users.concat(f.excl).map((u) => u.id).concat(f.current.map((c) => c.id)));
-      const hits = state.people.filter((p) => !taken.has(p.id) && p.id !== state.me && norm(`${p.name} ${C.ROLE_SINGULAR[p.role] || ""} ${(p.clinics || []).join(" ")}`).includes(q)).slice(0, 8);
-      for (const p of hits) {
+      const hits = state.people.filter((p) => !taken.has(p.id) && p.id !== state.me && norm(`${p.name} ${C.ROLE_SINGULAR[p.role] || ""} ${(p.clinics || []).join(" ")}`).includes(q));
+      for (const p of sortPeople(hits, "oncoodle-destinataires", RECIP_MODES).slice(0, 8)) {
         const li = el("li"), b = el("button", null, `${p.name}  ·  ${C.ROLE_SINGULAR[p.role] || p.role}${p.clinics && p.clinics.length ? " · " + p.clinics.join(", ") : ""}`);
         b.type = "button";
         b.addEventListener("click", () => { state.form[target].push({ id: p.id, name: p.name }); input.value = ""; hide(); renderChips(); schedulePreview(); input.focus(); });
@@ -708,7 +719,7 @@
     if (f.mode !== "edit") return;
     box.replaceChildren(el("h3", null, `Destinataires actuels (${f.current.length})`));
     const ul = el("ul");
-    for (const i of f.current) {
+    for (const i of sortPeople(f.current, "oncoodle-destinataires", RECIP_MODES)) {
       const li = el("li", f.removeUsers.has(i.id) ? "gone" : "");
       li.append(el("span", null, i.name));
       const right = el("span");
@@ -745,7 +756,7 @@
     box.firstChild.append(el("strong", null, head));
     if (r.truncated) box.append(el("p", "muted", "Liste tronquée à 400 personnes."));
     const ul = el("ul");
-    for (const m of f.members) {
+    for (const m of sortPeople(f.members, "oncoodle-destinataires", RECIP_MODES)) {
       const li = el("li");
       li.append(el("span", null, `${m.name}  ·  ${C.ROLE_SINGULAR[m.role] || m.role}  ·  ${m.via}`));
       li.append(checkbox("Obligatoire", f.required.has(m.id), (on) => { on ? f.required.add(m.id) : f.required.delete(m.id); }));
