@@ -34,7 +34,7 @@ Garde-fou : `tests/absences/name-lists.test.mjs`. Toute nouvelle liste de person
 | `admin-members.js` | Médecins cadres d'une secrétaire | `admin_members` | SQL | nom de famille | non |
 | `oncoodle.js` | Réponses, commentaires | `oncoodle_get` | nom de famille | inchangé (commentaires désormais dans le même ordre) | oui, `oncoodle-invites` (déjà livré) |
 | `oncoodle.js` | Destinataires : suggestions, actuels, calculés | `oncoodle_people`, `oncoodle_get`, `oncoodle_audience_preview` | nom de famille | inchangé | oui, `oncoodle-destinataires` (déjà livré) |
-| `planning.js` | Personnel du planning administratif, dans chaque équipe | `plan_grid` | `position` puis nom (SQL) | nom de famille (le champ `position`, libellé « Ordre dans l'export Excel », n'agit plus que sur l'export) | oui, `planning-personnel` (nom, prénom) |
+| `planning.js` | Personnel du planning administratif, dans chaque équipe | `plan_grid` | `position` puis nom (SQL) | nom de famille par défaut ; au choix prénom ou « Ordre du tableur » (ordre `position` du serveur, celui de l'export Excel, mode propre à cette liste : `OnconicSort.control(..., { extra })`, trié par `sheetOrder` dans `planning.js`) | oui, `planning-personnel` (nom, prénom, ordre du tableur) |
 | `planning.js` | Compte Onconic d'une ligne | `plan_accounts` | prénom (SQL) | nom de famille | non |
 | `temporaires.js` | Comptes temporaires, actifs puis terminés | `temp_accounts` | actifs, fin d'accès décroissante | actifs puis terminés, nom de famille dans chaque groupe | non |
 | `medletters.js` | Accès « médecin plus » | `medletters_members` | prénom (SQL) | nom de famille | non |

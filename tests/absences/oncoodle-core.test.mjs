@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { buildIcs as serverIcs } from '../../supabase/functions/notify-oncoodle/ics.ts';
-const core = createRequire(import.meta.url)('../../assets/js/oncoodle-core.js');
+const require_ = createRequire(import.meta.url);
+const core = require_('../../assets/js/oncoodle-core.js');
 
 test('jours fériés vaudois 2026 et 2027 (Pâques, Ascension, Jeûne fédéral)', () => {
   const h = (y) => Object.fromEntries([...core.holidays(y)].map(([d, l]) => [l, d]));
@@ -68,4 +69,21 @@ test('libellés de dates', () => {
   assert.equal(core.fmtShort('2026-11-20'), 'ven. 20.11');
   assert.equal(core.optionLabel({ day: '2026-11-20', start: '12:00', end: '13:00' }), 'ven. 20.11, 12:00–13:00');
   assert.equal(core.optionLabel({ day: '2026-11-20' }), 'ven. 20.11, Journée');
+});
+
+test('fériés ajoutés à la main : holidayOf et générateur de créneaux les reçoivent en paramètre', () => {
+  const extra = new Map([['2026-11-24', 'Pont fictif'], ['2026-11-28', 'Samedi fictif'], ['2026-11-26', 'Fermeture fictive'], ['2026-11-27', 'Fermeture fictive']]);
+  assert.equal(core.holidayOf('2026-11-24'), null, 'sans fériés manuels : inchangé');
+  assert.equal(core.holidayOf('2026-11-24', extra), 'Pont fictif');
+  assert.equal(core.holidayOf('2026-12-25', extra), 'Noël', 'les fériés vaudois restent calculés');
+  assert.equal(core.holidayOf('2026-11-25', extra), null);
+  const days = (o) => core.generateSlots({ from: '2026-11-23', to: '2026-11-28', weekdays: [1, 2, 3, 4, 5, 6], starts: ['12:00'], duration: 60, ...o }).slots.map((s) => s.day);
+  assert.deepEqual(days({}), ['2026-11-23', '2026-11-24', '2026-11-25', '2026-11-26', '2026-11-27', '2026-11-28'], 'sans fériés manuels : comportement inchangé');
+  assert.deepEqual(days({ extraHolidays: null }), days({}));
+  assert.deepEqual(days({ extraHolidays: extra }), ['2026-11-23', '2026-11-25'], 'jour seul, plage de deux jours et samedi sautés');
+  assert.deepEqual(days({ extraHolidays: extra, skipHolidays: false }), days({}), 'sans « sauter les fériés » : tout est proposé');
+  // férié manuel un week-end : aucun effet sur les jours de semaine choisis, les jours de semaine voisins restent proposés
+  assert.deepEqual(core.generateSlots({ from: '2026-11-27', to: '2026-11-30', weekdays: [1, 5], starts: [], duration: 0, extraHolidays: new Map([['2026-11-28', 'Samedi fictif']]) }).slots.map((s) => s.day), ['2026-11-27', '2026-11-30']);
+  // le calcul reste identique au module partagé
+  assert.deepEqual([...core.holidays(2027)], [...require_('../../assets/js/vd-holidays.js').holidays(2027)]);
 });

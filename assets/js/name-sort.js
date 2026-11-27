@@ -1,4 +1,4 @@
-// Ordre des listes de personnes : par défaut nom de famille, au choix de l'utilisateur (prénom, rôle, clinique).
+// Ordre des listes de personnes : par défaut nom de famille, au choix de l'utilisateur (prénom, rôle, clinique, ou un mode propre à la liste).
 // Module pur sans dépendance : window.OnconicSort dans le navigateur, module.exports sous Node (tests).
 (function (root, factory) {
   const api = factory();
@@ -79,21 +79,25 @@
     return Array.from(list || []).sort((a, b) => compareNames(get(a), get(b), o.mode || "family", o.ctx));
   }
 
-  function getMode(listKey, allowed) {
+  // extra : modes supplémentaires fournis par l'appelant (ex. « sheet », l'ordre du serveur), acceptés pour cette liste seulement ;
+  // l'appelant les trie lui-même (compareNames ne les connaît pas et retombe sur le nom de famille).
+  const known = (m, extra) => MODES.indexOf(m) >= 0 || (Array.isArray(extra) && extra.indexOf(m) >= 0);
+  function getMode(listKey, allowed, extra) {
     let v = "family";
     try { v = localStorage.getItem(KEY + listKey) || "family"; } catch (e) { v = "family"; }
-    if (MODES.indexOf(v) < 0 || (allowed && allowed.indexOf(v) < 0)) return "family";
+    if (!known(v, extra) || (allowed && allowed.indexOf(v) < 0)) return "family";
     return v;
   }
-  function setMode(listKey, mode) {
-    if (MODES.indexOf(mode) < 0) return false;
+  function setMode(listKey, mode, extra) {
+    if (!known(mode, extra)) return false;
     try { localStorage.setItem(KEY + listKey, mode); return true; } catch (e) { return false; }
   }
 
   // Liste déroulante « Trier par » ; renvoie l'étiquette qui l'entoure (.sort-control, select en .sort-select).
+  // opts.extra : { mode: "Libellé" } pour des modes propres à la liste, à citer aussi dans opts.modes pour fixer leur place.
   function control(listKey, opts) {
-    const o = opts || {};
-    const modes = (o.modes || ["family", "first"]).filter((m) => MODES.indexOf(m) >= 0);
+    const o = opts || {}, extra = o.extra || {}, extraKeys = Object.keys(extra);
+    const modes = (o.modes || ["family", "first"]).filter((m) => known(m, extraKeys));
     const label = document.createElement("label");
     label.className = "sort-control";
     label.append(document.createTextNode("Trier par "));
@@ -102,12 +106,12 @@
     for (const m of modes) {
       const opt = document.createElement("option");
       opt.value = m;
-      opt.textContent = LABELS[m];
+      opt.textContent = MODES.indexOf(m) >= 0 ? LABELS[m] : extra[m];
       sel.append(opt);
     }
-    sel.value = getMode(listKey, modes);
+    sel.value = getMode(listKey, modes, extraKeys);
     sel.addEventListener("change", () => {
-      setMode(listKey, sel.value);
+      setMode(listKey, sel.value, extraKeys);
       if (typeof o.onChange === "function") o.onChange(sel.value);
     });
     label.append(sel);
